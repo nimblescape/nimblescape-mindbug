@@ -38,7 +38,7 @@ of the program. The line is in your TypeScript file, because VS Code's debugger 
 map. Select
 **Show current step** (or press End) to go back to the newest step.
 
-![An earlier step in the dark theme, with the banner "You are looking at step 8"](docs/images/history-dark.png)
+![An earlier step in the dark theme: step 8 is selected in the step list](docs/images/history-dark.png)
 
 The view follows the color theme of VS Code: light, dark and high contrast.
 

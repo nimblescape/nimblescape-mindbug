@@ -52,9 +52,6 @@
   --hs-hot: #c9622f;
 
   /* Step history */
-  --hs-banner-bg: #fff4d6;
-  --hs-banner-border: #e8dbb8;
-  --hs-banner-fg: #5c4813;
   --hs-step-border: #c9d3df;
   --hs-step-fg: #4a5868;
   --hs-step-sel-bg: #dce8f7;
@@ -113,9 +110,6 @@ body.vscode-dark {
   --hs-arrow-active: #6cb6ff;
   --hs-hot: #ff9248;
 
-  --hs-banner-bg: #3a3120;
-  --hs-banner-border: #5c4a22;
-  --hs-banner-fg: #f0dca8;
   --hs-step-border: #3a4656;
   --hs-step-fg: #a9b4c2;
   --hs-step-sel-bg: #1c3352;
@@ -173,9 +167,6 @@ body.vscode-high-contrast-light {
   --hs-changed-border: var(--vscode-focusBorder, #f38518);
   --hs-arrow: var(--vscode-editor-foreground, #ffffff);
   --hs-arrow-active: var(--vscode-focusBorder, #f38518);
-  --hs-banner-bg: transparent;
-  --hs-banner-border: var(--vscode-contrastBorder, #6fc3df);
-  --hs-banner-fg: var(--vscode-editor-foreground);
   --hs-step-border: var(--vscode-contrastBorder, #6fc3df);
   --hs-step-fg: var(--vscode-editor-foreground);
   --hs-step-sel-bg: transparent;
@@ -275,7 +266,7 @@ button.primary[hidden] {
   white-space: nowrap;
 }
 
-/* Step history: controls, list of steps, banner for an earlier step */
+/* Step history: controls and list of steps */
 
 .history {
   display: flex;
@@ -356,17 +347,6 @@ button.step.selected {
   color: var(--hs-step-sel-fg);
   background: var(--hs-step-sel-bg);
   border: 2px solid var(--hs-step-sel-border);
-}
-
-.banner {
-  padding: 8px 16px;
-  color: var(--hs-banner-fg);
-  background: var(--hs-banner-bg);
-  border-bottom: 1px solid var(--hs-banner-border);
-}
-
-.banner[hidden] {
-  display: none;
 }
 
 .empty {

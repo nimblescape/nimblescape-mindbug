@@ -44,7 +44,6 @@ const statusEl = $<HTMLElement>('status');
 const emptyEl = $<HTMLElement>('empty');
 const legendEl = $<HTMLElement>('legend');
 const historyEl = $<HTMLElement>('history');
-const bannerEl = $<HTMLElement>('banner');
 const slider = $<HTMLInputElement>('slider');
 const stepText = $<HTMLElement>('stepText');
 const stepsEl = $<HTMLOListElement>('steps');
@@ -72,17 +71,6 @@ function statusLine(): string {
   const where = whereText(newest);
   const text = where ? `Paused at ${where}` : 'Paused';
   return newest.fallback ? `${text} (simple view: the heap could not be read)` : text;
-}
-
-function bannerText(): string {
-  const shown = history.current();
-  const newest = history.newest();
-  if (!shown || !newest) return '';
-  const now =
-    state.programState === 'ended'
-      ? `The program ended after step ${newest.step}.`
-      : `The program is at step ${newest.step}.`;
-  return `You are looking at step ${shown.step}. ${now} The diagram below shows the memory as it was at step ${shown.step}.`;
 }
 
 /** Builds the list of steps (one button for each step). */
@@ -157,8 +145,6 @@ function render(): void {
   const newest = history.newest()?.step ?? 0;
   stepText.textContent = count > 0 ? `Step ${shown} of ${newest}` : '';
   liveBtn.hidden = count === 0 || live;
-  bannerEl.hidden = count === 0 || live;
-  bannerEl.textContent = live ? '' : bannerText();
   updateSteps();
 
   if (!snap) {

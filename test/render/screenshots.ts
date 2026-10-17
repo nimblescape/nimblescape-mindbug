@@ -158,8 +158,8 @@ async function main(): Promise<void> {
 
       // 2. Step history: go back to an earlier step with the step list.
       await page.click('#steps li:nth-child(8) button');
-      const banner = await page.textContent('#banner');
-      if (!banner?.includes('You are looking at step 8')) throw new Error(`history banner: ${banner}`);
+      const stepText = await page.textContent('#stepText');
+      if (!stepText?.startsWith('Step 8 of')) throw new Error(`history step text: ${stepText}`);
       const sent = await page.evaluate(() => (window as any).__sent as any[]);
       const view = sent.filter((m) => m.type === 'viewStep').pop();
       if (!view || view.step !== 8 || view.live) throw new Error(`viewStep message: ${JSON.stringify(view)}`);
