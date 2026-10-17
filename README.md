@@ -31,9 +31,11 @@ but inside VS Code, with the normal debugger, and with [Deno](https://deno.com) 
 
 Each time the program pauses (a breakpoint or a step), the view saves a step. Use the step list,
 the slider or the Left and Right arrow keys to go back to an earlier step. The view then shows the
-memory as it was at that step. The editor shows the line where the program was at that step and
-marks it, also when that line is in another file. The line is in your TypeScript file, because
-VS Code's debugger reads Deno's source map. Select
+memory as it was at that step. The editor shows the line where the program was at that step, also
+when that line is in another file. It marks the line as the debugger marks a stack frame that you
+select: a green arrow and a green line. The yellow line of the debugger stays the current position
+of the program. The line is in your TypeScript file, because VS Code's debugger reads Deno's source
+map. Select
 **Show current step** (or press End) to go back to the newest step.
 
 ![An earlier step in the dark theme, with the banner "You are looking at step 8"](docs/images/history-dark.png)
