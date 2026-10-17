@@ -1,21 +1,17 @@
-// `npm run uninstall-local`: removes the extension from the VS Code of this computer
-// (`code --uninstall-extension …`), the counterpart of `npm run install-local`. It removes the extension id of
-// package.json and the former ids of the extension (FORMER_IDS), so that an install of an older name goes too.
-// It removes them from every VS Code profile: the default profile and each profile listed in VS Code's storage.json
-// (userDataProfiles). An id that is not installed in a profile is skipped.
-// `npm run uninstall-local -- --profile <name>` removes them from that one profile only.
+// `npm run uninstall-local`: removes the extension (the id of package.json) from the VS Code of this computer
+// (`code --uninstall-extension …`), the counterpart of `npm run install-local`. It removes it from every VS Code
+// profile: the default profile and each profile listed in VS Code's storage.json (userDataProfiles). A profile in which
+// the extension is not installed is skipped.
+// `npm run uninstall-local -- --profile <name>` removes it from that one profile only.
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** Ids that this extension had before (heap-stack, then mindbug, until 2026-10-17). */
-const FORMER_IDS = ['nimblescape.heap-stack', 'nimblescape.mindbug'];
-
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { name, publisher } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-const ids = [`${publisher}.${name}`, ...FORMER_IDS];
+const id = `${publisher}.${name}`;
 // code is a .cmd file on Windows, which needs a shell.
 const shell = process.platform === 'win32';
 
@@ -78,16 +74,14 @@ console.log(`VS Code profiles: ${profiles.map((profile) => profile ?? 'Default')
 const removed = [];
 let failed = false;
 for (const profile of profiles) {
-  for (const id of ids) {
-    const outcome = uninstall(['--uninstall-extension', id, ...(profile ? ['--profile', profile] : [])]);
-    if (outcome === 'removed') removed.push(`${id} (${profile ?? 'Default'})`);
-    if (outcome === 'failed') failed = true;
-  }
+  const outcome = uninstall(['--uninstall-extension', id, ...(profile ? ['--profile', profile] : [])]);
+  if (outcome === 'removed') removed.push(profile ?? 'Default');
+  if (outcome === 'failed') failed = true;
 }
 if (removed.length > 0) {
-  console.log(`Removed: ${removed.join(', ')}. Reload the open VS Code windows (Developer: Reload Window).`);
+  console.log(`Removed ${id} from: ${removed.join(', ')}. Reload the open VS Code windows (Developer: Reload Window).`);
 } else if (!failed) {
-  console.log(`${ids.join(' and ')}: not installed.`);
+  console.log(`${id}: not installed.`);
 }
 if (failed) {
   console.error('VS Code could not remove the extension in every profile (see above).');
