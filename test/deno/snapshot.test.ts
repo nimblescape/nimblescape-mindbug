@@ -2,8 +2,9 @@
 // FakeDap answers the Debug Adapter Protocol requests the way VS Code's JavaScript debugger does.
 //
 // Needs Deno: set DENO_PATH, or have `deno` on the PATH. Without Deno the tests are skipped.
+// npm run test:deno (vitest.deno.config.mts); `npm test` does not run them.
 
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
@@ -46,7 +47,7 @@ const idOf = (v: Value) => {
   return (v as { id: number }).id;
 };
 
-test('insertion sort: frames, aliasing and stable ids', { skip: !hasDeno && 'Deno not found' }, async () => {
+test.skipIf(!hasDeno)('insertion sort: frames, aliasing and stable ids', async () => {
   const [inLoop, atEnd] = await pauses('sort.ts', 2);
   assert.deepEqual(
     inLoop.frames.map((f) => f.name),
@@ -64,9 +65,9 @@ test('insertion sort: frames, aliasing and stable ids', { skip: !hasDeno && 'Den
   );
 });
 
-test('objects: getters are not called, closures, uninitialized let', { skip: !hasDeno && 'Deno not found' }, async () => {
+test.skipIf(!hasDeno)('objects: getters are not called, closures, uninitialized let', async () => {
   const [inBirthday, inCounter, atEnd] = await pauses('objects.ts', 3);
-  const ann = idOf(variable(inBirthday, 'birthday', 'this'));
+  const ann = idOf(variable(inBirthday, 'Person.birthday', 'this'));
   assert.equal(idOf(variable(inBirthday, 'Global frame', 'ann')), ann);
   const fields = inBirthday.objects[ann].fields!;
   assert.deepEqual(fields.find((f) => f.name === 'age')?.value, { k: 'num', v: '24' });
@@ -76,7 +77,7 @@ test('objects: getters are not called, closures, uninitialized let', { skip: !ha
   assert.deepEqual(variable(atEnd, 'Global frame', 'later'), { k: 'uninit' });
 });
 
-test('classes: class boxes with static variables, attributes, methods and superclass', { skip: !hasDeno && 'Deno not found' }, async () => {
+test.skipIf(!hasDeno)('classes: class boxes with static variables, attributes, methods and superclass', async () => {
   const [s] = await pauses('classes.ts', 1);
   const ann = s.objects[idOf(variable(s, 'Global frame', 'ann'))];
   const bob = s.objects[idOf(variable(s, 'Global frame', 'bob'))];
@@ -100,7 +101,7 @@ test('classes: class boxes with static variables, attributes, methods and superc
   );
   assert.equal(student.superId, person.id);
   assert.deepEqual(student.attrs, ['school'], 'a constructor parameter property is a declared field');
-  const birthday = s.frames.find((f) => f.name === 'birthday')!;
+  const birthday = s.frames.find((f) => f.name === 'Person.birthday')!;
   assert.deepEqual(
     birthday.vars.map((v) => v.name),
     ['this'],

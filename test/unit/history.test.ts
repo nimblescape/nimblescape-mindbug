@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { StepHistory, baseName, stepLineText, stepTitle, whereText } from '../../webview/history.ts';
 import type { MemorySnapshot } from '../../src/model.ts';

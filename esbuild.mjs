@@ -1,12 +1,15 @@
-// Builds the extension (Node, CommonJS) and the webview (browser) into dist/.
+// Builds the extension (Node, CommonJS) and the webview (browser) into dist/. A production build
+// (--production, which vscode:prepublish passes) is minified and has no source maps.
 import * as esbuild from 'esbuild';
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
 
 const watch = process.argv.includes('--watch');
+const production = process.argv.includes('--production');
 
 const common = {
   bundle: true,
-  sourcemap: true,
+  sourcemap: !production,
+  minify: production,
   target: 'es2022',
   logLevel: 'info',
 };
@@ -28,17 +31,9 @@ const webview = {
   format: 'iife',
 };
 
-// The VS Code integration suite (test/integration), built only with --tests.
-const suite = {
-  ...common,
-  entryPoints: ['test/integration/suite.ts'],
-  outfile: 'out/integration/suite.js',
-  platform: 'node',
-  format: 'cjs',
-  external: ['vscode'],
-};
-
 mkdirSync('dist', { recursive: true });
+// No map of an earlier development build may stay next to a minified bundle.
+if (production) for (const file of ['dist/extension.js.map', 'dist/webview.js.map']) rmSync(file, { force: true });
 const copyCss = () => copyFileSync('webview/style.css', 'dist/webview.css');
 
 if (watch) {
@@ -46,8 +41,6 @@ if (watch) {
   await Promise.all(contexts.map((c) => c.watch()));
   copyCss();
 } else {
-  const builds = [extension, webview];
-  if (process.argv.includes('--tests')) builds.push(suite);
-  await Promise.all(builds.map((b) => esbuild.build(b)));
+  await Promise.all([extension, webview].map((b) => esbuild.build(b)));
   copyCss();
 }

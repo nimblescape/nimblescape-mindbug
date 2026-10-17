@@ -4,3 +4,5 @@ out/
 .vscode-test/
 *.vsix
 test/render/output/
+test-results/
+coverage/

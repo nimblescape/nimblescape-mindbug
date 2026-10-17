@@ -18,6 +18,19 @@ const SCOPE_NAMES: Record<string, string> = {
   eval: 'Eval',
 };
 
+/**
+ * The name that VS Code's JavaScript debugger shows for a frame. It writes the class of `this` in
+ * front of the function name of a method: the VS Code test showed "Person.birthday". The snapshot
+ * (frameLabel in src/snapshot.ts) turns the names into the names of the memory view.
+ */
+function frameLabel(cf: PausedEvent['callFrames'][number]): string {
+  const fn = cf.functionName || '<anonymous>';
+  const cls = cf.this?.type === 'object' ? cf.this.className : undefined;
+  if (!cf.functionName || !cls || ['Object', 'Function', 'global', 'Window'].includes(cls)) return fn;
+  if (fn === cls || fn.includes('.')) return fn;
+  return `${cls}.${fn}`;
+}
+
 export class FakeDap implements DapClient {
   private readonly refs = new Map<number, { objectId: string; thisObject?: { type: string } }>();
   private nextRef = 1;
@@ -39,7 +52,7 @@ export class FakeDap implements DapClient {
         return {
           stackFrames: this.paused.callFrames.map((cf, i) => ({
             id: i,
-            name: cf.functionName || '<anonymous>',
+            name: frameLabel(cf),
             line: this.inspector.originalLine(cf.location),
             column: cf.location.columnNumber + 1,
             source: cf.url.startsWith('file:') ? { name: cf.url, path: fileURLToPath(cf.url) } : { name: cf.url },

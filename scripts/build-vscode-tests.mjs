@@ -1,0 +1,23 @@
+// Bundles each test of test/vscode/ to out/test/vscode/<name>.test.js for the tests in a real VS Code
+// (.vscode-test.mjs). The module `vscode` comes from the extension host, and mocha from @vscode/test-cli.
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as esbuild from 'esbuild';
+
+const root = fileURLToPath(new URL('..', import.meta.url));
+const source = path.join(root, 'test', 'vscode');
+const outdir = path.join(root, 'out', 'test', 'vscode');
+
+fs.rmSync(outdir, { recursive: true, force: true });
+await esbuild.build({
+  entryPoints: fs.readdirSync(source).filter((name) => name.endsWith('.test.ts')).map((name) => path.join(source, name)),
+  outdir,
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  target: 'es2022',
+  sourcemap: true,
+  external: ['vscode', 'mocha'],
+  logLevel: 'info',
+});

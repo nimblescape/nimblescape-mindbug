@@ -10,7 +10,7 @@ export interface CdpCallFrame {
   location: { scriptId: string; lineNumber: number; columnNumber: number };
   url: string;
   scopeChain: { type: string; name?: string; object: { objectId?: string } }[];
-  this: { type: string; objectId?: string };
+  this: { type: string; className?: string; objectId?: string };
 }
 
 export interface PausedEvent {
