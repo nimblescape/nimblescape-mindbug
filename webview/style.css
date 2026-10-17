@@ -1,0 +1,1149 @@
+/* Memory panel of the heap-stack extension.
+   All colors are tokens (--hs-*). They are set for the light theme first, then changed for the
+   dark theme and the high contrast themes. VS Code sets the classes vscode-light, vscode-dark,
+   vscode-high-contrast and vscode-high-contrast-light on <body>. */
+
+:root {
+  --hs-bg: var(--vscode-editor-background, #ffffff);
+  --hs-fg: var(--vscode-editor-foreground, #1f2328);
+  --hs-dim: #5a6472;
+  --hs-rule: var(--vscode-panel-border, #e0e0e0);
+  --hs-mono: var(--vscode-editor-font-family, 'Cascadia Code', 'Menlo', 'Consolas', monospace);
+  --hs-ui: var(--vscode-font-family, system-ui, -apple-system, 'Segoe UI', sans-serif);
+
+  /* The two memory areas */
+  --hs-stack-bg: #eaf1fa;
+  --hs-stack-border: #c9d7ea;
+  --hs-stack-title: #2f5d9a;
+  --hs-stack-sub: #4a5868;
+  --hs-heap-bg: #fbf6e9;
+  --hs-heap-border: #e8dbb8;
+  --hs-heap-title: #8a5a00;
+  --hs-heap-sub: #6b5a33;
+
+  /* Frames and variables */
+  --hs-frame-bg: #ffffff;
+  --hs-frame-border: #c9d3df;
+  --hs-frame-edge: #8fa1b6;
+  --hs-active-bg: #dce8f7;
+  --hs-active-border: #a9c1e0;
+  --hs-active-edge: #2f5d9a;
+  --hs-badge-bg: #2f5d9a;
+  --hs-badge-fg: #ffffff;
+  --hs-focus: #4b7bb4;
+  --hs-slot-bg: #ffffff;
+  --hs-slot-border: #9aa5b1;
+
+  /* Heap objects */
+  --hs-cell-bg: #fff6b8;
+  --hs-cell-border: #b5a85a;
+  --hs-idx: #6b6b4a;
+  --hs-uml-bg: #ffffff;
+  --hs-uml-border: #3c4652;
+  --hs-class-head: #e9eef4;
+  --hs-fn-bg: #f3f4f6;
+
+  /* Marks */
+  --hs-changed: #ffd36b;
+  --hs-changed-border: #c9a240;
+  --hs-new: #2f9e6b;
+  --hs-arrow: #8c96a3;
+  --hs-arrow-active: #2f5d9a;
+  --hs-hot: #c9622f;
+
+  /* Step history */
+  --hs-banner-bg: #fff4d6;
+  --hs-banner-border: #e8dbb8;
+  --hs-banner-fg: #5c4813;
+  --hs-step-border: #c9d3df;
+  --hs-step-fg: #4a5868;
+  --hs-step-sel-bg: #dce8f7;
+  --hs-step-sel-border: #2f5d9a;
+  --hs-step-sel-fg: #1f3f6a;
+  --hs-now: #c9622f;
+  --hs-now-fg: #8a3e14;
+  --hs-button-bg: #f3f3f3;
+  --hs-button-border: #c8c8c8;
+  --hs-button-fg: #1f2328;
+  --hs-primary-bg: #2f5d9a;
+  --hs-primary-fg: #ffffff;
+
+  /* Values: the colors of the Variables view of the current theme, with the default light colors as fallback */
+  --hs-str: var(--vscode-debugTokenExpression-string, #a31515);
+  --hs-num: var(--vscode-debugTokenExpression-number, #098658);
+  --hs-kw: var(--vscode-debugTokenExpression-boolean, #0000ff);
+}
+
+body.vscode-dark {
+  --hs-dim: #9da5b0;
+
+  --hs-stack-bg: #18222f;
+  --hs-stack-border: #2b3d55;
+  --hs-stack-title: #7cb0ee;
+  --hs-stack-sub: #a3b3c6;
+  --hs-heap-bg: #251f14;
+  --hs-heap-border: #4a3e22;
+  --hs-heap-title: #e2b45c;
+  --hs-heap-sub: #bfae88;
+
+  --hs-frame-bg: #1f2731;
+  --hs-frame-border: #35455a;
+  --hs-frame-edge: #687b92;
+  --hs-active-bg: #1c3352;
+  --hs-active-border: #3a5f8f;
+  --hs-active-edge: #6ca8ee;
+  --hs-badge-bg: #3b78c4;
+  --hs-badge-fg: #ffffff;
+  --hs-focus: #6cb6ff;
+  --hs-slot-bg: #141a21;
+  --hs-slot-border: #5c6b7c;
+
+  --hs-cell-bg: #38321d;
+  --hs-cell-border: #7d7140;
+  --hs-idx: #bdb28a;
+  --hs-uml-bg: #1b2028;
+  --hs-uml-border: #a9b4c2;
+  --hs-class-head: #262e39;
+  --hs-fn-bg: #23272e;
+
+  --hs-changed: #6b5212;
+  --hs-changed-border: #d9a932;
+  --hs-new: #3fbf86;
+  --hs-arrow: #7f8b9b;
+  --hs-arrow-active: #6cb6ff;
+  --hs-hot: #ff9248;
+
+  --hs-banner-bg: #3a3120;
+  --hs-banner-border: #5c4a22;
+  --hs-banner-fg: #f0dca8;
+  --hs-step-border: #3a4656;
+  --hs-step-fg: #a9b4c2;
+  --hs-step-sel-bg: #1c3352;
+  --hs-step-sel-border: #6ca8ee;
+  --hs-step-sel-fg: #dce8f7;
+  --hs-now: #e07a45;
+  --hs-now-fg: #f2a578;
+  --hs-button-bg: var(--vscode-button-secondaryBackground, #313131);
+  --hs-button-border: #4a4f57;
+  --hs-button-fg: var(--vscode-button-secondaryForeground, #cccccc);
+  --hs-primary-bg: #3b78c4;
+  --hs-primary-fg: #ffffff;
+
+  --hs-str: var(--vscode-debugTokenExpression-string, #ce9178);
+  --hs-num: var(--vscode-debugTokenExpression-number, #b5cea8);
+  --hs-kw: var(--vscode-debugTokenExpression-boolean, #569cd6);
+}
+
+body.vscode-high-contrast:not(.vscode-high-contrast-light) {
+  --hs-str: var(--vscode-debugTokenExpression-string, #ce9178);
+  --hs-num: var(--vscode-debugTokenExpression-number, #b5cea8);
+  --hs-kw: var(--vscode-debugTokenExpression-boolean, #569cd6);
+}
+
+/* High contrast: no colored areas, only clear borders. */
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --hs-dim: var(--vscode-editor-foreground);
+  --hs-stack-bg: transparent;
+  --hs-stack-border: var(--vscode-contrastBorder, #6fc3df);
+  --hs-stack-title: var(--vscode-editor-foreground);
+  --hs-stack-sub: var(--vscode-editor-foreground);
+  --hs-heap-bg: transparent;
+  --hs-heap-border: var(--vscode-contrastBorder, #6fc3df);
+  --hs-heap-title: var(--vscode-editor-foreground);
+  --hs-heap-sub: var(--vscode-editor-foreground);
+  --hs-frame-bg: transparent;
+  --hs-frame-border: var(--vscode-contrastBorder, #6fc3df);
+  --hs-frame-edge: var(--vscode-contrastBorder, #6fc3df);
+  --hs-active-bg: transparent;
+  --hs-active-border: var(--vscode-focusBorder, #f38518);
+  --hs-active-edge: var(--vscode-focusBorder, #f38518);
+  --hs-badge-bg: var(--vscode-focusBorder, #f38518);
+  --hs-badge-fg: var(--vscode-editor-background, #000000);
+  --hs-slot-bg: transparent;
+  --hs-slot-border: var(--vscode-contrastBorder, #6fc3df);
+  --hs-cell-bg: transparent;
+  --hs-cell-border: var(--vscode-contrastBorder, #6fc3df);
+  --hs-idx: var(--vscode-editor-foreground);
+  --hs-uml-bg: transparent;
+  --hs-uml-border: var(--vscode-contrastBorder, #6fc3df);
+  --hs-class-head: transparent;
+  --hs-fn-bg: transparent;
+  --hs-changed: transparent;
+  --hs-changed-border: var(--vscode-focusBorder, #f38518);
+  --hs-arrow: var(--vscode-editor-foreground, #ffffff);
+  --hs-arrow-active: var(--vscode-focusBorder, #f38518);
+  --hs-banner-bg: transparent;
+  --hs-banner-border: var(--vscode-contrastBorder, #6fc3df);
+  --hs-banner-fg: var(--vscode-editor-foreground);
+  --hs-step-border: var(--vscode-contrastBorder, #6fc3df);
+  --hs-step-fg: var(--vscode-editor-foreground);
+  --hs-step-sel-bg: transparent;
+  --hs-step-sel-border: var(--vscode-focusBorder, #f38518);
+  --hs-step-sel-fg: var(--vscode-editor-foreground);
+  --hs-button-bg: transparent;
+  --hs-button-border: var(--vscode-contrastBorder, #6fc3df);
+  --hs-button-fg: var(--vscode-editor-foreground);
+  --hs-primary-bg: transparent;
+  --hs-primary-fg: var(--vscode-editor-foreground);
+}
+
+body.vscode-high-contrast .changed,
+body.vscode-high-contrast-light .changed {
+  outline: 2px dashed var(--hs-changed-border);
+  outline-offset: -2px;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--hs-bg);
+  color: var(--hs-fg);
+  font-family: var(--hs-ui);
+  font-size: 13px;
+}
+
+button {
+  font: inherit;
+  color: var(--hs-button-fg);
+  background: var(--hs-button-bg);
+  border: 1px solid var(--hs-button-border);
+  border-radius: 4px;
+  height: 26px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder, #2f5d9a);
+  outline-offset: 1px;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+button.icon {
+  width: 30px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+}
+
+button.primary {
+  color: var(--hs-primary-fg);
+  background: var(--hs-primary-bg);
+  border-color: var(--hs-primary-bg);
+}
+
+button.primary[hidden] {
+  display: none;
+}
+
+/* Toolbar */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--hs-rule);
+}
+
+.status {
+  flex: 1 1 220px;
+  font-weight: 600;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--hs-dim);
+  white-space: nowrap;
+}
+
+/* Step history: controls, list of steps, banner for an earlier step */
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--hs-rule);
+}
+
+.history[hidden] {
+  display: none;
+}
+
+.history-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.history-controls input[type='range'] {
+  flex: 0 1 180px;
+  min-width: 80px;
+  accent-color: var(--hs-step-sel-border);
+}
+
+.step-text {
+  min-width: 90px;
+  color: var(--hs-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.steps {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0 0 4px;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.steps li {
+  flex: 0 0 auto;
+}
+
+button.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 62px;
+  height: 40px;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--hs-step-fg);
+  background: transparent;
+  border: 1px solid var(--hs-step-border);
+  border-radius: 6px;
+}
+
+.step-n {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.step-l {
+  white-space: nowrap;
+}
+
+button.step.now {
+  color: var(--hs-now-fg);
+  border-color: var(--hs-now);
+}
+
+button.step.selected {
+  color: var(--hs-step-sel-fg);
+  background: var(--hs-step-sel-bg);
+  border: 2px solid var(--hs-step-sel-border);
+}
+
+.banner {
+  padding: 8px 16px;
+  color: var(--hs-banner-fg);
+  background: var(--hs-banner-bg);
+  border-bottom: 1px solid var(--hs-banner-border);
+}
+
+.banner[hidden] {
+  display: none;
+}
+
+.empty {
+  padding: 24px;
+  max-width: 560px;
+  line-height: 1.5;
+  color: var(--hs-dim);
+}
+
+.empty strong {
+  color: var(--hs-fg);
+}
+
+.empty[hidden] {
+  display: none;
+}
+
+/* Canvas: the stack area on the left, the heap area on the right, the arrows above both */
+
+.canvas {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+}
+
+.canvas[hidden] {
+  display: none;
+}
+
+body.running .diagram {
+  opacity: 0.5;
+}
+
+.arrows {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 2;
+}
+
+/* Class boxes are above the arrow lines (lines that cross the classes part go behind them);
+   the dots, the "extends" lines and the dashed class links are above everything. */
+.arrows-top {
+  z-index: 4;
+}
+
+.class-box {
+  position: relative;
+  z-index: 3;
+}
+
+.diagram {
+  display: flex;
+  align-items: stretch;
+  gap: 28px;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 16px;
+}
+
+.region {
+  box-sizing: border-box;
+  padding: 14px 16px 18px;
+  border-radius: 10px;
+}
+
+.stack-region {
+  flex: 0 0 auto;
+  min-width: 260px;
+  background: var(--hs-stack-bg);
+  border: 1px solid var(--hs-stack-border);
+}
+
+.heap-region {
+  flex: 1 0 auto;
+  min-width: 280px;
+  background: var(--hs-heap-bg);
+  border: 1px solid var(--hs-heap-border);
+}
+
+.region-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.region-sub {
+  margin: 2px 0 16px;
+  max-width: 270px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.stack-region .region-title {
+  color: var(--hs-stack-title);
+}
+
+.stack-region .region-sub,
+.stack-region .hint {
+  color: var(--hs-stack-sub);
+}
+
+.heap-region .region-title {
+  color: var(--hs-heap-title);
+}
+
+.heap-region .region-sub {
+  color: var(--hs-heap-sub);
+}
+
+.hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+}
+
+/* Frames */
+
+.frames {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.frame {
+  position: relative;
+  padding: 6px 12px 10px 10px;
+  background: var(--hs-frame-bg);
+  border: 1px solid var(--hs-frame-border);
+  border-left: 3px solid var(--hs-frame-edge);
+  border-radius: 4px;
+}
+
+.frame.active {
+  background: var(--hs-active-bg);
+  border-color: var(--hs-active-border);
+  border-left-color: var(--hs-active-edge);
+}
+
+body.vscode-high-contrast .frame.active,
+body.vscode-high-contrast-light .frame.active {
+  border-width: 2px 2px 2px 4px;
+}
+
+.frame.focused {
+  outline: 2px dashed var(--hs-focus);
+  outline-offset: 2px;
+}
+
+.frame-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+  font-family: var(--hs-mono);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.frame-title.link {
+  cursor: pointer;
+}
+
+.frame-title.link:hover .frame-name {
+  text-decoration: underline;
+}
+
+.frame-line {
+  color: var(--hs-dim);
+}
+
+.badge {
+  margin-left: auto;
+  padding: 1px 8px;
+  font-family: var(--hs-ui);
+  font-size: 11px;
+  color: var(--hs-badge-fg);
+  background: var(--hs-badge-bg);
+  border-radius: 8px;
+}
+
+.frame-empty,
+.frame-note,
+.heap-empty {
+  color: var(--hs-dim);
+  font-style: italic;
+  padding: 2px 0;
+}
+
+.frame-note {
+  font-size: 0.9em;
+  max-width: 260px;
+}
+
+.vars {
+  display: grid;
+  grid-template-columns: minmax(80px, auto) minmax(80px, max-content);
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.var-name {
+  text-align: right;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.var-name.this {
+  color: var(--hs-kw);
+}
+
+.slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 80px;
+  height: 28px;
+  padding: 0 8px;
+  font-family: var(--hs-mono);
+  font-size: 14px;
+  white-space: nowrap;
+  background: var(--hs-slot-bg);
+  border: 1px solid var(--hs-slot-border);
+}
+
+.scope-sep {
+  grid-column: 1 / -1;
+  padding-top: 4px;
+  font-size: 11px;
+  color: var(--hs-dim);
+  text-align: right;
+}
+
+/* Values */
+
+.val {
+  white-space: pre;
+}
+
+.v-str {
+  color: var(--hs-str);
+}
+
+.v-num,
+.v-big {
+  color: var(--hs-num);
+}
+
+.v-bool,
+.v-null,
+.v-undef {
+  color: var(--hs-kw);
+}
+
+.v-uninit,
+.v-accessor,
+.v-unavail,
+.v-hole,
+.fn-inline {
+  color: var(--hs-dim);
+  font-style: italic;
+}
+
+.v-uninit {
+  font-family: var(--hs-ui);
+  font-size: 12px;
+}
+
+.ptr {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  vertical-align: middle;
+}
+
+.slot.changed,
+.cell.changed,
+tr.attr.changed > td,
+tr.entry.changed > td {
+  background: var(--hs-changed);
+}
+
+.slot.changed,
+.cell.changed {
+  border-color: var(--hs-changed-border);
+}
+
+/* Heap layout: a row of classes at the top (when shown), then the objects.
+   Each tree is a row; the objects that an object points to are placed to its right. */
+
+.heap {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.heap-part {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.part-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--hs-heap-title);
+}
+
+.part-sub {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--hs-heap-sub);
+}
+
+.class-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 24px 80px;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+.tree {
+  display: flex;
+  align-items: flex-start;
+  gap: 64px;
+}
+
+.kids {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.obj {
+  flex: 0 0 auto;
+}
+
+.obj.new {
+  box-shadow: 0 0 0 2px var(--hs-new);
+}
+
+.array.new,
+.set.new {
+  box-shadow: none;
+}
+
+.array.new .cells,
+.set.new .cells {
+  box-shadow: 0 0 0 2px var(--hs-new);
+}
+
+.oid {
+  font-family: var(--hs-ui);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--hs-dim);
+  text-decoration: none;
+}
+
+/* Arrays and sets: a row of cells, the index at the top left of each cell */
+
+.obj-label {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--hs-dim);
+}
+
+.obj-label .type {
+  font-family: var(--hs-mono);
+  color: var(--hs-fg);
+}
+
+.cells {
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 760px;
+  padding: 0 1px 1px 0;
+}
+
+.cell {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 44px;
+  height: 46px;
+  margin: 0 -1px -1px 0;
+  padding: 16px 8px 0;
+  background: var(--hs-cell-bg);
+  border: 1px solid var(--hs-cell-border);
+}
+
+.set .cell {
+  padding-top: 11px;
+}
+
+.cell.more,
+.cell.empty-cells {
+  display: flex;
+  align-items: center;
+  padding-top: 0;
+  color: var(--hs-dim);
+  font-style: italic;
+  background: transparent;
+}
+
+.idx {
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  font-size: 10px;
+  color: var(--hs-idx);
+}
+
+.cv {
+  text-align: center;
+  font-family: var(--hs-mono);
+  font-size: 16px;
+  line-height: 22px;
+  white-space: nowrap;
+}
+
+/* Objects: UML object notation (name compartment, attribute compartment) */
+
+.uml {
+  min-width: 170px;
+  background: var(--hs-uml-bg);
+  border: 1.5px solid var(--hs-uml-border);
+}
+
+.uml-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 48px;
+  border-bottom: 1px solid var(--hs-uml-border);
+  white-space: nowrap;
+}
+
+.uml-name {
+  font-family: var(--hs-mono);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.uml-head .oid {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+}
+
+.uml-body {
+  min-height: 12px;
+  padding: 4px 4px 6px;
+}
+
+table.attrs,
+table.entries {
+  border-collapse: collapse;
+}
+
+table.attrs td {
+  height: 26px;
+}
+
+.attr-name {
+  padding: 0 4px 0 8px;
+  font-family: var(--hs-mono);
+  white-space: nowrap;
+}
+
+.attr-eq {
+  padding: 0 4px;
+  color: var(--hs-dim);
+}
+
+.attr-value {
+  min-width: 18px;
+  padding: 0 12px 0 4px;
+  font-family: var(--hs-mono);
+  white-space: nowrap;
+}
+
+table.entries {
+  margin: 0 4px 2px;
+}
+
+table.entries th {
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--hs-dim);
+  text-align: left;
+}
+
+table.entries td {
+  height: 26px;
+  padding: 0 10px;
+  border-top: 1px solid var(--hs-cell-border);
+  font-family: var(--hs-mono);
+  white-space: nowrap;
+}
+
+td.entry-key {
+  border-right: 1px solid var(--hs-cell-border);
+}
+
+.more-line {
+  padding: 2px 8px;
+  color: var(--hs-dim);
+  font-style: italic;
+  font-size: 0.9em;
+}
+
+.value-text {
+  padding: 2px 8px;
+  font-family: var(--hs-mono);
+}
+
+/* Classes: UML class notation (name, static variables, attributes of each object, methods) */
+
+.class-box {
+  min-width: 190px;
+}
+
+.class-head {
+  position: relative;
+  padding: 5px 44px 6px;
+  text-align: center;
+  white-space: nowrap;
+  background: var(--hs-class-head);
+  border-bottom: 1px solid var(--hs-uml-border);
+}
+
+.class-head .oid {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+}
+
+.stereo {
+  font-size: 11px;
+  color: var(--hs-dim);
+}
+
+.class-name {
+  font-family: var(--hs-mono);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.extends {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--hs-dim);
+}
+
+.compartment {
+  padding: 4px 10px 6px;
+  border-bottom: 1px solid var(--hs-uml-border);
+}
+
+.compartment:last-child {
+  border-bottom: none;
+}
+
+.compartment table.attrs {
+  margin-left: -8px;
+}
+
+.caption {
+  font-size: 11px;
+  color: var(--hs-dim);
+}
+
+.member {
+  font-family: var(--hs-mono);
+  line-height: 24px;
+  white-space: nowrap;
+}
+
+.static {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.none {
+  font-style: italic;
+  line-height: 22px;
+  color: var(--hs-dim);
+}
+
+.obj.related {
+  outline: 2px solid var(--hs-hot);
+  outline-offset: 2px;
+}
+
+/* Functions and classes in the object rows (only when "Show functions" is on) */
+
+.function {
+  padding: 4px 10px;
+  background: var(--hs-fn-bg);
+  border: 1px solid var(--hs-uml-border);
+  border-radius: 10px;
+}
+
+.fn-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-family: var(--hs-mono);
+  font-weight: 600;
+}
+
+.fn-head .oid {
+  margin-left: auto;
+}
+
+.fn-text {
+  font-family: var(--hs-mono);
+  font-size: 0.9em;
+  color: var(--hs-dim);
+}
+
+.obj.missing {
+  padding: 6px 10px;
+  border: 1px dashed var(--hs-cell-border);
+  color: var(--hs-dim);
+  font-style: italic;
+}
+
+/* Arrows */
+
+.arrow {
+  fill: none;
+  stroke: var(--hs-arrow);
+  stroke-width: 1.7;
+}
+
+.arrow.active {
+  stroke: var(--hs-arrow-active);
+  stroke-width: 2;
+}
+
+.arrow.hot {
+  stroke: var(--hs-hot);
+  stroke-width: 2.5;
+}
+
+.head,
+.dot {
+  fill: var(--hs-arrow);
+}
+
+.head.active,
+.dot.active {
+  fill: var(--hs-arrow-active);
+}
+
+.head.hot,
+.dot.hot {
+  fill: var(--hs-hot);
+}
+
+/* "made from this class" (dashed, only while the mouse is over an object or a class) */
+.inst {
+  fill: none;
+  stroke: var(--hs-hot);
+  stroke-width: 1.8;
+  stroke-dasharray: 6 4;
+}
+
+/* "extends": UML generalization, a line with a hollow triangle at the superclass */
+.gen {
+  fill: none;
+  stroke: var(--hs-uml-border);
+  stroke-width: 1.5;
+}
+
+.genhead {
+  fill: var(--hs-uml-bg);
+  stroke: var(--hs-uml-border);
+  stroke-width: 1.2;
+}
+
+/* Legend */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 26px;
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--hs-dim);
+  border-top: 1px solid var(--hs-rule);
+}
+
+.legend[hidden] {
+  display: none;
+}
+
+body:not(.has-classes) .legend-classes {
+  display: none;
+}
+
+.lg-inst {
+  stroke: var(--hs-hot);
+  stroke-width: 1.8;
+  stroke-dasharray: 6 4;
+}
+
+.lg-hot {
+  fill: var(--hs-hot);
+}
+
+.lg-gen {
+  stroke: var(--hs-uml-border);
+  stroke-width: 1.5;
+}
+
+.lg-genhead {
+  fill: var(--hs-uml-bg);
+  stroke: var(--hs-uml-border);
+  stroke-width: 1.2;
+}
+
+.legend .static {
+  font-family: var(--hs-mono);
+  color: var(--hs-fg);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lg-dot {
+  fill: var(--hs-arrow);
+}
+
+.lg-line {
+  stroke: var(--hs-arrow);
+  stroke-width: 1.7;
+}
+
+.swatch {
+  display: inline-block;
+  width: 16px;
+  height: 12px;
+  box-sizing: border-box;
+}
+
+.changed-swatch {
+  background: var(--hs-changed);
+  border: 1px solid var(--hs-changed-border);
+}
+
+.active-swatch {
+  background: var(--hs-active-bg);
+  border-left: 3px solid var(--hs-active-edge);
+}

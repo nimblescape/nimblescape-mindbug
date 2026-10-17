@@ -1,0 +1,173 @@
+{
+  "name": "heap-stack",
+  "displayName": "Heap Stack",
+  "description": "Shows the stack frames and the heap of a paused TypeScript program (Deno) as a diagram, to help students learn how memory works.",
+  "version": "0.1.0",
+  "publisher": "nimblescape",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nimblescape/nimblescape-heapstack"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Debuggers",
+    "Education",
+    "Visualization"
+  ],
+  "keywords": [
+    "deno",
+    "typescript",
+    "heap",
+    "stack",
+    "memory",
+    "education",
+    "python tutor",
+    "uml"
+  ],
+  "activationEvents": [
+    "onDebug"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "heapStack.open",
+        "title": "Open Memory View",
+        "category": "Heap Stack",
+        "icon": {
+          "light": "media/memory-light.svg",
+          "dark": "media/memory-dark.svg"
+        }
+      },
+      {
+        "command": "heapStack.debugWithDeno",
+        "title": "Debug Current File with Deno",
+        "category": "Heap Stack",
+        "icon": "$(debug-alt)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "heapStack.debugWithDeno",
+          "when": "resourceLangId == typescript && !inDebugMode",
+          "group": "navigation"
+        },
+        {
+          "command": "heapStack.open",
+          "when": "inDebugMode",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "heapStack.debugWithDeno",
+          "when": "resourceLangId == typescript"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Heap Stack",
+      "properties": {
+        "heapStack.denoPath": {
+          "type": "string",
+          "default": "deno",
+          "markdownDescription": "Path to the Deno program, used by **Debug Current File with Deno**. The default `deno` works when Deno is on the `PATH`."
+        },
+        "heapStack.inspectPort": {
+          "type": "number",
+          "default": 9229,
+          "description": "Port on which Deno waits for the debugger. Change it when another program uses port 9229."
+        },
+        "heapStack.stopOnEntry": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "When on, **Debug Current File with Deno** pauses at the first line of the program, so you can step from the start."
+        },
+        "heapStack.openAutomatically": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the memory view when a debug session pauses for the first time."
+        },
+        "heapStack.maxHistorySteps": {
+          "type": "number",
+          "default": 500,
+          "minimum": 1,
+          "maximum": 5000,
+          "description": "Maximum number of steps that the memory view keeps, so that you can go back to an earlier step. When there are more steps, the oldest steps are removed."
+        },
+        "heapStack.maxObjects": {
+          "type": "number",
+          "default": 300,
+          "minimum": 10,
+          "maximum": 5000,
+          "description": "Maximum number of heap objects that are read per stack frame."
+        },
+        "heapStack.maxArrayItems": {
+          "type": "number",
+          "default": 100,
+          "minimum": 5,
+          "maximum": 2000,
+          "description": "Maximum number of array items, set members and map entries that are shown per object."
+        },
+        "heapStack.maxStringLength": {
+          "type": "number",
+          "default": 200,
+          "minimum": 10,
+          "maximum": 10000,
+          "description": "Maximum number of characters that are shown per string."
+        }
+      }
+    },
+    "debuggers": [
+      {
+        "type": "node",
+        "configurationSnippets": [
+          {
+            "label": "Heap Stack: Debug a TypeScript file with Deno",
+            "description": "Runs a TypeScript file with Deno and shows its memory in the Heap Stack view.",
+            "body": {
+              "type": "node",
+              "request": "launch",
+              "name": "Deno: ${1:main.ts}",
+              "program": "^\"\\${workspaceFolder}/${1:main.ts}\"",
+              "cwd": "^\"\\${workspaceFolder}\"",
+              "runtimeExecutable": "deno",
+              "runtimeArgs": [
+                "run",
+                "--inspect-wait",
+                "--allow-all"
+              ],
+              "attachSimplePort": 9229
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "npm run test:unit && npm run test:deno",
+    "test:unit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"test/unit/*.test.ts\"",
+    "test:deno": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"test/deno/*.test.ts\"",
+    "test:render": "npm run build && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/render/screenshots.ts",
+    "test:vscode": "node esbuild.mjs --tests && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/integration/runTest.ts",
+    "package": "vsce package --no-dependencies --skip-license",
+    "vscode:prepublish": "npm run build",
+    "record": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/render/record.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "~1.90.0",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.25.0",
+    "playwright-core": "^1.56.0",
+    "typescript": "^5.7.0"
+  }
+}
