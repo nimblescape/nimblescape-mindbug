@@ -52,13 +52,15 @@ export function webviewHtml(o: WebviewHtmlInput): string {
   <div class="diagram">
     <section class="region stack-region" aria-labelledby="stackTitle">
       <h2 id="stackTitle" class="region-title">STACK</h2>
-      <p class="region-sub">One frame for each function call. Local variables live here.</p>
-      <div id="frames" class="frames"></div>
-      <p class="hint">&#8595; A new function call adds a frame at the bottom.</p>
+      <p class="region-sub">Local variables live here.</p>
+      <div class="stack-pile">
+        <p class="hint">&#8593; A new function call adds a frame on top.</p>
+        <div id="frames" class="frames"></div>
+      </div>
     </section>
     <section class="region heap-region" aria-labelledby="heapTitle">
       <h2 id="heapTitle" class="region-title">HEAP</h2>
-      <p class="region-sub">Objects and arrays live here. Variables only point to them.</p>
+      <p class="region-sub">Objects live here, variables point to them.</p>
       <div id="heap" class="heap"></div>
     </section>
   </div>

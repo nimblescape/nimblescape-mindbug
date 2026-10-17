@@ -99,7 +99,7 @@ function renderFrame(frame: Frame, index: number, input: RenderInput, isTop: boo
   }
   if (isTop) {
     const badge = el('span', 'badge', input.live === false ? 'runs at this step' : 'runs now');
-    badge.title = 'This function call is the one that runs. A new call adds a frame below it.';
+    badge.title = 'This function call is the one that runs. A new call adds a frame on top of it.';
     title.append(badge);
   }
   box.append(title);
@@ -138,7 +138,8 @@ export function renderFrames(container: HTMLElement, input: RenderInput): void {
     container.append(el('div', 'frame-empty', 'The program is paused outside your own code.'));
     return;
   }
-  frames.forEach((f, i) => container.append(renderFrame(f, i, input, i === frames.length - 1)));
+  // The stack builds bottom up: the Global frame is at the bottom, and the function that runs now is on top.
+  for (let i = frames.length - 1; i >= 0; i--) container.append(renderFrame(frames[i], i, input, i === frames.length - 1));
 }
 
 function idTag(o: HeapObject, opts: ViewOptions): HTMLElement | undefined {

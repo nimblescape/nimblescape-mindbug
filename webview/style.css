@@ -418,6 +418,8 @@ body.running .diagram {
 }
 
 .stack-region {
+  display: flex;
+  flex-direction: column;
   flex: 0 0 auto;
   min-width: 260px;
   background: var(--hs-stack-bg);
@@ -463,11 +465,21 @@ body.running .diagram {
 }
 
 .hint {
-  margin: 12px 0 0;
+  margin: 0 0 12px;
   font-size: 12px;
 }
 
 /* Frames */
+
+/*
+ * The stack builds bottom up: the frames sit at the bottom of the STACK area, so that a new frame appears on top.
+ * When the heap is taller than the window, the frames stay at the bottom of the visible part (sticky).
+ */
+.stack-pile {
+  position: sticky;
+  bottom: 8px;
+  margin-top: auto;
+}
 
 .frames {
   display: flex;
