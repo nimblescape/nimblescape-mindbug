@@ -1,6 +1,6 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { classifyScope, frameLabel, frameName, isUserFrame, parseWalkerResult, unquote } from '../../src/snapshot.ts';
+import { classifyScope, frameLabel, frameName, isCommonJsModule, isUserFrame, parseWalkerResult, unquote } from '../../src/snapshot.ts';
 import type { HeapObject, Value } from '../../src/model.ts';
 
 test('scope names of VS Code’s JavaScript debugger', () => {
@@ -77,6 +77,16 @@ test('frame names of constructors and methods name the class that declares them'
   assert.equal(frameLabel('<static_initializer>', ref(1), objects), 'Person (set up static variables)');
   assert.equal(frameLabel('Person.<anonymous>', ann, objects), '<anonymous>', 'an arrow function in a method');
   assert.equal(frameLabel('insertionSort', undefined, objects), 'insertionSort');
+  // Node.js: in a function that runs without an object, `this` is the global object (not shown).
+  assert.equal(frameLabel('global.insertionSort', undefined, objects), 'insertionSort');
+});
+
+test('Node.js runs a file without import or export in a function: its frame is the Global scope', () => {
+  const params = ['exports', 'require', 'module', '__filename', '__dirname'];
+  assert.ok(isCommonJsModule('<anonymous>', true, ['this', ...params, 'arr1']));
+  assert.ok(!isCommonJsModule('<anonymous>', false, params), 'only the outermost frame');
+  assert.ok(!isCommonJsModule('insertionSort', true, params), 'only a frame without a name');
+  assert.ok(!isCommonJsModule('<anonymous>', true, ['arr1', 'require']), 'only with all parameters of the module');
 });
 
 test('unquote and parseWalkerResult', () => {

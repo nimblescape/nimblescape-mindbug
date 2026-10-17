@@ -55,6 +55,11 @@ export class MemoryPanel {
     this.panel.reveal(undefined, true);
   }
 
+  /** The column for a code editor: the first one, or the second one when this panel is in the first one. */
+  editorColumn(): vscode.ViewColumn {
+    return this.panel.viewColumn === vscode.ViewColumn.One ? vscode.ViewColumn.Two : vscode.ViewColumn.One;
+  }
+
   post(msg: ToWebview): void {
     if (!this.ready) {
       // Keep only the newest message of each type until the page has loaded.
@@ -78,7 +83,7 @@ export class MemoryPanel {
       const uri = vscode.Uri.file(m.file);
       const line = Math.max(0, m.line - 1);
       void vscode.window.showTextDocument(uri, {
-        viewColumn: vscode.ViewColumn.One,
+        viewColumn: this.editorColumn(),
         selection: new vscode.Range(line, 0, line, 0),
         preserveFocus: false,
       });
