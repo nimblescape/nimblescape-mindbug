@@ -9,9 +9,10 @@ but inside VS Code, with the normal debugger, and with [Deno](https://deno.com) 
 
 ## What the Heap Stack view shows
 
-- **STACK** (blue area): one frame for each function call. The function that runs now is at the
-  bottom and has the label "runs now". Each variable is a box. A number, a string or a boolean is
-  written in the box.
+- **STACK** (blue area): one frame for each function call. The stack builds bottom up: the Global
+  frame is at the bottom, and each function call adds a frame on top. The function that runs now is
+  the top frame and has the label "runs now". Each variable is a box. A number, a string or a boolean
+  is written in the box.
 - **HEAP** (yellow area): objects and arrays. A variable that holds an object stores only *where*
   the object is. The view draws this as an arrow from the variable to the object. Two arrows to the
   same object mean that two variables point to the same object.
