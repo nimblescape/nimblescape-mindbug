@@ -157,6 +157,7 @@
     "vscode:prepublish": "node esbuild.mjs --production",
     "package": "vsce package --no-dependencies --no-rewrite-relative-links",
     "install-local": "node scripts/install-local.mjs",
+    "uninstall-local": "node scripts/uninstall-local.mjs",
     "record": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/render/record.ts"
   },
   "devDependencies": {

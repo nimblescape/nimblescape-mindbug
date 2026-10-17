@@ -103,14 +103,15 @@ The npm scripts are the same as in the other nimblescape extensions. Node is the
 
 ```sh
 npm install
-npm run build          # builds dist/ (npm run watch: builds again after each change)
+npm run build            # builds dist/ (npm run watch: builds again after each change)
 npm run typecheck
-npm test               # unit tests (vitest)
-npm run test:deno      # tests against a real Deno program (needs Deno, or DENO_PATH)
-npm run test:render    # screenshots of the view in three themes (test/render/output)
-npm run test:vscode    # tests in a real VS Code (downloads VS Code; use xvfb-run on Linux)
-npm run package        # builds mindbug-<version>.vsix (minified, without source maps)
-npm run install-local  # builds the .vsix and installs it into the VS Code of this computer
+npm test                 # unit tests (vitest)
+npm run test:deno        # tests against a real Deno program (needs Deno, or DENO_PATH)
+npm run test:render      # screenshots of the view in three themes (test/render/output)
+npm run test:vscode      # tests in a real VS Code (downloads VS Code; use xvfb-run on Linux)
+npm run package          # builds mindbug-<version>.vsix (minified, without source maps)
+npm run install-local    # builds the .vsix and installs it into the VS Code of this computer
+npm run uninstall-local  # removes it from the VS Code of this computer (also the old id nimblescape.heap-stack)
 ```
 
 `npm run record` records the example programs step by step with Deno into
