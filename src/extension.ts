@@ -1,4 +1,4 @@
-// Entry point of the mindbug extension.
+// Entry point of the Mindbug extension.
 
 import * as vscode from 'vscode';
 import { MemoryController } from './controller.ts';
@@ -18,8 +18,8 @@ export function activate(context: vscode.ExtensionContext): MindbugApi {
   const controller = new MemoryController(context.extensionUri);
   context.subscriptions.push(
     controller,
-    vscode.commands.registerCommand('mindbug.open', () => controller.open()),
-    vscode.commands.registerCommand('mindbug.run', async (resource?: vscode.Uri) => {
+    vscode.commands.registerCommand('nimblescape.mindbug.open', () => controller.open()),
+    vscode.commands.registerCommand('nimblescape.mindbug.run', async (resource?: vscode.Uri) => {
       const started = await runWithMindbug(resource);
       if (started) controller.open();
     }),

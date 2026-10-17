@@ -7,7 +7,7 @@ export interface WebviewHtmlInput {
   nonce: string;
   scriptUri: string;
   styleUri: string;
-  /** Maximum number of steps the panel keeps (setting `mindbug.maxHistorySteps`). */
+  /** Maximum number of steps the panel keeps (setting `nimblescape.mindbug.maxHistorySteps`). */
   maxSteps?: number;
 }
 

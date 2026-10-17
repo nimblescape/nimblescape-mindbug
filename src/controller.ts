@@ -121,7 +121,7 @@ export class MemoryController implements vscode.Disposable {
   }
 
   private maxSteps(): number {
-    return vscode.workspace.getConfiguration('mindbug').get<number>('maxHistorySteps', 500);
+    return vscode.workspace.getConfiguration('nimblescape.mindbug').get<number>('maxHistorySteps', 500);
   }
 
   /**
@@ -203,7 +203,7 @@ export class MemoryController implements vscode.Disposable {
 
   private onStopped(session: vscode.DebugSession, threadId: number): void {
     this.paused = { session, threadId };
-    const config = vscode.workspace.getConfiguration('mindbug');
+    const config = vscode.workspace.getConfiguration('nimblescape.mindbug');
     if (!this.panel && config.get<boolean>('openAutomatically', true) && !this.autoOpened.has(rootId(session))) {
       this.autoOpened.add(rootId(session));
       this.open();
@@ -238,7 +238,7 @@ export class MemoryController implements vscode.Disposable {
   }
 
   private limits(): WalkerLimits {
-    const c = vscode.workspace.getConfiguration('mindbug');
+    const c = vscode.workspace.getConfiguration('nimblescape.mindbug');
     return {
       objects: c.get<number>('maxObjects', DEFAULT_LIMITS.objects),
       items: c.get<number>('maxArrayItems', DEFAULT_LIMITS.items),

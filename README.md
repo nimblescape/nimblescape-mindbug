@@ -49,7 +49,7 @@ The view follows the color theme of VS Code: light, dark and high contrast.
 
 - VS Code 1.90 or newer. The extension uses the JavaScript debugger that is built into VS Code.
 - [Deno 2](https://docs.deno.com/runtime/getting_started/installation/) on the `PATH`, or the
-  setting `mindbug.denoPath` pointing to the Deno program.
+  setting `nimblescape.mindbug.denoPath` pointing to the Deno program.
 
 ## How to use it
 
@@ -68,14 +68,14 @@ three small programs and a `launch.json`.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `mindbug.denoPath` | `deno` | Path to the Deno program. |
-| `mindbug.inspectPort` | `9229` | Port on which Deno waits for the debugger. |
-| `mindbug.stopOnEntry` | `true` | Pause at the first line of the program. |
-| `mindbug.openAutomatically` | `true` | Open the Mindbug view at the first pause of a debug session. |
-| `mindbug.maxHistorySteps` | `500` | Number of steps that the view keeps for the step history. |
-| `mindbug.maxObjects` | `300` | Number of heap objects that are read per scope. |
-| `mindbug.maxArrayItems` | `100` | Number of array items, set members and map entries per object. |
-| `mindbug.maxStringLength` | `200` | Number of characters per string. |
+| `nimblescape.mindbug.denoPath` | `deno` | Path to the Deno program. |
+| `nimblescape.mindbug.inspectPort` | `9229` | Port on which Deno waits for the debugger. |
+| `nimblescape.mindbug.stopOnEntry` | `true` | Pause at the first line of the program. |
+| `nimblescape.mindbug.openAutomatically` | `true` | Open the Mindbug view at the first pause of a debug session. |
+| `nimblescape.mindbug.maxHistorySteps` | `500` | Number of steps that the view keeps for the step history. |
+| `nimblescape.mindbug.maxObjects` | `300` | Number of heap objects that are read per scope. |
+| `nimblescape.mindbug.maxArrayItems` | `100` | Number of array items, set members and map entries per object. |
+| `nimblescape.mindbug.maxStringLength` | `200` | Number of characters per string. |
 
 The toolbar of the view has three switches: **Show classes**, **Show functions** (functions, and the
 variables that hold functions or classes) and **Show ids** (the object ids).
@@ -109,9 +109,9 @@ npm test                 # unit tests (vitest)
 npm run test:deno        # tests against a real Deno program (needs Deno, or DENO_PATH)
 npm run test:render      # screenshots of the view in three themes (test/render/output)
 npm run test:vscode      # tests in a real VS Code (downloads VS Code; use xvfb-run on Linux)
-npm run package          # builds mindbug-<version>.vsix (minified, without source maps)
+npm run package          # builds nimblescape-mindbug-<version>.vsix (minified, without source maps)
 npm run install-local    # builds the .vsix and installs it into the VS Code of this computer
-npm run uninstall-local  # removes it from the VS Code of this computer (also the old id nimblescape.heap-stack)
+npm run uninstall-local  # removes it from the VS Code of this computer (also the old ids nimblescape.heap-stack and nimblescape.mindbug)
 ```
 
 `npm run record` records the example programs step by step with Deno into

@@ -11,7 +11,7 @@ export interface MemoryPanelHandlers {
 }
 
 export class MemoryPanel {
-  static readonly viewType = 'mindbug.memory';
+  static readonly viewType = 'nimblescape.mindbug.memory';
 
   private readonly panel: vscode.WebviewPanel;
   private readonly disposables: vscode.Disposable[] = [];

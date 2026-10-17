@@ -35,7 +35,7 @@ export function denoDebugConfiguration(file: string, cwd: string, s: DenoLaunchS
 }
 
 export function readLaunchSettings(): DenoLaunchSettings {
-  const c = vscode.workspace.getConfiguration('mindbug');
+  const c = vscode.workspace.getConfiguration('nimblescape.mindbug');
   return {
     denoPath: c.get<string>('denoPath', 'deno') || 'deno',
     port: c.get<number>('inspectPort', 9229),
@@ -59,7 +59,7 @@ export async function runWithMindbug(resource?: vscode.Uri): Promise<boolean> {
   const started = await vscode.debug.startDebugging(folder, config);
   if (!started) {
     void vscode.window.showErrorMessage(
-      'The debugger did not start. Check that Deno is installed and that the setting "mindbug.denoPath" points to it.',
+      'The debugger did not start. Check that Deno is installed and that the setting "nimblescape.mindbug.denoPath" points to it.',
     );
   }
   return started;
