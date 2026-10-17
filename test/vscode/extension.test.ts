@@ -256,10 +256,10 @@ async function continueToLine(api: MindbugApi, file: string, line: number): Prom
 
 async function callStack(api: MindbugApi, start: Start): Promise<void> {
   const file = path.join(examples(), 'call-stack.ts');
-  await debug(api, start, file, [35, 43, 57]);
+  await debug(api, start, file, [57, 65, 76]);
   // In lineTotal, the inner function, four scopes are on the stack, with the newest function call on top. The
   // variables of different scopes point to the same objects on the heap.
-  const first = await runToLine(api, file, 35);
+  const first = await runToLine(api, file, 57);
   assert.deepEqual(
     first.frames.map((f) => f.name),
     ['Global scope', 'checkout', 'makeBill', 'lineTotal'],
@@ -270,10 +270,16 @@ async function callStack(api: MindbugApi, start: Start): Promise<void> {
   assert.deepEqual(variable(first, 'lineTotal', 'total'), { k: 'num', v: '5.4' });
   const bill = idOf(variable(first, 'makeBill', 'bill'));
   const discount = idOf(variable(first, 'lineTotal', 'discount'));
+  // The objects are instances of classes.
+  assert.equal(first.objects[cart].items?.length, 2);
+  assert.equal(first.objects[idOf(first.objects[cart].items![0])].type, 'Item');
+  assert.equal(first.objects[discount].type, 'Discount');
+  assert.equal(first.objects[bill].type, 'Bill');
+  assert.equal(first.objects[first.objects[bill].cls!].kind, 'class');
 
   // The object of the inner function does not survive its call: the next call has a new object, and the old object
   // is not on the heap any more. The object of the middle function survives the call of the inner function.
-  const second = await continueToLine(api, file, 35);
+  const second = await continueToLine(api, file, 57);
   assert.notEqual(idOf(variable(second, 'lineTotal', 'discount')), discount, 'the second call creates a new object');
   assert.equal(second.objects[discount], undefined, 'the object of the first call is not on the heap any more');
   assert.equal(idOf(variable(second, 'makeBill', 'bill')), bill, 'the bill of makeBill is the same object');
@@ -281,12 +287,12 @@ async function callStack(api: MindbugApi, start: Start): Promise<void> {
 
   // The object of the middle function also survives the middle function: at the end, bill of the Global scope
   // points to it.
-  const made = await continueToLine(api, file, 43);
+  const made = await continueToLine(api, file, 65);
   assert.deepEqual(
     made.frames.map((f) => f.name),
     ['Global scope', 'checkout', 'makeBill'],
   );
-  const end = await continueToLine(api, file, 57);
+  const end = await continueToLine(api, file, 76);
   assert.deepEqual(
     end.frames.map((f) => f.name),
     ['Global scope'],
