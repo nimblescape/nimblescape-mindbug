@@ -91,6 +91,7 @@ describe('the package', () => {
       'README.md',
       'CHANGELOG.md',
       'LICENSE',
+      'SUPPORT.md',
     ];
     // The icons of the commands of package.json and of the editor (src/controller.ts).
     for (const command of manifest.contributes.commands) {
@@ -115,9 +116,9 @@ describe('the package', () => {
 
 describe('the documents', () => {
   // The package keeps the Markdown links of its documents unchanged (--no-rewrite-relative-links). A relative link
-  // outside code would therefore break on the Marketplace page.
+  // outside code would therefore break on the Marketplace page and in the installed extension.
   it('link outside code to web addresses or fragments only, in the documents of the package', () => {
-    for (const name of ['README.md', 'CHANGELOG.md']) {
+    for (const name of ['README.md', 'CHANGELOG.md', 'SUPPORT.md']) {
       const text = read(name)
         .replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?^ {0,3}\1[^\n]*$/gm, '')
         .replace(/`[^`\n]*`/g, '');
