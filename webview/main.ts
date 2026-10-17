@@ -200,6 +200,11 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
       state.statusText = msg.text;
       render();
       break;
+    case 'showStep': {
+      const i = history.snapshots.findIndex((s) => s.step === msg.step);
+      if (i >= 0) showStep(i);
+      break;
+    }
     case 'focusFrame':
       state.focusFrameId = msg.frameId;
       for (const f of framesEl.querySelectorAll<HTMLElement>('.frame')) {

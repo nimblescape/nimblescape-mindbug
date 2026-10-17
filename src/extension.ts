@@ -2,7 +2,7 @@
 
 import * as vscode from 'vscode';
 import { MemoryController } from './controller.ts';
-import { runWithMindbug } from './denoLaunch.ts';
+import { runWithMindbug } from './launch.ts';
 import type { MemorySnapshot } from './model.ts';
 
 export interface MindbugApi {

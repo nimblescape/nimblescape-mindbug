@@ -37,8 +37,8 @@ export class MemoryController implements vscode.Disposable {
    */
   private readonly stepDecoration: vscode.TextEditorDecorationType;
   private viewedStep: Extract<FromWebview, { type: 'viewStep' }> | undefined;
-  /** Counts the calls of revealLine, so that a call that waits for an editor to open does not undo a later call. */
-  private reveals = 0;
+  /** The reveals of revealLine, one after the other: a reveal that waits for an editor to open must not undo a later one. */
+  private revealing: Promise<void> = Promise.resolve();
   /** Resolvers waiting for the next snapshot (used by tests). */
   private readonly snapshotWaiters: ((s: MemorySnapshot) => void)[] = [];
 
@@ -134,41 +134,41 @@ export class MemoryController implements vscode.Disposable {
   private onViewStep(m: Extract<FromWebview, { type: 'viewStep' }> | undefined): void {
     this.viewedStep = m && !m.live && m.file && m.line ? m : undefined;
     this.markViewedStep();
-    if (m?.file && m.line) void this.revealLine(m.file, m.line, !m.live);
+    if (m?.file && m.line) this.revealLine(m.file, m.line, !m.live);
   }
 
   /**
    * Scrolls the editor of `file` to `line`. When no editor shows the file, `open` opens it in the first column
    * (an earlier step can be in a file that is closed now); the live step only scrolls, because the debugger opens it.
    */
-  private async revealLine(file: string, line: number, open: boolean): Promise<void> {
-    const reveal = ++this.reveals;
+  private revealLine(file: string, line: number, open: boolean): void {
+    this.revealing = this.revealing.then(() => this.revealNow(file, line, open)).catch(() => undefined);
+  }
+
+  private async revealNow(file: string, line: number, open: boolean): Promise<void> {
     const l = Math.max(0, line - 1);
     const range = new vscode.Range(l, 0, l, 0);
     let editor = vscode.window.visibleTextEditors.find((e) => sameFile(e.document.uri, file));
     if (!editor && open) {
       try {
         editor = await vscode.window.showTextDocument(vscode.Uri.file(file), {
-          viewColumn: vscode.ViewColumn.One,
+          viewColumn: this.panel?.editorColumn() ?? vscode.ViewColumn.One,
           preserveFocus: true,
           preview: true,
         });
       } catch {
         return; // the file does not exist any more
       }
-      // While the editor opened, the panel showed another step: its line counts.
-      if (reveal !== this.reveals) return;
     }
     editor?.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
   }
 
-  /** Shows the step with number `step` as the panel does when you select it in the step list (for tests). */
+  /**
+   * Shows the step with number `step` in the panel, as when you select it in the step list (for tests). The panel
+   * then sends the `viewStep` message, in order after the messages it sent before.
+   */
   viewStep(step: number): void {
-    const i = this.history.findIndex((s) => s.step === step);
-    const snap = this.history[i];
-    if (!snap) return;
-    const top = snap.frames[snap.frames.length - 1];
-    this.onViewStep({ type: 'viewStep', step, live: i === this.history.length - 1, file: top?.file, line: top?.line });
+    this.panel?.post({ type: 'showStep', step });
   }
 
   private markViewedStep(): void {

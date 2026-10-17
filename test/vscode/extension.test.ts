@@ -1,7 +1,7 @@
 /// <reference types="mocha" />
 // Tests in a real VS Code (npm run test:vscode, .vscode-test.mjs): mocha runs them in the extension host. They debug
-// the example programs with Deno through VS Code's built-in JavaScript debugger and check the snapshots of the
-// extension.
+// the example programs through VS Code's built-in JavaScript debugger and check the snapshots of the extension. The same
+// checks run for each way to start a program (STARTS): the view must not depend on the runtime.
 
 import * as assert from 'node:assert/strict';
 import * as path from 'node:path';
@@ -47,8 +47,41 @@ async function runToLine(api: MindbugApi, file: string, line: number): Promise<M
   throw new Error(`the program did not pause at line ${line}`);
 }
 
-/** Starts "Run with Mindbug" for `file` and returns the snapshot of the first pause (stop on entry). */
-async function debug(api: MindbugApi, file: string, breakpointLines: number[]): Promise<MemorySnapshot> {
+/** A way to start a program: the command "Run with Mindbug" with a runtime, or an own launch configuration. */
+interface Start {
+  title: string;
+  run(file: string): Thenable<unknown>;
+  /** True when the first pause is at the first statement of the program. */
+  pausesAtFirstStatement: boolean;
+}
+
+async function runWithMindbug(runtime: 'node' | 'deno', file: string): Promise<void> {
+  await vscode.workspace.getConfiguration('nimblescape.mindbug').update('runtime', runtime, vscode.ConfigurationTarget.Global);
+  await vscode.commands.executeCommand('nimblescape.mindbug.run', vscode.Uri.file(file));
+}
+
+const STARTS: Start[] = [
+  { title: 'Run with Mindbug, Deno', run: (file) => runWithMindbug('deno', file), pausesAtFirstStatement: true },
+  { title: 'Run with Mindbug, Node.js', run: (file) => runWithMindbug('node', file), pausesAtFirstStatement: true },
+  {
+    // What a student writes in launch.json: nothing in it is about Mindbug. Node.js comes from the PATH.
+    // With stopOnEntry, the debugger stops at the first line of the file that can stop, which can be inside a function.
+    title: 'own launch configuration, Node.js',
+    pausesAtFirstStatement: false,
+    run: (file) =>
+      vscode.debug.startDebugging(vscode.workspace.workspaceFolders?.[0], {
+        type: 'node',
+        request: 'launch',
+        name: 'Node.js: current file',
+        program: file,
+        stopOnEntry: true,
+        console: 'internalConsole',
+      }),
+  },
+];
+
+/** Starts `file` and returns the snapshot of the first pause (stop on entry). */
+async function debug(api: MindbugApi, start: Start, file: string, breakpointLines: number[]): Promise<MemorySnapshot> {
   const uri = vscode.Uri.file(file);
   vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
   vscode.debug.addBreakpoints(
@@ -56,7 +89,7 @@ async function debug(api: MindbugApi, file: string, breakpointLines: number[]): 
   );
   await vscode.window.showTextDocument(uri);
   const first = api.nextSnapshot(TIMEOUT);
-  await vscode.commands.executeCommand('nimblescape.mindbug.run', uri);
+  await start.run(file);
   return first;
 }
 
@@ -87,14 +120,21 @@ async function stop(): Promise<void> {
   await ended;
 }
 
-async function insertionSort(api: MindbugApi): Promise<void> {
+async function insertionSort(api: MindbugApi, start: Start): Promise<void> {
   const file = path.join(examples(), 'insertion-sort.ts');
-  const entry = await debug(api, file, [15]);
-  // The program pauses at its first statement, and Deno's own code is not a frame.
-  assert.deepEqual(
-    entry.frames.map((f) => [f.name, f.line, f.file]),
-    [['Global scope', 19, file]],
-  );
+  const entry = await debug(api, start, file, [15]);
+  // The program pauses at its first statement, and the runtime's own code is not a frame.
+  if (start.pausesAtFirstStatement) {
+    assert.deepEqual(
+      entry.frames.map((f) => [f.name, f.line, f.file]),
+      [['Global scope', 19, file]],
+    );
+  } else {
+    assert.deepEqual(
+      entry.frames.map((f) => [f.name, f.file]),
+      [['Global scope', file], ['insertionSort', file]],
+    );
+  }
   const s = await runToLine(api, file, 15);
   assert.deepEqual(
     s.frames.map((f) => f.name),
@@ -113,9 +153,9 @@ async function insertionSort(api: MindbugApi): Promise<void> {
   await stop();
 }
 
-async function people(api: MindbugApi): Promise<void> {
+async function people(api: MindbugApi, start: Start): Promise<void> {
   const file = path.join(examples(), 'people.ts');
-  await debug(api, file, [9, 22, 38, 29]);
+  await debug(api, start, file, [9, 22, 38, 29]);
   // The frame of a method has the class that declares it; a constructor is "Class.constructor", also when
   // a subclass calls it with super(...).
   const first = await runToLine(api, file, 9);
@@ -169,6 +209,10 @@ describe('the Mindbug view in VS Code', () => {
     if (vscode.debug.activeDebugSession) await stop();
   });
 
-  it('shows the scopes, the arrays and the aliasing of insertion sort', () => insertionSort(api));
-  it('shows classes, static variables and the scopes of constructors and methods', () => people(api));
+  for (const start of STARTS) {
+    describe(start.title, () => {
+      it('shows the scopes, the arrays and the aliasing of insertion sort', () => insertionSort(api, start));
+      it('shows classes, static variables and the scopes of constructors and methods', () => people(api, start));
+    });
+  }
 });

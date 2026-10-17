@@ -116,7 +116,9 @@ export type ToWebview =
   | { type: 'history'; snapshots: MemorySnapshot[]; sessionId: string }
   | { type: 'status'; state: Exclude<ProgramState, 'paused'>; text: string }
   /** The frame selected in the VS Code Call Stack view. */
-  | { type: 'focusFrame'; frameId: number | undefined };
+  | { type: 'focusFrame'; frameId: number | undefined }
+  /** Show the step with this number, as when it is selected in the step list (for tests). */
+  | { type: 'showStep'; step: number };
 
 /** Messages from the webview to the extension. */
 export type FromWebview =

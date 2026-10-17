@@ -87,6 +87,17 @@ export function isUserFrame(frame: DapStackFrame): boolean {
 
 const ANONYMOUS = /^(<anonymous>|\(anonymous\)|anonymous|<module>|)$/;
 
+/** The parameters of the function in which Node.js runs a CommonJS module (a file without import or export). */
+const COMMONJS_PARAMETERS = ['exports', 'require', 'module', '__filename', '__dirname'];
+
+/**
+ * True for the frame of a CommonJS module in Node.js: the outermost frame, without a name, with the parameters
+ * of the module function. Its variables are the global variables of the file, as in the Module scope of an ES module.
+ */
+export function isCommonJsModule(name: string, isLast: boolean, localNames: string[]): boolean {
+  return isLast && ANONYMOUS.test(name.trim()) && COMMONJS_PARAMETERS.every((p) => localNames.includes(p));
+}
+
 /**
  * Readable names for the functions that V8 creates for class fields:
  * `<instance_members_initializer>` runs the field initializers of `new Person()`,
@@ -134,9 +145,10 @@ export function frameLabel(
   const isStatic = thisObj?.kind === 'class';
   const chain = classChain(objects, isStatic ? thisObj?.id : thisObj?.cls);
 
-  // The debugger names the class of `this` ("Function" for a class) in front of the function name.
+  // The debugger names the class of `this` ("Function" for a class) in front of the function name. In a function
+  // that runs without an object, `this` is the global object in Node.js, and the debugger writes "global.".
   let base = debuggerName;
-  for (const p of [chain[0]?.type, 'Function']) {
+  for (const p of [chain[0]?.type, 'Function', thisValue === undefined ? 'global' : undefined]) {
     if (p && base.startsWith(`${p}.`)) {
       base = base.slice(p.length + 1);
       break;
@@ -290,7 +302,7 @@ async function readFrame(
   const scopes = await readScopes(dap, f.id);
   const hasLocal = scopes.some((s) => s.cls === 'local');
   const hasModule = scopes.some((s) => s.cls === 'module');
-  const isGlobal = !hasLocal && (hasModule || (isLast && ANONYMOUS.test(f.name.trim())));
+  let isGlobal = !hasLocal && (hasModule || (isLast && ANONYMOUS.test(f.name.trim())));
 
   const frame: Frame = {
     frameId: f.id,
@@ -324,13 +336,21 @@ async function readFrame(
   // DAP lists scopes from the innermost to the outermost. The innermost name wins
   // (this is also what an expression in this frame sees).
   const seen = new Set<string>();
-  const ordered: { name: string; scope: ScopeKind; dap: DapVariable }[] = [];
+  let ordered: { name: string; scope: ScopeKind; dap: DapVariable }[] = [];
   for (const sv of scopeVars) {
     for (const v of sv.vars) {
       if (seen.has(v.name)) continue;
       seen.add(v.name);
       ordered.push({ name: v.name, scope: sv.kind, dap: v });
     }
+  }
+  const localNames = ordered.filter((o) => o.scope === 'local').map((o) => o.name);
+  if (!isGlobal && isCommonJsModule(f.name, isLast, localNames)) {
+    isGlobal = true;
+    frame.isGlobal = true;
+    frame.name = 'Global scope';
+    const hidden = new Set([...COMMONJS_PARAMETERS, 'this']);
+    ordered = ordered.filter((o) => !(o.scope === 'local' && hidden.has(o.name)));
   }
   if (!isGlobal && !seen.has('this')) {
     ordered.push({ name: 'this', scope: 'local', dap: { name: 'this', value: '', variablesReference: 0 } });
