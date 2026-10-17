@@ -19,7 +19,7 @@ export function webviewHtml(o: WebviewHtmlInput): string {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${o.cspSource}; script-src 'nonce-${o.nonce}'; img-src ${o.cspSource} data:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link href="${o.styleUri}" rel="stylesheet">
-<title>Memory</title>
+<title>Heap Stack</title>
 </head>
 <body data-max-steps="${o.maxSteps ?? 500}">
 <header class="toolbar">
@@ -41,7 +41,7 @@ export function webviewHtml(o: WebviewHtmlInput): string {
 <div id="banner" class="banner" role="note" hidden></div>
 <div id="empty" class="empty">
   <p><strong>No program is paused.</strong></p>
-  <p>Open a TypeScript file and run the command <strong>Heap Stack: Debug Current File with Deno</strong>,
+  <p>Open a TypeScript file and run the command <strong>Run with Heap Stack</strong>,
   or start your own Deno launch configuration with F5.</p>
   <p>When the program stops at a breakpoint or after a step, this panel shows the <strong>stack</strong>
   (one frame for each function call, with its local variables) and the <strong>heap</strong>

@@ -5,9 +5,9 @@ while you debug it: the **stack** with one frame for each function call, and the
 objects and arrays that the variables point to. It works like [Python Tutor](https://pythontutor.com),
 but inside VS Code, with the normal debugger, and with [Deno](https://deno.com) as the runtime.
 
-![The memory view next to the code: stack frames on the left, arrays on the heap on the right](docs/images/stack-and-heap.png)
+![The Heap Stack view next to the code: stack frames on the left, arrays on the heap on the right](docs/images/stack-and-heap.png)
 
-## What the memory view shows
+## What the Heap Stack view shows
 
 - **STACK** (blue area): one frame for each function call. The function that runs now is at the
   bottom and has the label "runs now". Each variable is a box. A number, a string or a boolean is
@@ -31,7 +31,9 @@ but inside VS Code, with the normal debugger, and with [Deno](https://deno.com) 
 
 Each time the program pauses (a breakpoint or a step), the view saves a step. Use the step list,
 the slider or the Left and Right arrow keys to go back to an earlier step. The view then shows the
-memory as it was at that step, and the editor marks the line where the program was. Select
+memory as it was at that step. The editor shows the line where the program was at that step and
+marks it, also when that line is in another file. The line is in your TypeScript file, because
+VS Code's debugger reads Deno's source map. Select
 **Show current step** (or press End) to go back to the newest step.
 
 ![An earlier step in the dark theme, with the banner "You are looking at step 8"](docs/images/history-dark.png)
@@ -47,9 +49,9 @@ The view follows the color theme of VS Code: light, dark and high contrast.
 ## How to use it
 
 1. Open a TypeScript file.
-2. Run the command **Heap Stack: Debug Current File with Deno** (Command Palette, or the button
-   at the top right of the editor).
-3. The program pauses at its first line, and the **Memory** view opens next to the code.
+2. Run the command **Run with Heap Stack** (Command Palette, or the button at the top right of the
+   editor).
+3. The program pauses at its first line, and the **Heap Stack** view opens next to the code.
 4. Use **Step Over** (F10) and **Step Into** (F11) of the debugger. The view changes at each step.
 
 You can also use your own launch configuration (`.vscode/launch.json`). In `launch.json`, select
@@ -64,7 +66,7 @@ three small programs and a `launch.json`.
 | `heapStack.denoPath` | `deno` | Path to the Deno program. |
 | `heapStack.inspectPort` | `9229` | Port on which Deno waits for the debugger. |
 | `heapStack.stopOnEntry` | `true` | Pause at the first line of the program. |
-| `heapStack.openAutomatically` | `true` | Open the memory view at the first pause of a debug session. |
+| `heapStack.openAutomatically` | `true` | Open the Heap Stack view at the first pause of a debug session. |
 | `heapStack.maxHistorySteps` | `500` | Number of steps that the view keeps for the step history. |
 | `heapStack.maxObjects` | `300` | Number of heap objects that are read per stack frame. |
 | `heapStack.maxArrayItems` | `100` | Number of array items, set members and map entries per object. |

@@ -1,4 +1,4 @@
-// Command "Heap Stack: Debug Current File with Deno".
+// Command "Run with Heap Stack".
 // It starts VS Code's built-in JavaScript debugger with Deno as the runtime,
 // so students do not need to write a launch.json file.
 
@@ -11,11 +11,15 @@ export interface DenoLaunchSettings {
   stopOnEntry: boolean;
 }
 
-/** The debug configuration for one TypeScript file. Same shape as the Deno documentation recommends. */
+/**
+ * The debug configuration for one TypeScript file. Same shape as the Deno documentation recommends, but with the type
+ * "pwa-node" (the name of VS Code's JavaScript debugger for "node"): with the type "node" and `attachSimplePort`, the
+ * debugger continues at the pause of --inspect-brk, so the program does not stop at its first line.
+ */
 export function denoDebugConfiguration(file: string, cwd: string, s: DenoLaunchSettings): vscode.DebugConfiguration {
   const inspectFlag = s.stopOnEntry ? '--inspect-brk' : '--inspect-wait';
   return {
-    type: 'node',
+    type: 'pwa-node',
     request: 'launch',
     name: `Heap Stack: ${path.basename(file)}`,
     program: file,
@@ -39,11 +43,11 @@ export function readLaunchSettings(): DenoLaunchSettings {
   };
 }
 
-export async function debugCurrentFileWithDeno(resource?: vscode.Uri): Promise<boolean> {
+export async function runWithHeapStack(resource?: vscode.Uri): Promise<boolean> {
   const editor = vscode.window.activeTextEditor;
   const uri = resource instanceof vscode.Uri ? resource : editor?.document.uri;
   if (!uri || uri.scheme !== 'file') {
-    void vscode.window.showErrorMessage('Open a TypeScript file first, then run "Debug Current File with Deno" again.');
+    void vscode.window.showErrorMessage('Open a TypeScript file first, then run "Run with Heap Stack" again.');
     return false;
   }
   const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());

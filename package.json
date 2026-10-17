@@ -35,24 +35,22 @@
     "commands": [
       {
         "command": "heapStack.open",
-        "title": "Open Memory View",
-        "category": "Heap Stack",
+        "title": "Open Heap Stack",
         "icon": {
           "light": "media/memory-light.svg",
           "dark": "media/memory-dark.svg"
         }
       },
       {
-        "command": "heapStack.debugWithDeno",
-        "title": "Debug Current File with Deno",
-        "category": "Heap Stack",
+        "command": "heapStack.run",
+        "title": "Run with Heap Stack",
         "icon": "$(debug-alt)"
       }
     ],
     "menus": {
       "editor/title": [
         {
-          "command": "heapStack.debugWithDeno",
+          "command": "heapStack.run",
           "when": "resourceLangId == typescript && !inDebugMode",
           "group": "navigation"
         },
@@ -64,7 +62,7 @@
       ],
       "commandPalette": [
         {
-          "command": "heapStack.debugWithDeno",
+          "command": "heapStack.run",
           "when": "resourceLangId == typescript"
         }
       ]
@@ -75,7 +73,7 @@
         "heapStack.denoPath": {
           "type": "string",
           "default": "deno",
-          "markdownDescription": "Path to the Deno program, used by **Debug Current File with Deno**. The default `deno` works when Deno is on the `PATH`."
+          "markdownDescription": "Path to the Deno program, used by **Run with Heap Stack**. The default `deno` works when Deno is on the `PATH`."
         },
         "heapStack.inspectPort": {
           "type": "number",
@@ -85,19 +83,19 @@
         "heapStack.stopOnEntry": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "When on, **Debug Current File with Deno** pauses at the first line of the program, so you can step from the start."
+          "markdownDescription": "When on, **Run with Heap Stack** pauses at the first line of the program, so you can step from the start."
         },
         "heapStack.openAutomatically": {
           "type": "boolean",
           "default": true,
-          "description": "Open the memory view when a debug session pauses for the first time."
+          "description": "Open the Heap Stack view when a debug session pauses for the first time."
         },
         "heapStack.maxHistorySteps": {
           "type": "number",
           "default": 500,
           "minimum": 1,
           "maximum": 5000,
-          "description": "Maximum number of steps that the memory view keeps, so that you can go back to an earlier step. When there are more steps, the oldest steps are removed."
+          "description": "Maximum number of steps that the Heap Stack view keeps, so that you can go back to an earlier step. When there are more steps, the oldest steps are removed."
         },
         "heapStack.maxObjects": {
           "type": "number",

@@ -118,10 +118,46 @@ export class MemoryController implements vscode.Disposable {
     return vscode.workspace.getConfiguration('heapStack').get<number>('maxHistorySteps', 500);
   }
 
-  /** The panel shows another step. An earlier step gets its line marked in the editor. */
+  /**
+   * The panel shows another step. The editor shows the line of that step, as the debugger does at a pause, and an
+   * earlier step gets its line marked. The line is already in the TypeScript file: VS Code's JavaScript debugger
+   * maps the stack frames through Deno's source map.
+   */
   private onViewStep(m: Extract<FromWebview, { type: 'viewStep' }> | undefined): void {
     this.viewedStep = m && !m.live && m.file && m.line ? m : undefined;
     this.markViewedStep();
+    if (m?.file && m.line) void this.revealLine(m.file, m.line, !m.live);
+  }
+
+  /**
+   * Scrolls the editor of `file` to `line`. When no editor shows the file, `open` opens it in the first column
+   * (an earlier step can be in a file that is closed now); the live step only scrolls, because the debugger opens it.
+   */
+  private async revealLine(file: string, line: number, open: boolean): Promise<void> {
+    const l = Math.max(0, line - 1);
+    const range = new vscode.Range(l, 0, l, 0);
+    let editor = vscode.window.visibleTextEditors.find((e) => sameFile(e.document.uri, file));
+    if (!editor && open) {
+      try {
+        editor = await vscode.window.showTextDocument(vscode.Uri.file(file), {
+          viewColumn: vscode.ViewColumn.One,
+          preserveFocus: true,
+          preview: true,
+        });
+      } catch {
+        return; // the file does not exist any more
+      }
+    }
+    editor?.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+  }
+
+  /** Shows the step with number `step` as the panel does when you select it in the step list (for tests). */
+  viewStep(step: number): void {
+    const i = this.history.findIndex((s) => s.step === step);
+    const snap = this.history[i];
+    if (!snap) return;
+    const top = snap.frames[snap.frames.length - 1];
+    this.onViewStep({ type: 'viewStep', step, live: i === this.history.length - 1, file: top?.file, line: top?.line });
   }
 
   private markViewedStep(): void {
@@ -135,8 +171,8 @@ export class MemoryController implements vscode.Disposable {
       editor.setDecorations(this.stepDecoration, [
         {
           range: new vscode.Range(line, 0, line, 0),
-          hoverMessage: `The memory view shows step ${m.step}. At that step the program was at this line.`,
-          renderOptions: { after: { contentText: `◀ memory view: step ${m.step}` } },
+          hoverMessage: `Heap Stack shows step ${m.step}. At that step the program was at this line.`,
+          renderOptions: { after: { contentText: `◀ Heap Stack: step ${m.step}` } },
         },
       ]);
     }

@@ -47,7 +47,8 @@ async function runToLine(api: HeapStackApi, file: string, line: number): Promise
   throw new Error(`the program did not pause at line ${line}`);
 }
 
-async function debug(api: HeapStackApi, file: string, breakpointLines: number[]): Promise<void> {
+/** Starts "Run with Heap Stack" for `file` and returns the snapshot of the first pause (stop on entry). */
+async function debug(api: HeapStackApi, file: string, breakpointLines: number[]): Promise<MemorySnapshot> {
   const uri = vscode.Uri.file(file);
   vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
   vscode.debug.addBreakpoints(
@@ -55,8 +56,23 @@ async function debug(api: HeapStackApi, file: string, breakpointLines: number[])
   );
   await vscode.window.showTextDocument(uri);
   const first = api.nextSnapshot(TIMEOUT);
-  await vscode.commands.executeCommand('heapStack.debugWithDeno', uri);
-  await first;
+  await vscode.commands.executeCommand('heapStack.run', uri);
+  return first;
+}
+
+/** Waits until an editor shows `line` of `file`. */
+async function waitForVisibleLine(file: string, line: number): Promise<void> {
+  for (let i = 0; i < 50; i++) {
+    const editor = vscode.window.visibleTextEditors.find((e) => e.document.uri.fsPath === file);
+    if (editor?.visibleRanges.some((r) => r.start.line <= line - 1 && line - 1 <= r.end.line)) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`no editor shows line ${line} of ${path.basename(file)}`);
+}
+
+async function closeTextEditors(): Promise<void> {
+  const tabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs).filter((t) => t.input instanceof vscode.TabInputText);
+  await vscode.window.tabGroups.close(tabs);
 }
 
 async function stop(): Promise<void> {
@@ -73,7 +89,12 @@ async function stop(): Promise<void> {
 
 async function insertionSort(api: HeapStackApi): Promise<void> {
   const file = path.join(examples(), 'insertion-sort.ts');
-  await debug(api, file, [15]);
+  const entry = await debug(api, file, [15]);
+  // The program pauses at its first statement, and Deno's own code is not a frame.
+  assert.deepEqual(
+    entry.frames.map((f) => [f.name, f.line, f.file]),
+    [['Global frame', 19, file]],
+  );
   const s = await runToLine(api, file, 15);
   assert.deepEqual(
     s.frames.map((f) => f.name),
@@ -124,10 +145,17 @@ async function people(api: HeapStackApi): Promise<void> {
   assert.deepEqual(person.attrs, ['name', 'age', 'home', 'bestFriend']);
   const bob = s.objects[idOf(variable(s, 'Global frame', 'bob'))];
   assert.equal(s.objects[bob.cls!].superId, person.id);
+
+  // An earlier step of the history shows its line in the editor, also when the file is closed.
+  await closeTextEditors();
+  api.viewStep(first.step);
+  await waitForVisibleLine(file, 9);
+  api.viewStep(s.step);
+  await waitForVisibleLine(file, 29);
   await stop();
 }
 
-describe('the memory view in VS Code', () => {
+describe('the Heap Stack view in VS Code', () => {
   let api: HeapStackApi;
 
   before(async () => {
