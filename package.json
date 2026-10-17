@@ -1,13 +1,13 @@
 {
-  "name": "mindbug",
-  "displayName": "Mindbug",
+  "name": "nimblescape-mindbug",
+  "displayName": "nimblescape Mindbug",
   "description": "Shows the stack (one scope for each function call) and the heap of a paused TypeScript program (Deno) as a diagram, to help students learn how memory works.",
   "version": "0.1.0",
   "publisher": "nimblescape",
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/nimblescape/nimblescape-mindbug"
+    "url": "https://github.com/nimblescape/nimblescape-mindbug.git"
   },
   "engines": {
     "vscode": "^1.90.0"
@@ -34,7 +34,7 @@
   "contributes": {
     "commands": [
       {
-        "command": "mindbug.open",
+        "command": "nimblescape.mindbug.open",
         "title": "Open Mindbug",
         "icon": {
           "light": "media/memory-light.svg",
@@ -42,7 +42,7 @@
         }
       },
       {
-        "command": "mindbug.run",
+        "command": "nimblescape.mindbug.run",
         "title": "Run with Mindbug",
         "icon": "$(debug-alt)"
       }
@@ -50,68 +50,68 @@
     "menus": {
       "editor/title": [
         {
-          "command": "mindbug.run",
+          "command": "nimblescape.mindbug.run",
           "when": "resourceLangId == typescript && !inDebugMode",
           "group": "navigation"
         },
         {
-          "command": "mindbug.open",
+          "command": "nimblescape.mindbug.open",
           "when": "inDebugMode",
           "group": "navigation"
         }
       ],
       "commandPalette": [
         {
-          "command": "mindbug.run",
+          "command": "nimblescape.mindbug.run",
           "when": "resourceLangId == typescript"
         }
       ]
     },
     "configuration": {
-      "title": "Mindbug",
+      "title": "nimblescape Mindbug",
       "properties": {
-        "mindbug.denoPath": {
+        "nimblescape.mindbug.denoPath": {
           "type": "string",
           "default": "deno",
           "markdownDescription": "Path to the Deno program, used by **Run with Mindbug**. The default `deno` works when Deno is on the `PATH`."
         },
-        "mindbug.inspectPort": {
+        "nimblescape.mindbug.inspectPort": {
           "type": "number",
           "default": 9229,
           "description": "Port on which Deno waits for the debugger. Change it when another program uses port 9229."
         },
-        "mindbug.stopOnEntry": {
+        "nimblescape.mindbug.stopOnEntry": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "When on, **Run with Mindbug** pauses at the first line of the program, so you can step from the start."
         },
-        "mindbug.openAutomatically": {
+        "nimblescape.mindbug.openAutomatically": {
           "type": "boolean",
           "default": true,
           "description": "Open the Mindbug view when a debug session pauses for the first time."
         },
-        "mindbug.maxHistorySteps": {
+        "nimblescape.mindbug.maxHistorySteps": {
           "type": "number",
           "default": 500,
           "minimum": 1,
           "maximum": 5000,
           "description": "Maximum number of steps that the Mindbug view keeps, so that you can go back to an earlier step. When there are more steps, the oldest steps are removed."
         },
-        "mindbug.maxObjects": {
+        "nimblescape.mindbug.maxObjects": {
           "type": "number",
           "default": 300,
           "minimum": 10,
           "maximum": 5000,
           "description": "Maximum number of heap objects that are read per scope."
         },
-        "mindbug.maxArrayItems": {
+        "nimblescape.mindbug.maxArrayItems": {
           "type": "number",
           "default": 100,
           "minimum": 5,
           "maximum": 2000,
           "description": "Maximum number of array items, set members and map entries that are shown per object."
         },
-        "mindbug.maxStringLength": {
+        "nimblescape.mindbug.maxStringLength": {
           "type": "number",
           "default": 200,
           "minimum": 10,

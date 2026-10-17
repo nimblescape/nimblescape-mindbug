@@ -344,7 +344,7 @@ function renderHeapObject(id: number, input: RenderInput): HTMLElement {
   let box: HTMLElement;
   if (!o) {
     box = el('div', 'obj missing', '… not loaded');
-    box.title = 'This object was not read, because the program has too many objects. Increase "mindbug.maxObjects" to see more.';
+    box.title = 'This object was not read, because the program has too many objects. Increase "nimblescape.mindbug.maxObjects" to see more.';
   } else if (o.kind === 'array') {
     box = renderArray(o, input);
   } else if (o.kind === 'set') {

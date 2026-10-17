@@ -56,7 +56,7 @@ async function debug(api: MindbugApi, file: string, breakpointLines: number[]): 
   );
   await vscode.window.showTextDocument(uri);
   const first = api.nextSnapshot(TIMEOUT);
-  await vscode.commands.executeCommand('mindbug.run', uri);
+  await vscode.commands.executeCommand('nimblescape.mindbug.run', uri);
   return first;
 }
 
@@ -159,10 +159,10 @@ describe('the Mindbug view in VS Code', () => {
   let api: MindbugApi;
 
   before(async () => {
-    const ext = vscode.extensions.getExtension('nimblescape.mindbug');
+    const ext = vscode.extensions.getExtension('nimblescape.nimblescape-mindbug');
     assert.ok(ext, 'the extension is installed');
     api = (await ext.activate()) as MindbugApi;
-    await vscode.workspace.getConfiguration('mindbug').update('openAutomatically', true, vscode.ConfigurationTarget.Global);
+    await vscode.workspace.getConfiguration('nimblescape.mindbug').update('openAutomatically', true, vscode.ConfigurationTarget.Global);
   });
 
   afterEach(async () => {

@@ -1,4 +1,4 @@
-/* Memory panel of the mindbug extension.
+/* Memory panel of the Mindbug extension.
    All colors are tokens (--mb-*). They are set for the light theme first, then changed for the
    dark theme and the high contrast themes. VS Code sets the classes vscode-light, vscode-dark,
    vscode-high-contrast and vscode-high-contrast-light on <body>. */

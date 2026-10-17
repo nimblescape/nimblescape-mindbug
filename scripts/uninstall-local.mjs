@@ -10,8 +10,8 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** Ids that this extension had before (it was called heap-stack until 2026-10-17). */
-const FORMER_IDS = ['nimblescape.heap-stack'];
+/** Ids that this extension had before (heap-stack, then mindbug, until 2026-10-17). */
+const FORMER_IDS = ['nimblescape.heap-stack', 'nimblescape.mindbug'];
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { name, publisher } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
