@@ -146,7 +146,7 @@ npm run test:render      # screenshots of the view in three themes (test/render/
 npm run test:vscode      # tests in a real VS Code with Deno and Node.js (downloads VS Code; use xvfb-run on Linux)
 npm run package          # builds nimblescape-mindbug-<version>.vsix (minified, without source maps)
 npm run install-local    # builds the .vsix and installs it into the VS Code of this computer
-npm run uninstall-local  # removes it from the VS Code of this computer (also the old ids nimblescape.heap-stack and nimblescape.mindbug)
+npm run uninstall-local  # removes it from the VS Code of this computer (all profiles)
 ```
 
 `npm run record` records the example programs step by step with Deno into
