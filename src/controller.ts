@@ -37,6 +37,8 @@ export class MemoryController implements vscode.Disposable {
    */
   private readonly stepDecoration: vscode.TextEditorDecorationType;
   private viewedStep: Extract<FromWebview, { type: 'viewStep' }> | undefined;
+  /** Counts the calls of revealLine, so that a call that waits for an editor to open does not undo a later call. */
+  private reveals = 0;
   /** Resolvers waiting for the next snapshot (used by tests). */
   private readonly snapshotWaiters: ((s: MemorySnapshot) => void)[] = [];
 
@@ -140,6 +142,7 @@ export class MemoryController implements vscode.Disposable {
    * (an earlier step can be in a file that is closed now); the live step only scrolls, because the debugger opens it.
    */
   private async revealLine(file: string, line: number, open: boolean): Promise<void> {
+    const reveal = ++this.reveals;
     const l = Math.max(0, line - 1);
     const range = new vscode.Range(l, 0, l, 0);
     let editor = vscode.window.visibleTextEditors.find((e) => sameFile(e.document.uri, file));
@@ -153,6 +156,8 @@ export class MemoryController implements vscode.Disposable {
       } catch {
         return; // the file does not exist any more
       }
+      // While the editor opened, the panel showed another step: its line counts.
+      if (reveal !== this.reveals) return;
     }
     editor?.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
   }
