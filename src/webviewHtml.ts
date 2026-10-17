@@ -38,7 +38,6 @@ export function webviewHtml(o: WebviewHtmlInput): string {
   </div>
   <ol id="steps" class="steps" aria-label="Steps"></ol>
 </nav>
-<div id="banner" class="banner" role="note" hidden></div>
 <div id="empty" class="empty">
   <p><strong>No program is paused.</strong></p>
   <p>Open a TypeScript file and run the command <strong>Run with Heap Stack</strong>,
