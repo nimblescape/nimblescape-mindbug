@@ -41,7 +41,7 @@ export function webviewHtml(o: WebviewHtmlInput): string {
 <div id="empty" class="empty">
   <p><strong>No program is paused.</strong></p>
   <p>Open a TypeScript file and run the command <strong>Run with Mindbug</strong>,
-  or start your own Deno launch configuration with F5.</p>
+  or start a launch configuration with F5.</p>
   <p>When the program stops at a breakpoint or after a step, this panel shows the <strong>stack</strong>
   (one scope for each function call, with its local variables) and the <strong>heap</strong>
   (the objects and arrays that the variables point to).</p>

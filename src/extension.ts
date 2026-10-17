@@ -2,7 +2,7 @@
 
 import * as vscode from 'vscode';
 import { MemoryController } from './controller.ts';
-import { runWithMindbug } from './launch.ts';
+import { DEBUG_TYPE, MindbugConfigurationProvider, runWithMindbug } from './launch.ts';
 import type { MemorySnapshot } from './model.ts';
 
 export interface MindbugApi {
@@ -18,10 +18,17 @@ export function activate(context: vscode.ExtensionContext): MindbugApi {
   const controller = new MemoryController(context.extensionUri);
   context.subscriptions.push(
     controller,
+    // Dynamic: the configuration of the current file is in the list of "Run and Debug", also without launch.json.
+    vscode.debug.registerDebugConfigurationProvider(
+      DEBUG_TYPE,
+      new MindbugConfigurationProvider(),
+      vscode.DebugConfigurationProviderTriggerKind.Dynamic,
+    ),
     vscode.commands.registerCommand('nimblescape.mindbug.open', () => controller.open()),
     vscode.commands.registerCommand('nimblescape.mindbug.run', async (resource?: vscode.Uri) => {
       const started = await runWithMindbug(resource);
       if (started) controller.open();
+      return started;
     }),
   );
   return {

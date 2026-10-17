@@ -129,7 +129,7 @@ export class MemoryController implements vscode.Disposable {
   /**
    * The panel shows another step. The editor shows the line of that step, as the debugger does at a pause, and an
    * earlier step gets its line marked. The line is already in the TypeScript file: VS Code's JavaScript debugger
-   * maps the stack frames through Deno's source map.
+   * maps the stack frames through the source map of the runtime.
    */
   private onViewStep(m: Extract<FromWebview, { type: 'viewStep' }> | undefined): void {
     this.viewedStep = m && !m.live && m.file && m.line ? m : undefined;

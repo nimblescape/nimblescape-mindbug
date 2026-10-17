@@ -1,7 +1,7 @@
-// The runtimes that "Run with Mindbug" can start a program with: Deno and Node.js.
-// Only the command "Run with Mindbug" (launch.ts) uses this file. The Mindbug view does not know the runtime: it reads
-// every debug session of VS Code's JavaScript debugger, also one that a launch configuration of the student starts.
-// This file does not import 'vscode' at run time, so unit tests can run it.
+// The runtimes that the debug type "mindbug" can start a program with: Deno and Node.js.
+// Only the debug type "mindbug" and the command "Run with Mindbug" (launch.ts) use this file. The Mindbug view does not
+// know the runtime: it reads every debug session of VS Code's JavaScript debugger, also one that a launch configuration
+// of another type starts. This file does not import 'vscode' at run time, so unit tests can run it.
 
 import { execFile } from 'node:child_process';
 import * as path from 'node:path';
@@ -68,10 +68,29 @@ export function nodeRunsTypeScript(version: string): boolean {
   return major > MIN_NODE[0] || (major === MIN_NODE[0] && minor >= MIN_NODE[1]);
 }
 
-/** The runtime of the settings; for "auto" Deno when it runs, else Node.js when it runs TypeScript files. */
-export async function chooseRuntime(s: LaunchSettings, version = versionOf): Promise<Runtime | undefined> {
-  if (s.runtime !== 'auto') return s.runtime;
-  if (await version(s.denoPath)) return 'deno';
+/** The runtime to start the program with, or the reason why there is none (a message for the student). */
+export type RuntimeChoice = { runtime: Runtime } | { problem: string };
+
+/**
+ * The runtime of the settings, after a check that it runs: for "auto" Deno when it runs, else Node.js when it runs
+ * TypeScript files.
+ */
+export async function chooseRuntime(s: LaunchSettings, version = versionOf): Promise<RuntimeChoice> {
+  const minNode = `Node.js ${MIN_NODE.join('.')} or newer`;
+  const deno = s.runtime === 'node' ? undefined : await version(s.denoPath);
+  if (deno) return { runtime: 'deno' };
+  if (s.runtime === 'deno') {
+    return { problem: `Mindbug did not find Deno ("${s.denoPath}"). Install Deno, or set "nimblescape.mindbug.denoPath".` };
+  }
   const node = await version(s.nodePath);
-  return node && nodeRunsTypeScript(node) ? 'node' : undefined;
+  if (node && nodeRunsTypeScript(node)) return { runtime: 'node' };
+  const old = node ? ` ("${s.nodePath}" is Node.js ${node}, which cannot run TypeScript files)` : '';
+  if (s.runtime === 'node') {
+    return { problem: `Mindbug needs ${minNode}${old || ` and did not find "${s.nodePath}"`}. Install it, or set "nimblescape.mindbug.nodePath".` };
+  }
+  return {
+    problem:
+      `Mindbug needs Deno or ${minNode}, and found neither${old}. Install one of them, ` +
+      'or set "nimblescape.mindbug.denoPath" or "nimblescape.mindbug.nodePath".',
+  };
 }
