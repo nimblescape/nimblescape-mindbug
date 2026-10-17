@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Tests with Deno
+        run: npm run test:deno
+
+      - name: Screenshot tests
+        run: |
+          npx playwright-core install --with-deps chromium
+          npm run test:render
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: test/render/output/*.png
+          if-no-files-found: ignore
+
+      - name: Tests in VS Code
+        run: xvfb-run -a npm run test:vscode
+
+      - name: Package
+        run: npm run package
+
+      - name: Upload extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: heap-stack-vsix
+          path: '*.vsix'

@@ -1,0 +1,13 @@
+{
+  // Rules for VS Code's built-in TypeScript checker, the same as Deno uses (strict mode).
+  // Deno itself does not need this file.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": []
+  },
+  "include": ["*.ts"]
+}
