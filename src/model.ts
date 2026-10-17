@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // Data model of one memory snapshot. The extension builds it, the webview draws it.
 // The heap walker (src/heapWalker.ts) produces the same Value and HeapObject shapes.
 

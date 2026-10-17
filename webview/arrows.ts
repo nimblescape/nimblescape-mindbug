@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // Draws the reference arrows as one SVG layer above the stack and the heap.
 // Each arrow starts at a dot inside a variable, cell or attribute and ends at the object it points to.
 

@@ -1,5 +1,14 @@
-// Builds the extension (Node, CommonJS) and the webview (browser) into dist/. A production build
-// (--production, which vscode:prepublish passes) is minified and has no source maps.
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
+// Builds the extension (Node.js, CommonJS) and the webview (browser) into dist/. VS Code provides the module `vscode`
+// at run time, so the bundle of the extension leaves it out. Both bundles are readable JavaScript: not minified, so
+// that they keep the names of the source and anyone can read the code of the package and compare it with the source
+// (CONTRIBUTING.md, "Reviewing the package"). The option `keepNames` stays off: it adds calls of a helper of esbuild
+// into every function, also into installHeapWalker of src/heapWalker.ts, whose text runs in the debugged program,
+// where that helper does not exist. Only a development build writes source maps; a production build (--production,
+// which vscode:prepublish passes) has none.
 import * as esbuild from 'esbuild';
 import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
 
@@ -9,8 +18,7 @@ const production = process.argv.includes('--production');
 const common = {
   bundle: true,
   sourcemap: !production,
-  minify: production,
-  target: 'es2022',
+  minify: false,
   logLevel: 'info',
 };
 
@@ -20,6 +28,7 @@ const extension = {
   outfile: 'dist/extension.js',
   platform: 'node',
   format: 'cjs',
+  target: 'node24',
   external: ['vscode'],
 };
 
@@ -29,6 +38,7 @@ const webview = {
   outfile: 'dist/webview.js',
   platform: 'browser',
   format: 'iife',
+  target: 'es2022',
 };
 
 mkdirSync('dist', { recursive: true });

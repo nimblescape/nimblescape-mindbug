@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // A small Chrome DevTools Protocol client for Deno's V8 inspector, used by the tests.
 // VS Code's JavaScript debugger talks the same protocol to Deno; these tests use it directly.
 

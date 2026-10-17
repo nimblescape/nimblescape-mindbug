@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // Screenshot test of the memory panel. It loads the real panel page (the same HTML, CSS and script
 // as in VS Code) in Chromium, sends it the snapshots that record.ts recorded from the examples,
 // and saves screenshots in the light, dark and high contrast themes.

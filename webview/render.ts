@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // Builds the HTML of the frames column and the heap column.
 // Arrows are drawn afterwards by arrows.ts, from the `.ptr` dots to the `.obj` boxes.
 

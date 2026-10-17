@@ -1,22 +1,18 @@
-.github/**
-.vscode/**
-.vscode-test/**
-docs/**
-examples/**
-node_modules/**
-out/**
-src/**
-test/**
-webview/**
-**/*.map
-**/*.ts
-*.vsix
-esbuild.mjs
-tsconfig.json
-package-lock.json
-.gitignore
-scripts/**
-.node-version
-.vscode-test.mjs
-vitest.config.mts
-vitest.deno.config.mts
+# SPDX-License-Identifier: MIT
+# © 2026 Hannes Stauss (scalarion@nimblescape.com)
+# Licensed under the MIT License. See LICENSE in the repository root for details.
+
+# The package holds the bundles, the icons and the documents only: ignore
+# everything, then keep the listed files.
+**
+!dist/extension.js
+!dist/webview.js
+!dist/webview.css
+!media/memory-dark.svg
+!media/memory-light.svg
+!media/step-arrow.svg
+!resources/icon.png
+!package.json
+!README.md
+!CHANGELOG.md
+!LICENSE

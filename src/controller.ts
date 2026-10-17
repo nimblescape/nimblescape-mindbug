@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // Connects the debugger with the memory panel: it watches the debug sessions, reads a new
 // snapshot at every pause and sends it to the panel.
 
@@ -9,6 +13,14 @@ import { MemoryPanel } from './panel.ts';
 
 /** Requests that make the program run again. */
 const RUN_COMMANDS = new Set(['continue', 'next', 'stepIn', 'stepOut', 'stepBack', 'reverseContinue', 'goto', 'restartFrame']);
+
+/**
+ * The debug types of VS Code's JavaScript debugger for Node.js and Deno, whose sessions the view follows: "pwa-node"
+ * (also the session of a configuration of type "mindbug", and the child session that runs the program), "node" and
+ * "node-terminal" (the JavaScript Debug Terminal). The helper of src/heapWalker.ts is JavaScript, so the sessions of
+ * other debuggers, for example of Python or Go, get no request of Mindbug.
+ */
+export const JS_DEBUG_TYPES = ['pwa-node', 'node', 'node-terminal'];
 
 interface PauseState {
   session: vscode.DebugSession;
@@ -55,15 +67,16 @@ export class MemoryController implements vscode.Disposable {
       overviewRulerColor: new vscode.ThemeColor('debugIcon.breakpointStackframeForeground'),
       overviewRulerLane: vscode.OverviewRulerLane.Full,
     });
-    this.disposables.push(
-      vscode.debug.registerDebugAdapterTrackerFactory('*', {
-        createDebugAdapterTracker: (session) => ({
-          onDidSendMessage: (m: any) => this.onAdapterMessage(session, m),
-          onWillReceiveMessage: (m: any) => {
-            if (m?.type === 'request' && RUN_COMMANDS.has(m.command)) this.onRunning(session);
-          },
-        }),
+    const tracker: vscode.DebugAdapterTrackerFactory = {
+      createDebugAdapterTracker: (session) => ({
+        onDidSendMessage: (m: any) => this.onAdapterMessage(session, m),
+        onWillReceiveMessage: (m: any) => {
+          if (m?.type === 'request' && RUN_COMMANDS.has(m.command)) this.onRunning(session);
+        },
       }),
+    };
+    this.disposables.push(
+      ...JS_DEBUG_TYPES.map((type) => vscode.debug.registerDebugAdapterTrackerFactory(type, tracker)),
       vscode.debug.onDidTerminateDebugSession((s) => this.onTerminated(s)),
       vscode.window.onDidChangeVisibleTextEditors(() => this.markViewedStep()),
       this.stepDecoration,

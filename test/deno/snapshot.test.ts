@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // End-to-end test of the snapshot collector against a real Deno program, through Deno's V8 inspector.
 // FakeDap answers the Debug Adapter Protocol requests the way VS Code's JavaScript debugger does.
 //
@@ -53,7 +57,7 @@ test.skipIf(!hasDeno)('insertion sort: frames, aliasing and stable ids', async (
     inLoop.frames.map((f) => f.name),
     ['Global scope', 'insertionSort'],
   );
-  assert.equal(inLoop.frames[1].line, 10);
+  assert.equal(inLoop.frames[1].line, 14);
   const arr = idOf(variable(inLoop, 'insertionSort', 'arr'));
   assert.equal(idOf(variable(inLoop, 'Global scope', 'arr2')), arr, 'arr and arr2 are the same array');
   assert.notEqual(idOf(variable(inLoop, 'Global scope', 'arr1')), arr);

@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // A small stand-in for VS Code's JavaScript debugger (js-debug): it answers the four
 // Debug Adapter Protocol requests that the collector uses, from a paused V8 inspector.
 // Scope names follow js-debug ("Local: fn", "Block", "Closure (fn)", "Module", "Global").

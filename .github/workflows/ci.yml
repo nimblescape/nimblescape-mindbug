@@ -1,60 +1,144 @@
+# SPDX-License-Identifier: MIT
+# © 2026 Hannes Stauss (scalarion@nimblescape.com)
+# Licensed under the MIT License. See LICENSE in the repository root for details.
+
+# Test the extension and build its package for every push to main and every
+# pull request, on the pinned Node.js 24 release (.node-version); VS Code 1.125
+# (engines.vscode) and later run extensions on Node.js 24 too. The job "test"
+# installs the locked development tools without install scripts and the pinned
+# Deno release, checks the types, runs the unit tests, the tests against real
+# Deno programs, the screenshot tests and the tests in a real VS Code (stable),
+# and packages the VSIX with vsce, which also validates the manifest and the
+# README. The VSIX and the screenshots stay workflow artifacts for inspection.
+# The job "release rules" checks the release rules of CONTRIBUTING.md in the
+# source (scripts/release-checks.mjs). This workflow publishes nothing: the
+# release workflow calls it for the commit of a version and publishes the VSIX
+# of that call. The workflow "VS Code versions" calls it once per week with
+# another VS Code version; such a call runs only the type check, the unit
+# tests, the tests in VS Code and the package.
+
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+  # The release workflow calls this workflow for the commit of a version,
+  # because its push of that commit starts no workflow.
+  workflow_call:
+    inputs:
+      ref:
+        description: The commit to test and package; empty for the commit of the event.
+        type: string
+        required: false
+        default: ''
+      vscode-version:
+        description: The VS Code version of the tests in VS Code, "insiders" or a version such as 1.125.0; empty for stable. When set, the tests against Deno programs and the screenshot tests do not run.
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  # Checkout needs repository reads; the checks get no write scope.
+  contents: read
+
+env:
+  # The two calls of the workflow "VS Code versions" in one workflow run keep their artifacts apart. Empty for every
+  # other run, so the release workflow finds the artifact "vsix".
+  ARTIFACT_SUFFIX: ${{ inputs.vscode-version && format('-vscode-{0}', inputs.vscode-version) || '' }}
 
 jobs:
   test:
+    name: Test and package
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out the source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - name: Set up the pinned Node release
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
-          cache: npm
 
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+      # The tests run the examples with Deno. The archive of the pinned release must have the SHA-256 sum that the
+      # release publishes (deno-x86_64-unknown-linux-gnu.zip.sha256sum), so CI needs no action of another publisher.
+      - name: Install the pinned Deno release
+        env:
+          DENO_VERSION: 2.9.7
+          DENO_SHA256: c6527f24f4b16031d3ae4fa9f658d5f11534c8d84ce7dc8502420280919c3490
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/deno.zip" "https://dl.deno.land/release/v$DENO_VERSION/deno-x86_64-unknown-linux-gnu.zip"
+          echo "$DENO_SHA256  $RUNNER_TEMP/deno.zip" | sha256sum --check --strict
+          unzip -q "$RUNNER_TEMP/deno.zip" -d "$RUNNER_TEMP/deno"
+          echo "$RUNNER_TEMP/deno" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/deno/deno" --version
 
-      - run: npm ci
+      - name: Install the locked development tools without install scripts
+        run: npm ci --ignore-scripts
 
-      - name: Type check
+      - name: Check the types
         run: npm run typecheck
 
-      - name: Build
-        run: npm run build
-
-      - name: Unit tests
+      - name: Run the unit tests
         run: npm test
 
-      - name: Tests with Deno
+      - name: Run the tests against Deno programs
+        if: ${{ !inputs.vscode-version }}
         run: npm run test:deno
 
-      - name: Screenshot tests
+      - name: Run the screenshot tests
+        if: ${{ !inputs.vscode-version }}
         run: |
           npx playwright-core install --with-deps chromium
           npm run test:render
 
-      - name: Upload screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Keep the screenshots
+        if: ${{ always() && !inputs.vscode-version }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: screenshots
           path: test/render/output/*.png
           if-no-files-found: ignore
 
-      - name: Tests in VS Code
+      # .vscode-test.mjs takes the VS Code version from VSCODE_TEST_VERSION; empty gives stable.
+      - name: Run the tests in VS Code
+        env:
+          VSCODE_TEST_VERSION: ${{ inputs.vscode-version }}
         run: xvfb-run -a npm run test:vscode
 
-      - name: Package
+      - name: Build the VSIX package
         run: npm run package
 
-      - name: Upload extension
-        uses: actions/upload-artifact@v4
+      - name: Keep the VSIX package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: vsix
+          name: vsix${{ env.ARTIFACT_SUFFIX }}
           path: '*.vsix'
+          if-no-files-found: error
+
+  release-rules:
+    # Rules 1, 2 and 5 of CONTRIBUTING.md: the extension ID follows the naming scheme and is the ID of the last release,
+    # and only the workflow "Release" publishes, with the sign-in to Microsoft Entra ID, and deletes no extension.
+    name: release rules
+    if: ${{ !inputs.vscode-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Set up the pinned Node release
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: Check the extension ID and the publishing steps
+        run: node scripts/release-checks.mjs rules

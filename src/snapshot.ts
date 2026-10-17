@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // Builds one MemorySnapshot from a paused debug session, using only standard
 // Debug Adapter Protocol requests: stackTrace, scopes, variables, evaluate.
 // This file does not import 'vscode', so tests can run it with a fake debug session.
