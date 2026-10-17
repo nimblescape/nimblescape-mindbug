@@ -34,7 +34,7 @@ of the JavaScript debugger that is built into VS Code.
   to the class it was made from.
 - **Changes**: everything that changed in the last step has a yellow background.
 
-![Four scopes on the stack, lineTotal on top of makeBill, checkout and the Global scope; the object of lineTotal is at the top of the heap, the objects of the Global scope at the bottom](docs/images/call-stack.png)
+![Four scopes on the stack, lineTotal on top of makeBill, checkout and the Global scope; the classes Item, Discount and Bill at the top of the heap; the Discount object of lineTotal above the Bill object of makeBill and the objects of the Global scope](docs/images/call-stack.png)
 
 ![Classes with static variables, objects made from them, and the dashed arrow from an object to its class](docs/images/classes.png)
 
@@ -105,9 +105,10 @@ folder [examples](examples) has four small programs and a
 - [insertion-sort.ts](examples/insertion-sort.ts): two variables point to the same array.
 - [people.ts](examples/people.ts): classes, static variables, constructors and methods.
 - [linked-list.ts](examples/linked-list.ts): objects that point to each other.
-- [call-stack.ts](examples/call-stack.ts): three functions on the stack at the same time. An object
-  that the inner function creates does not survive its call; an object that the middle function
-  creates survives the call of the inner function and is still there in the Global scope at the end.
+- [call-stack.ts](examples/call-stack.ts): three functions on the stack at the same time, with objects
+  of the classes Item, Discount and Bill. The Discount object that the inner function creates does
+  not survive its call; the Bill object that the middle function creates survives the call of the
+  inner function and is still there in the Global scope at the end.
 
 ## Settings
 
