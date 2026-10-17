@@ -15,15 +15,29 @@ test('scope names of VS Code’s JavaScript debugger', () => {
 });
 
 test('user frames: own files only', () => {
-  const f = (path: string | undefined, hint?: string) =>
-    isUserFrame({ id: 1, name: 'f', line: 1, column: 1, source: path ? { name: 'x', path } : undefined, presentationHint: hint as any });
+  const f = (path: string | undefined, hint?: string, sourceReference?: number) =>
+    isUserFrame({
+      id: 1,
+      name: 'f',
+      line: 1,
+      column: 1,
+      source: path ? { name: 'x', path, sourceReference } : undefined,
+      presentationHint: hint as any,
+    });
   assert.ok(f('/home/s/sort.ts'));
+  assert.ok(f('/home/s/sort.ts', undefined, 0));
   assert.ok(f('C:\\Users\\s\\sort.ts'));
+  assert.ok(f('\\\\server\\share\\sort.ts'));
   assert.ok(!f('ext:deno_console/01_console.js'));
   assert.ok(!f('node:internal/main'));
   assert.ok(!f('/p/node_modules/x/index.js'));
   assert.ok(!f(undefined));
   assert.ok(!f('/home/s/sort.ts', 'label'));
+  // Deno's own code, as VS Code's JavaScript debugger names it: a relative path and a sourceReference.
+  assert.ok(!f('deno_node/console.ts', undefined, 562595578));
+  assert.ok(!f('runtime/90_deno_ns.js', undefined, 179477628));
+  assert.ok(!f('core/01_core.js'));
+  assert.ok(!f('https://jsr.io/@std/assert/1.0.0/mod.ts'));
 });
 
 test('readable names for the functions that V8 makes for class fields', () => {

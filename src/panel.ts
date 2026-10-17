@@ -1,4 +1,4 @@
-// The webview panel beside the editor that shows the memory diagram.
+// The webview panel "Heap Stack" beside the editor that shows the memory diagram.
 
 import * as vscode from 'vscode';
 import type { FromWebview, ToWebview } from './model.ts';
@@ -38,7 +38,7 @@ export class MemoryPanel {
   static create(extensionUri: vscode.Uri, handlers: MemoryPanelHandlers, maxSteps: number): MemoryPanel {
     const panel = vscode.window.createWebviewPanel(
       MemoryPanel.viewType,
-      'Memory',
+      'Heap Stack',
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'dist')] },
     );

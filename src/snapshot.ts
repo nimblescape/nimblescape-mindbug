@@ -75,7 +75,11 @@ export function isUserFrame(frame: DapStackFrame): boolean {
   const src = frame.source;
   if (!src || !src.path) return false;
   if (src.presentationHint === 'deemphasize') return false;
+  // A file of the student is a file on disk. VS Code's JavaScript debugger gives Deno's own (minified) code a
+  // relative path such as "deno_node/console.ts" and a sourceReference, because its text comes from the debugger.
+  if (src.sourceReference) return false;
   const p = src.path;
+  if (!/^(\/|[a-z]:[\\/]|\\\\)/i.test(p)) return false;
   if (/^(ext|node|deno|internal|eval|wasm):/i.test(p) || p.startsWith('<')) return false;
   if (/[\\/]node_modules[\\/]/.test(p)) return false;
   return true;
