@@ -66,9 +66,9 @@ function sizeLayer(svg: SVGSVGElement, width: number, height: number): void {
 function markers(): SVGDefsElement {
   const defs = svgEl('defs', {});
   defs.append(
-    marker('hs-head', 'head'),
-    marker('hs-head-active', 'head active'),
-    marker('hs-head-hot', 'head hot'),
+    marker('mb-head', 'head'),
+    marker('mb-head-active', 'head active'),
+    marker('mb-head-hot', 'head hot'),
     generalizationMarker(),
   );
   return defs;
@@ -110,7 +110,7 @@ export function drawArrows(canvas: HTMLElement, svg: SVGSVGElement, top: SVGSVGE
       svgEl('path', {
         d: arrowPath(source, dest),
         class: active ? 'arrow active' : 'arrow',
-        'marker-end': `url(#${active ? 'hs-head-active' : 'hs-head'})`,
+        'marker-end': `url(#${active ? 'mb-head-active' : 'mb-head'})`,
         'data-target': ptr.dataset.target ?? '',
       }),
     );
@@ -133,7 +133,7 @@ export function drawArrows(canvas: HTMLElement, svg: SVGSVGElement, top: SVGSVGE
   for (const sub of canvas.querySelectorAll<HTMLElement>('.class-box[data-super]')) {
     const sup = canvas.querySelector<HTMLElement>(`.class-box[data-id="${sub.dataset.super}"]`);
     if (!sup) continue;
-    gens.push(svgEl('path', { d: generalizationPath(rect(sub, ox, oy), rect(sup, ox, oy)), class: 'gen', 'marker-end': 'url(#hs-gen)' }));
+    gens.push(svgEl('path', { d: generalizationPath(rect(sub, ox, oy), rect(sup, ox, oy)), class: 'gen', 'marker-end': 'url(#mb-gen)' }));
   }
   svg.append(...lines);
   top.append(...gens, ...dots, svgEl('g', { class: 'links' }));
@@ -153,7 +153,7 @@ function rect(e: Element, ox: number, oy: number): Box {
 
 function generalizationMarker(): SVGMarkerElement {
   const m = svgEl('marker', {
-    id: 'hs-gen',
+    id: 'mb-gen',
     viewBox: '0 0 12 12',
     refX: '11',
     refY: '6',
@@ -238,7 +238,7 @@ export function showClassLinks(canvas: HTMLElement, svg: SVGSVGElement, hovered:
       svgEl('path', {
         d: classLinkPath({ ...o, top: h.top + Math.min(16, (h.bottom - h.top) / 2) - 16 }, rect(cls, ox, oy)),
         class: 'inst',
-        'marker-end': 'url(#hs-head-hot)',
+        'marker-end': 'url(#mb-head-hot)',
       }),
     );
   }
@@ -250,7 +250,7 @@ export function highlightArrows(svg: SVGSVGElement, top: SVGSVGElement, targetId
     const hot = targetId !== undefined && path.dataset.target === targetId;
     path.classList.toggle('hot', hot);
     const active = path.classList.contains('active');
-    path.setAttribute('marker-end', `url(#${hot ? 'hs-head-hot' : active ? 'hs-head-active' : 'hs-head'})`);
+    path.setAttribute('marker-end', `url(#${hot ? 'mb-head-hot' : active ? 'mb-head-active' : 'mb-head'})`);
   }
   for (const dot of top.querySelectorAll<SVGCircleElement>('circle.dot')) {
     dot.classList.toggle('hot', targetId !== undefined && dot.dataset.target === targetId);

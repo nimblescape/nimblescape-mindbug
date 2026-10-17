@@ -1,13 +1,13 @@
 {
-  "name": "heap-stack",
-  "displayName": "Heap Stack",
-  "description": "Shows the stack frames and the heap of a paused TypeScript program (Deno) as a diagram, to help students learn how memory works.",
+  "name": "mindbug",
+  "displayName": "Mindbug",
+  "description": "Shows the stack (one scope for each function call) and the heap of a paused TypeScript program (Deno) as a diagram, to help students learn how memory works.",
   "version": "0.1.0",
   "publisher": "nimblescape",
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/nimblescape/nimblescape-heapstack"
+    "url": "https://github.com/nimblescape/nimblescape-mindbug"
   },
   "engines": {
     "vscode": "^1.90.0"
@@ -34,84 +34,84 @@
   "contributes": {
     "commands": [
       {
-        "command": "heapStack.open",
-        "title": "Open Heap Stack",
+        "command": "mindbug.open",
+        "title": "Open Mindbug",
         "icon": {
           "light": "media/memory-light.svg",
           "dark": "media/memory-dark.svg"
         }
       },
       {
-        "command": "heapStack.run",
-        "title": "Run with Heap Stack",
+        "command": "mindbug.run",
+        "title": "Run with Mindbug",
         "icon": "$(debug-alt)"
       }
     ],
     "menus": {
       "editor/title": [
         {
-          "command": "heapStack.run",
+          "command": "mindbug.run",
           "when": "resourceLangId == typescript && !inDebugMode",
           "group": "navigation"
         },
         {
-          "command": "heapStack.open",
+          "command": "mindbug.open",
           "when": "inDebugMode",
           "group": "navigation"
         }
       ],
       "commandPalette": [
         {
-          "command": "heapStack.run",
+          "command": "mindbug.run",
           "when": "resourceLangId == typescript"
         }
       ]
     },
     "configuration": {
-      "title": "Heap Stack",
+      "title": "Mindbug",
       "properties": {
-        "heapStack.denoPath": {
+        "mindbug.denoPath": {
           "type": "string",
           "default": "deno",
-          "markdownDescription": "Path to the Deno program, used by **Run with Heap Stack**. The default `deno` works when Deno is on the `PATH`."
+          "markdownDescription": "Path to the Deno program, used by **Run with Mindbug**. The default `deno` works when Deno is on the `PATH`."
         },
-        "heapStack.inspectPort": {
+        "mindbug.inspectPort": {
           "type": "number",
           "default": 9229,
           "description": "Port on which Deno waits for the debugger. Change it when another program uses port 9229."
         },
-        "heapStack.stopOnEntry": {
+        "mindbug.stopOnEntry": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "When on, **Run with Heap Stack** pauses at the first line of the program, so you can step from the start."
+          "markdownDescription": "When on, **Run with Mindbug** pauses at the first line of the program, so you can step from the start."
         },
-        "heapStack.openAutomatically": {
+        "mindbug.openAutomatically": {
           "type": "boolean",
           "default": true,
-          "description": "Open the Heap Stack view when a debug session pauses for the first time."
+          "description": "Open the Mindbug view when a debug session pauses for the first time."
         },
-        "heapStack.maxHistorySteps": {
+        "mindbug.maxHistorySteps": {
           "type": "number",
           "default": 500,
           "minimum": 1,
           "maximum": 5000,
-          "description": "Maximum number of steps that the Heap Stack view keeps, so that you can go back to an earlier step. When there are more steps, the oldest steps are removed."
+          "description": "Maximum number of steps that the Mindbug view keeps, so that you can go back to an earlier step. When there are more steps, the oldest steps are removed."
         },
-        "heapStack.maxObjects": {
+        "mindbug.maxObjects": {
           "type": "number",
           "default": 300,
           "minimum": 10,
           "maximum": 5000,
-          "description": "Maximum number of heap objects that are read per stack frame."
+          "description": "Maximum number of heap objects that are read per scope."
         },
-        "heapStack.maxArrayItems": {
+        "mindbug.maxArrayItems": {
           "type": "number",
           "default": 100,
           "minimum": 5,
           "maximum": 2000,
           "description": "Maximum number of array items, set members and map entries that are shown per object."
         },
-        "heapStack.maxStringLength": {
+        "mindbug.maxStringLength": {
           "type": "number",
           "default": 200,
           "minimum": 10,
@@ -125,8 +125,8 @@
         "type": "node",
         "configurationSnippets": [
           {
-            "label": "Heap Stack: Debug a TypeScript file with Deno",
-            "description": "Runs a TypeScript file with Deno and shows its memory in the Heap Stack view.",
+            "label": "Mindbug: Debug a TypeScript file with Deno",
+            "description": "Runs a TypeScript file with Deno and shows its memory in the Mindbug view.",
             "body": {
               "type": "node",
               "request": "launch",

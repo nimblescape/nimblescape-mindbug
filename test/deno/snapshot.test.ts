@@ -51,14 +51,14 @@ test.skipIf(!hasDeno)('insertion sort: frames, aliasing and stable ids', async (
   const [inLoop, atEnd] = await pauses('sort.ts', 2);
   assert.deepEqual(
     inLoop.frames.map((f) => f.name),
-    ['Global frame', 'insertionSort'],
+    ['Global scope', 'insertionSort'],
   );
   assert.equal(inLoop.frames[1].line, 10);
   const arr = idOf(variable(inLoop, 'insertionSort', 'arr'));
-  assert.equal(idOf(variable(inLoop, 'Global frame', 'arr2')), arr, 'arr and arr2 are the same array');
-  assert.notEqual(idOf(variable(inLoop, 'Global frame', 'arr1')), arr);
+  assert.equal(idOf(variable(inLoop, 'Global scope', 'arr2')), arr, 'arr and arr2 are the same array');
+  assert.notEqual(idOf(variable(inLoop, 'Global scope', 'arr1')), arr);
   assert.deepEqual(variable(inLoop, 'insertionSort', 'unsortedIndex'), { k: 'num', v: '7' });
-  assert.equal(idOf(variable(atEnd, 'Global frame', 'arr2')), arr, 'the id stays the same in the next step');
+  assert.equal(idOf(variable(atEnd, 'Global scope', 'arr2')), arr, 'the id stays the same in the next step');
   assert.deepEqual(
     atEnd.objects[arr].items!.map((v) => (v as { v: string }).v),
     ['-4', '1', '3', '3', '4', '5', '6', '7'],
@@ -68,23 +68,23 @@ test.skipIf(!hasDeno)('insertion sort: frames, aliasing and stable ids', async (
 test.skipIf(!hasDeno)('objects: getters are not called, closures, uninitialized let', async () => {
   const [inBirthday, inCounter, atEnd] = await pauses('objects.ts', 3);
   const ann = idOf(variable(inBirthday, 'Person.birthday', 'this'));
-  assert.equal(idOf(variable(inBirthday, 'Global frame', 'ann')), ann);
+  assert.equal(idOf(variable(inBirthday, 'Global scope', 'ann')), ann);
   const fields = inBirthday.objects[ann].fields!;
   assert.deepEqual(fields.find((f) => f.name === 'age')?.value, { k: 'num', v: '24' });
   assert.deepEqual(fields.find((f) => f.name === 'secretCount')?.value, { k: 'num', v: '0' }, 'the getter did not run');
   const count = inCounter.frames.at(-1)!.vars.find((v) => v.name === 'count');
   assert.equal(count?.scope, 'closure');
-  assert.deepEqual(variable(atEnd, 'Global frame', 'later'), { k: 'uninit' });
+  assert.deepEqual(variable(atEnd, 'Global scope', 'later'), { k: 'uninit' });
 });
 
 test.skipIf(!hasDeno)('classes: class boxes with static variables, attributes, methods and superclass', async () => {
   const [s] = await pauses('classes.ts', 1);
-  const ann = s.objects[idOf(variable(s, 'Global frame', 'ann'))];
-  const bob = s.objects[idOf(variable(s, 'Global frame', 'bob'))];
+  const ann = s.objects[idOf(variable(s, 'Global scope', 'ann'))];
+  const bob = s.objects[idOf(variable(s, 'Global scope', 'bob'))];
   const person = s.objects[ann.cls!];
   const student = s.objects[bob.cls!];
   assert.equal(person.type, 'Person');
-  assert.equal(idOf(variable(s, 'Global frame', 'Person')), person.id);
+  assert.equal(idOf(variable(s, 'Global scope', 'Person')), person.id);
   assert.deepEqual(person.attrs, ['name', 'age']);
   assert.deepEqual(
     person.fields!.map((f) => [f.name, f.value.k]),

@@ -6,7 +6,7 @@
 import * as assert from 'node:assert/strict';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import type { HeapStackApi } from '../../src/extension.ts';
+import type { MindbugApi } from '../../src/extension.ts';
 import type { MemorySnapshot, Value } from '../../src/model.ts';
 
 const TIMEOUT = 60000;
@@ -35,7 +35,7 @@ function idOf(v: Value): number {
 }
 
 /** Continues until the program pauses at `line` of `file`. */
-async function runToLine(api: HeapStackApi, file: string, line: number): Promise<MemorySnapshot> {
+async function runToLine(api: MindbugApi, file: string, line: number): Promise<MemorySnapshot> {
   for (let i = 0; i < 10; i++) {
     const last = api.lastSnapshot();
     if (last && top(last)?.file === file && top(last)?.line === line) return last;
@@ -47,8 +47,8 @@ async function runToLine(api: HeapStackApi, file: string, line: number): Promise
   throw new Error(`the program did not pause at line ${line}`);
 }
 
-/** Starts "Run with Heap Stack" for `file` and returns the snapshot of the first pause (stop on entry). */
-async function debug(api: HeapStackApi, file: string, breakpointLines: number[]): Promise<MemorySnapshot> {
+/** Starts "Run with Mindbug" for `file` and returns the snapshot of the first pause (stop on entry). */
+async function debug(api: MindbugApi, file: string, breakpointLines: number[]): Promise<MemorySnapshot> {
   const uri = vscode.Uri.file(file);
   vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
   vscode.debug.addBreakpoints(
@@ -56,7 +56,7 @@ async function debug(api: HeapStackApi, file: string, breakpointLines: number[])
   );
   await vscode.window.showTextDocument(uri);
   const first = api.nextSnapshot(TIMEOUT);
-  await vscode.commands.executeCommand('heapStack.run', uri);
+  await vscode.commands.executeCommand('mindbug.run', uri);
   return first;
 }
 
@@ -87,33 +87,33 @@ async function stop(): Promise<void> {
   await ended;
 }
 
-async function insertionSort(api: HeapStackApi): Promise<void> {
+async function insertionSort(api: MindbugApi): Promise<void> {
   const file = path.join(examples(), 'insertion-sort.ts');
   const entry = await debug(api, file, [15]);
   // The program pauses at its first statement, and Deno's own code is not a frame.
   assert.deepEqual(
     entry.frames.map((f) => [f.name, f.line, f.file]),
-    [['Global frame', 19, file]],
+    [['Global scope', 19, file]],
   );
   const s = await runToLine(api, file, 15);
   assert.deepEqual(
     s.frames.map((f) => f.name),
-    ['Global frame', 'insertionSort'],
+    ['Global scope', 'insertionSort'],
   );
   const arr = idOf(variable(s, 'insertionSort', 'arr'));
-  assert.equal(idOf(variable(s, 'Global frame', 'arr2')), arr, 'arr and arr2 point to the same array');
+  assert.equal(idOf(variable(s, 'Global scope', 'arr2')), arr, 'arr and arr2 point to the same array');
   assert.equal(s.objects[arr].kind, 'array');
   assert.equal(s.objects[arr].length, 8);
 
   const next = api.nextSnapshot(TIMEOUT);
   await vscode.commands.executeCommand('workbench.action.debug.stepOver');
   const after = await next;
-  assert.equal(idOf(variable(after, 'Global frame', 'arr2')), arr, 'the id stays the same after a step');
+  assert.equal(idOf(variable(after, 'Global scope', 'arr2')), arr, 'the id stays the same after a step');
   assert.ok(after.step > s.step);
   await stop();
 }
 
-async function people(api: HeapStackApi): Promise<void> {
+async function people(api: MindbugApi): Promise<void> {
   const file = path.join(examples(), 'people.ts');
   await debug(api, file, [9, 22, 38, 29]);
   // The frame of a method has the class that declares it; a constructor is "Class.constructor", also when
@@ -129,11 +129,11 @@ async function people(api: HeapStackApi): Promise<void> {
   assert.deepEqual(
     pauses.map((p) => p.frames.map((f) => f.name).join(' > ')),
     [
-      'Global frame > Address.constructor',
-      'Global frame > Person.constructor',
-      'Global frame > Student.constructor > Person.constructor',
-      'Global frame > Student.constructor',
-      'Global frame > Person.birthday',
+      'Global scope > Address.constructor',
+      'Global scope > Person.constructor',
+      'Global scope > Student.constructor > Person.constructor',
+      'Global scope > Student.constructor',
+      'Global scope > Person.birthday',
     ],
   );
   const s = pauses[pauses.length - 1];
@@ -143,7 +143,7 @@ async function people(api: HeapStackApi): Promise<void> {
   assert.equal(person.type, 'Person');
   assert.deepEqual(person.fields?.[0], { name: 'count', value: { k: 'num', v: '2' } });
   assert.deepEqual(person.attrs, ['name', 'age', 'home', 'bestFriend']);
-  const bob = s.objects[idOf(variable(s, 'Global frame', 'bob'))];
+  const bob = s.objects[idOf(variable(s, 'Global scope', 'bob'))];
   assert.equal(s.objects[bob.cls!].superId, person.id);
 
   // An earlier step of the history shows its line in the editor, also when the file is closed.
@@ -155,20 +155,20 @@ async function people(api: HeapStackApi): Promise<void> {
   await stop();
 }
 
-describe('the Heap Stack view in VS Code', () => {
-  let api: HeapStackApi;
+describe('the Mindbug view in VS Code', () => {
+  let api: MindbugApi;
 
   before(async () => {
-    const ext = vscode.extensions.getExtension('nimblescape.heap-stack');
+    const ext = vscode.extensions.getExtension('nimblescape.mindbug');
     assert.ok(ext, 'the extension is installed');
-    api = (await ext.activate()) as HeapStackApi;
-    await vscode.workspace.getConfiguration('heapStack').update('openAutomatically', true, vscode.ConfigurationTarget.Global);
+    api = (await ext.activate()) as MindbugApi;
+    await vscode.workspace.getConfiguration('mindbug').update('openAutomatically', true, vscode.ConfigurationTarget.Global);
   });
 
   afterEach(async () => {
     if (vscode.debug.activeDebugSession) await stop();
   });
 
-  it('shows the frames, the arrays and the aliasing of insertion sort', () => insertionSort(api));
-  it('shows classes, static variables and the frames of constructors and methods', () => people(api));
+  it('shows the scopes, the arrays and the aliasing of insertion sort', () => insertionSort(api));
+  it('shows classes, static variables and the scopes of constructors and methods', () => people(api));
 });

@@ -17,6 +17,7 @@ export const DEFAULT_VIEW_OPTIONS: ViewOptions = { showFunctions: false, showIds
 export interface HeapLayout {
   /** Ids of the class boxes; a superclass comes before its subclasses. Empty when classes are hidden. */
   classes: number[];
+  /** The rows of objects, from top to bottom. */
   rows: HeapTree[];
 }
 
@@ -61,12 +62,17 @@ export function refsOf(o: HeapObject): number[] {
 /**
  * Builds the heap layout. Objects that frame variables point to start rows; the objects they point to
  * are placed to their right. `maxDepth` limits how far a row grows to the right; deeper objects start
- * a new row below. Classes go to their own list (when shown); objects that only a static variable
- * points to start rows after the others.
+ * a new row below. Classes go to their own list (when shown).
+ *
+ * The heap builds bottom up, like the stack: the rows of the Global scope are at the bottom, and the rows
+ * of each newer function call are above them. The rows of one scope keep the order of its variables.
+ * Objects that only a static variable points to start rows at the top, below the classes.
+ * An object belongs to the oldest scope that points to it, so it does not move when a function is called.
  */
 export function layoutHeap(snap: MemorySnapshot, opts: ViewOptions, maxDepth = 6): HeapLayout {
   const placed = new Set<number>();
-  const rows: HeapTree[] = [];
+  /** The rows of the scope (or of the classes) that is placed now. */
+  let rows: HeapTree[] = [];
   const pending: number[] = [];
 
   const visit = (id: number, depth: number): HeapTree | undefined => {
@@ -98,11 +104,16 @@ export function layoutHeap(snap: MemorySnapshot, opts: ViewOptions, maxDepth = 6
     }
   };
 
+  // snap.frames starts with the oldest scope, usually the Global scope.
+  const scopeRows: HeapTree[][] = [];
   for (const frame of snap.frames) {
+    rows = [];
     for (const v of visibleVars(frame, snap, opts)) {
       if (v.value.k === 'ref') addRoot(v.value.id);
     }
+    scopeRows.push(rows);
   }
+  rows = [];
 
   const classes: number[] = [];
   if (opts.showClasses) {
@@ -117,7 +128,7 @@ export function layoutHeap(snap: MemorySnapshot, opts: ViewOptions, maxDepth = 6
       note(snap.objects[t.id]?.cls);
       t.children.forEach(walk);
     };
-    rows.forEach(walk);
+    scopeRows.flat().forEach(walk);
     for (const o of Object.values(snap.objects)) {
       note(o.cls);
       if (o.kind === 'class') note(o.id);
@@ -134,5 +145,5 @@ export function layoutHeap(snap: MemorySnapshot, opts: ViewOptions, maxDepth = 6
       for (const child of refsOf(snap.objects[id]!)) addRoot(child);
     }
   }
-  return { classes, rows };
+  return { classes, rows: [...rows, ...scopeRows.reverse().flat()] };
 }

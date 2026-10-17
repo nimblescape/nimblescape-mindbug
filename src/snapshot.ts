@@ -294,7 +294,7 @@ async function readFrame(
 
   const frame: Frame = {
     frameId: f.id,
-    name: isGlobal ? 'Global frame' : frameName(f.name),
+    name: isGlobal ? 'Global scope' : frameName(f.name),
     isGlobal,
     line: f.line,
     file: f.source?.path,
@@ -337,7 +337,7 @@ async function readFrame(
   }
 
   // Display order: local variables, then block variables from the outer to the inner block,
-  // then closure variables. In the Global frame: module variables, then blocks.
+  // then closure variables. In the Global scope: module variables, then blocks.
   const rank = (s: ScopeKind): number => (s === 'local' || s === 'module' ? 0 : s === 'block' ? 1 : 2);
   const blocksInnerFirst = ordered.filter((o) => o.scope === 'block');
   const display = [
@@ -355,7 +355,7 @@ async function readFrame(
     try {
       walked = await evaluateFrame(dap, f.id, readable, limits);
     } catch (e) {
-      frame.note = `The heap could not be read in this frame: ${e instanceof Error ? e.message : String(e)}`;
+      frame.note = `The heap could not be read in this scope: ${e instanceof Error ? e.message : String(e)}`;
     }
   }
 

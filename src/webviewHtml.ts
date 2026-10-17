@@ -7,7 +7,7 @@ export interface WebviewHtmlInput {
   nonce: string;
   scriptUri: string;
   styleUri: string;
-  /** Maximum number of steps the panel keeps (setting `heapStack.maxHistorySteps`). */
+  /** Maximum number of steps the panel keeps (setting `mindbug.maxHistorySteps`). */
   maxSteps?: number;
 }
 
@@ -19,7 +19,7 @@ export function webviewHtml(o: WebviewHtmlInput): string {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${o.cspSource}; script-src 'nonce-${o.nonce}'; img-src ${o.cspSource} data:;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link href="${o.styleUri}" rel="stylesheet">
-<title>Heap Stack</title>
+<title>Mindbug</title>
 </head>
 <body data-max-steps="${o.maxSteps ?? 500}">
 <header class="toolbar">
@@ -40,10 +40,10 @@ export function webviewHtml(o: WebviewHtmlInput): string {
 </nav>
 <div id="empty" class="empty">
   <p><strong>No program is paused.</strong></p>
-  <p>Open a TypeScript file and run the command <strong>Run with Heap Stack</strong>,
+  <p>Open a TypeScript file and run the command <strong>Run with Mindbug</strong>,
   or start your own Deno launch configuration with F5.</p>
   <p>When the program stops at a breakpoint or after a step, this panel shows the <strong>stack</strong>
-  (one frame for each function call, with its local variables) and the <strong>heap</strong>
+  (one scope for each function call, with its local variables) and the <strong>heap</strong>
   (the objects and arrays that the variables point to).</p>
 </div>
 <main id="canvas" class="canvas" hidden>
@@ -54,7 +54,7 @@ export function webviewHtml(o: WebviewHtmlInput): string {
       <h2 id="stackTitle" class="region-title">STACK</h2>
       <p class="region-sub">Local variables live here.</p>
       <div class="stack-pile">
-        <p class="hint">&#8593; A new function call adds a frame on top.</p>
+        <p class="hint">&#8593; A new function call adds a scope on top.</p>
         <div id="frames" class="frames"></div>
       </div>
     </section>
@@ -80,7 +80,10 @@ export function webviewHtml(o: WebviewHtmlInput): string {
   </span>
   <span class="legend-item legend-classes"><span class="static">count</span>Underlined: static, one value for the whole class</span>
   <span class="legend-item"><span class="swatch changed-swatch"></span>Changed in the last step</span>
-  <span class="legend-item"><span class="swatch active-swatch"></span>The function that runs now</span>
+  <span class="legend-item">
+    <svg class="lg-runs" width="10" height="14" viewBox="0 0 10 14" aria-hidden="true"><path d="M1 1L9 7L1 13Z"></path></svg>
+    The function that runs at this step
+  </span>
 </footer>
 <script nonce="${o.nonce}" src="${o.scriptUri}"></script>
 </body>

@@ -1,4 +1,4 @@
-// Command "Run with Heap Stack".
+// Command "Run with Mindbug".
 // It starts VS Code's built-in JavaScript debugger with Deno as the runtime,
 // so students do not need to write a launch.json file.
 
@@ -21,7 +21,7 @@ export function denoDebugConfiguration(file: string, cwd: string, s: DenoLaunchS
   return {
     type: 'pwa-node',
     request: 'launch',
-    name: `Heap Stack: ${path.basename(file)}`,
+    name: `Mindbug: ${path.basename(file)}`,
     program: file,
     cwd,
     runtimeExecutable: s.denoPath,
@@ -35,7 +35,7 @@ export function denoDebugConfiguration(file: string, cwd: string, s: DenoLaunchS
 }
 
 export function readLaunchSettings(): DenoLaunchSettings {
-  const c = vscode.workspace.getConfiguration('heapStack');
+  const c = vscode.workspace.getConfiguration('mindbug');
   return {
     denoPath: c.get<string>('denoPath', 'deno') || 'deno',
     port: c.get<number>('inspectPort', 9229),
@@ -43,11 +43,11 @@ export function readLaunchSettings(): DenoLaunchSettings {
   };
 }
 
-export async function runWithHeapStack(resource?: vscode.Uri): Promise<boolean> {
+export async function runWithMindbug(resource?: vscode.Uri): Promise<boolean> {
   const editor = vscode.window.activeTextEditor;
   const uri = resource instanceof vscode.Uri ? resource : editor?.document.uri;
   if (!uri || uri.scheme !== 'file') {
-    void vscode.window.showErrorMessage('Open a TypeScript file first, then run "Run with Heap Stack" again.');
+    void vscode.window.showErrorMessage('Open a TypeScript file first, then run "Run with Mindbug" again.');
     return false;
   }
   const doc = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
@@ -59,7 +59,7 @@ export async function runWithHeapStack(resource?: vscode.Uri): Promise<boolean> 
   const started = await vscode.debug.startDebugging(folder, config);
   if (!started) {
     void vscode.window.showErrorMessage(
-      'The debugger did not start. Check that Deno is installed and that the setting "heapStack.denoPath" points to it.',
+      'The debugger did not start. Check that Deno is installed and that the setting "mindbug.denoPath" points to it.',
     );
   }
   return started;

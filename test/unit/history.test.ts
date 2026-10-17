@@ -7,7 +7,7 @@ function snap(step: number, line = step, name = 'f'): MemorySnapshot {
   return {
     step,
     frames: [
-      { frameId: 0, name: 'Global frame', isGlobal: true, line: 1, file: '/w/a.ts', vars: [] },
+      { frameId: 0, name: 'Global scope', isGlobal: true, line: 1, file: '/w/a.ts', vars: [] },
       { frameId: 1, name, isGlobal: false, line, file: '/w/sort.ts', vars: [] },
     ],
     objects: {},

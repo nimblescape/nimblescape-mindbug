@@ -121,7 +121,7 @@ export class MemoryController implements vscode.Disposable {
   }
 
   private maxSteps(): number {
-    return vscode.workspace.getConfiguration('heapStack').get<number>('maxHistorySteps', 500);
+    return vscode.workspace.getConfiguration('mindbug').get<number>('maxHistorySteps', 500);
   }
 
   /**
@@ -177,7 +177,7 @@ export class MemoryController implements vscode.Disposable {
       editor.setDecorations(this.stepDecoration, [
         {
           range: new vscode.Range(line, 0, line, 0),
-          hoverMessage: `Heap Stack shows step ${m.step}. At that step the program was at this line.`,
+          hoverMessage: `Mindbug shows step ${m.step}. At that step the program was at this line.`,
         },
       ]);
     }
@@ -203,7 +203,7 @@ export class MemoryController implements vscode.Disposable {
 
   private onStopped(session: vscode.DebugSession, threadId: number): void {
     this.paused = { session, threadId };
-    const config = vscode.workspace.getConfiguration('heapStack');
+    const config = vscode.workspace.getConfiguration('mindbug');
     if (!this.panel && config.get<boolean>('openAutomatically', true) && !this.autoOpened.has(rootId(session))) {
       this.autoOpened.add(rootId(session));
       this.open();
@@ -238,7 +238,7 @@ export class MemoryController implements vscode.Disposable {
   }
 
   private limits(): WalkerLimits {
-    const c = vscode.workspace.getConfiguration('heapStack');
+    const c = vscode.workspace.getConfiguration('mindbug');
     return {
       objects: c.get<number>('maxObjects', DEFAULT_LIMITS.objects),
       items: c.get<number>('maxArrayItems', DEFAULT_LIMITS.items),
