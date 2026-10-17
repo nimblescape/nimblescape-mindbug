@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // Records the memory snapshots of the example programs, step by step, with a real Deno.
 // The screenshot test (screenshots.ts) draws these snapshots, so it does not need Deno.
 //

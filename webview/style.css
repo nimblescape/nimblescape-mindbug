@@ -1,3 +1,9 @@
+/*
+ * SPDX-License-Identifier: MIT
+ * © 2026 Hannes Stauss (scalarion@nimblescape.com)
+ * Licensed under the MIT License. See LICENSE in the repository root for details.
+ */
+
 /* Memory panel of the Mindbug extension.
    All colors are tokens (--mb-*). They are set for the light theme first, then changed for the
    dark theme and the high contrast themes. VS Code sets the classes vscode-light, vscode-dark,

@@ -1,114 +1,47 @@
-# Mindbug
+# nimblescape Mindbug
 
-Mindbug is a Visual Studio Code extension for teaching. It shows the memory of a TypeScript program
-while you debug it: the **stack** with one scope for each function call, and the **heap** with the
-objects and arrays that the variables point to. It works like [Python Tutor](https://pythontutor.com),
-but inside VS Code, with the normal debugger. It runs the program with [Deno](https://deno.com) or
-[Node.js](https://nodejs.org). The view does not depend on the runtime: it shows every debug session
-of the JavaScript debugger that is built into VS Code.
+See the memory of your TypeScript program while you debug it: the stack and the heap, as a diagram next to the code.
 
-![The Mindbug view next to the code: scopes on the stack on the left, arrays on the heap on the right](docs/images/stack-and-heap.png)
+Mindbug is a VS Code extension for teaching. It shows the **stack**, with one scope for each function call and its local variables, and the **heap**, with the objects and arrays that the variables point to. Arrows go from the variables to the objects. Mindbug works like [Python Tutor](https://pythontutor.com), but inside VS Code, with its normal debugger. It runs the program with [Deno](https://deno.com) or [Node.js](https://nodejs.org).
 
-## What the Mindbug view shows
+![The Mindbug view next to the code: scopes on the stack on the left, arrays on the heap on the right](https://raw.githubusercontent.com/nimblescape/nimblescape-mindbug/main/docs/images/stack-and-heap.png)
 
-- **STACK** (blue area): one scope for each function call, with its local variables. The stack
-  builds bottom up: the Global scope is at the bottom, and each function call adds a scope on top.
-  The top scope is the function that runs: a triangle at its left points to it. The triangle is
-  yellow at the current step and green at an earlier step, as the arrow of the debugger in the
-  editor. Each variable is a box. A number, a string or a boolean is written in the box. The
-  variables of a scope also build bottom up: the first variable of the function (its first
-  parameter) is at the bottom, and each later variable is above it.
-- **HEAP** (yellow area): objects and arrays. A variable that holds an object stores only *where*
-  the object is. The view draws this as an arrow from the variable to the object. Two arrows to the
-  same object mean that two variables point to the same object. The heap also builds bottom up: the
-  objects of the Global scope are at the bottom, next to the Global scope, and the objects of each
-  newer function call are above them. An object that only the variables of a function point to
-  goes away from the view when the function returns (see [examples/call-stack.ts](examples/call-stack.ts)).
-- **Objects** use UML object notation: `:Person` (underlined) in the head, and one line
-  `name = value` for each attribute.
-- **Arrays** are a row of cells, with the index at the top left of each cell.
-- **Classes** are at the top of the heap, because in JavaScript a class is also an object on the
-  heap. A class box shows the **static variables** (class variables) with their values, underlined
-  as in UML, the attributes that each object gets, and the methods. A subclass shows
-  "extends" and the UML arrow to its superclass. Move the mouse over an object to see a dashed arrow
-  to the class it was made from.
-- **Changes**: everything that changed in the last step has a yellow background.
+## What Mindbug does on your computer
 
-![Four scopes on the stack, lineTotal on top of makeBill, checkout and the Global scope; the classes Item, Discount and Bill at the top of the heap; the Discount object of lineTotal above the Bill object of makeBill and the objects of the Global scope](docs/images/call-stack.png)
+- **When it works.** Mindbug starts when a debug session starts in VS Code, or when you run one of its commands. Before that, it does nothing.
+- **Runtimes.** **Run with Mindbug** and a launch configuration of type `mindbug` first run `deno --version` or `node --version` (the programs of the settings `nimblescape.mindbug.denoPath` and `nimblescape.mindbug.nodePath`) to find a runtime. Then the JavaScript debugger of VS Code starts your TypeScript file with Deno (`deno run --inspect-brk=127.0.0.1:9229 --allow-all`) or with Node.js 22.7 or newer (`node --inspect-brk=127.0.0.1:9229 --experimental-transform-types`), in the workspace folder, and connects to it on your computer only (`127.0.0.1`, port of the setting `nimblescape.mindbug.inspectPort`). With `--allow-all`, Deno gives your program all the rights of your user, as Node.js does. **Run with Mindbug** saves the file before it starts it.
+- **Code in your program.** At each pause of a debug session of the JavaScript debugger, also of one that Mindbug did not start, Mindbug runs a small helper in the paused program with the `evaluate` request of the debugger. The helper reads the variables of the scopes and the objects that they reach, and gives each object a number that stays the same from step to step. It adds one hidden global variable, `__mindbug`, to the program, calls no getter, and changes no variable and no object of the program. Only an object that is a `Proxy` runs code of the program when the helper reads it.
+- **Files and data.** Mindbug changes no file, except the save of **Run with Mindbug**. It keeps the steps of the step history in the memory of VS Code, until the next debug session starts, and the view keeps its three switches while it is open. Mindbug writes nothing to the disk.
+- **Network.** Mindbug connects to no address. The debugger connects to the runtime on your computer. Deno downloads the modules that your program imports from the web (for example `npm:` and `jsr:` imports), as `deno run` always does. Mindbug collects no telemetry.
 
-![Classes with static variables, objects made from them, and the dashed arrow from an object to its class](docs/images/classes.png)
+[Security](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/security.md#what-mindbug-does-on-your-computer) describes each step and where its protection ends.
 
-### Step history
+## Features
 
-Each time the program pauses (a breakpoint or a step), the view saves a step. Use the step list,
-the slider or the Left and Right arrow keys to go back to an earlier step. The view then shows the
-memory as it was at that step. The editor shows the line where the program was at that step, also
-when that line is in another file. It marks the line as the debugger does when you select a function
-call in its Call Stack view: a green arrow and a green line. The yellow line of the debugger stays the current position
-of the program. The line is in your TypeScript file, because VS Code's debugger reads the source map
-of the runtime. Select **Show current step** (or press End) to go back to the newest step.
+- **Stack and heap.** The stack and the heap build bottom up: the Global scope and its objects are at the bottom, and each function call adds a scope, with its objects, on top. A triangle at the left points to the scope that runs.
+- **UML notation.** Objects are UML objects (`:Person`, with one line for each attribute), and arrays are rows of indexed cells.
+- **Classes.** The classes are at the top of the heap, with their static variables, attributes, methods and superclass, because in JavaScript a class is also an object on the heap.
+- **Aliasing.** Two arrows to one object show that two variables point to the same object.
+- **Changes.** Everything that changed in the last step has a yellow background.
+- **Step history.** Go back to an earlier step. The view then shows the memory of that step, and the editor marks its line.
+- **Any runtime.** The view shows every debug session of the JavaScript debugger of VS Code, also one that a launch configuration of type `node` starts.
+- **Themes.** The view follows the light, dark and high contrast themes of VS Code.
 
-![An earlier step in the dark theme: step 8 is selected in the step list](docs/images/history-dark.png)
-
-The view follows the color theme of VS Code: light, dark and high contrast.
+![Four scopes on the stack, lineTotal on top of makeBill, checkout and the Global scope; the classes Item, Discount and Bill at the top of the heap](https://raw.githubusercontent.com/nimblescape/nimblescape-mindbug/main/docs/images/call-stack.png)
 
 ## Requirements
 
-- VS Code 1.90 or newer. The extension uses the JavaScript debugger that is built into VS Code.
-- One of these runtimes:
-  - [Deno 2](https://docs.deno.com/runtime/getting_started/installation/) on the `PATH`, or the
-    setting `nimblescape.mindbug.denoPath` pointing to the Deno program.
-  - [Node.js](https://nodejs.org) 22.7 or newer on the `PATH`, or the setting
-    `nimblescape.mindbug.nodePath` pointing to it. Mindbug starts Node.js with the option
-    `--experimental-transform-types`, so that Node.js runs the TypeScript file.
+- VS Code 1.125 or later. Mindbug uses the JavaScript debugger that is part of VS Code.
+- [Deno 2](https://docs.deno.com/runtime/getting_started/installation/), or [Node.js](https://nodejs.org) 22.7 or newer. Mindbug takes Deno when it is installed, else Node.js.
 
-## How to use it
+## Getting started
 
 1. Open a TypeScript file.
-2. Run the command **Run with Mindbug** (Command Palette, or the button at the top right of the
-   editor).
+2. Run the command **Run with Mindbug** (Command Palette, or the button at the top right of the editor).
 3. The program pauses at its first line, and the **Mindbug** view opens next to the code.
 4. Use **Step Over** (F10) and **Step Into** (F11) of the debugger. The view changes at each step.
 
-**Run with Mindbug** takes Deno when it is installed, else Node.js. The setting
-`nimblescape.mindbug.runtime` (`auto`, `deno` or `node`) changes this.
-
-### Launch configurations
-
-The debug type `mindbug` starts a TypeScript file from a launch configuration (`.vscode/launch.json`),
-the same way as **Run with Mindbug**. In `launch.json`, select **Add Configuration…** and then
-**Mindbug: Run a TypeScript file**:
-
-```json
-{
-  "type": "mindbug",
-  "request": "launch",
-  "name": "Mindbug: current file",
-  "program": "${file}"
-}
-```
-
-| Attribute | Default | What it does |
-| --- | --- | --- |
-| `program` | `${file}` (the file of the active editor) | The TypeScript file to run. |
-| `runtime` | the setting `nimblescape.mindbug.runtime` | `auto`, `deno` or `node`. |
-| `cwd` | the workspace folder | The folder in which the program runs. |
-| `stopOnEntry` | the setting `nimblescape.mindbug.stopOnEntry` | Pause at the first line of the program. |
-
-Without a `launch.json` file, press F5 in a TypeScript file and select **Mindbug**.
-
-The view also works with a launch configuration of another type, for example type `node` of the
-JavaScript debugger: it opens at the first pause of any JavaScript or TypeScript debug session. The
-folder [examples](examples) has four small programs and a
-[launch.json](examples/.vscode/launch.json) with both kinds of launch configuration:
-
-- [insertion-sort.ts](examples/insertion-sort.ts): two variables point to the same array.
-- [people.ts](examples/people.ts): classes, static variables, constructors and methods.
-- [linked-list.ts](examples/linked-list.ts): objects that point to each other.
-- [call-stack.ts](examples/call-stack.ts): three functions on the stack at the same time, with objects
-  of the classes Item, Discount and Bill. The Discount object that the inner function creates does
-  not survive its call; the Bill object that the middle function creates survives the call of the
-  inner function and is still there in the Global scope at the end.
+Without a `launch.json` file, F5 in a TypeScript file also offers **Mindbug**. The [user guide](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/guide.md#launch-configurations) explains the launch configurations of type `mindbug`, and the [examples](https://github.com/nimblescape/nimblescape-mindbug/tree/main/examples) are four small programs to start with.
 
 ## Settings
 
@@ -125,46 +58,20 @@ folder [examples](examples) has four small programs and a
 | `nimblescape.mindbug.maxArrayItems` | `100` | Number of array items, set members and map entries per object. |
 | `nimblescape.mindbug.maxStringLength` | `200` | Number of characters per string. |
 
-The toolbar of the view has three switches: **Show classes**, **Show functions** (functions, and the
-variables that hold functions or classes) and **Show ids** (the object ids).
+All commands, settings and details are in the [user guide](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/guide.md).
 
-## How it works
+## Security and privacy
 
-The Debug Adapter Protocol does not tell whether two variables point to the same object. So, at each
-pause, the extension runs a small helper inside the paused program (through the debugger's
-`evaluate` request). The helper gives each object an id that stays the same from step to step, and
-describes the objects that the variables can reach. It does not call getters, so reading the memory
-does not change the program. The code is in [src/heapWalker.ts](src/heapWalker.ts) and
-[src/snapshot.ts](src/snapshot.ts).
+**A program that you run with Mindbug is code that you run.** It runs with the rights of your user, as with `deno run --allow-all` or `node` in a terminal. Run only programs that you trust. VS Code debugs a program only in a trusted workspace, so Mindbug does not run in Restricted Mode. See [Security](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/security.md).
 
-Limits:
+Mindbug connects to no address, stores nothing on the disk, and collects no telemetry.
 
-- Private fields (`#name`) are not shown, because JavaScript does not allow other code to read them.
-- Getters are shown as `get`, not with their value.
-- Only scopes up to the first `await` are shown. The function calls before an `await` are not on
-  the stack any more.
+## Uninstall
 
-## Development
+Uninstall the extension in VS Code. Mindbug stores no data, so nothing else is left. A `launch.json` file with a configuration of type `mindbug` stays; VS Code then shows that it does not know the type.
 
-The npm scripts are the same as in the other nimblescape extensions. Node is the version in
-[.node-version](.node-version).
+---
 
-```sh
-npm install
-npm run build            # builds dist/ (npm run watch: builds again after each change)
-npm run typecheck
-npm test                 # unit tests (vitest)
-npm run test:deno        # tests against a real Deno program (needs Deno, or DENO_PATH)
-npm run test:render      # screenshots of the view in three themes (test/render/output)
-npm run test:vscode      # tests in a real VS Code with Deno and Node.js (downloads VS Code; use xvfb-run on Linux)
-npm run package          # builds nimblescape-mindbug-<version>.vsix (minified, without source maps)
-npm run install-local    # builds the .vsix and installs it into the VS Code of this computer
-npm run uninstall-local  # removes it from the VS Code of this computer (all profiles)
-```
+[Change log](https://github.com/nimblescape/nimblescape-mindbug/blob/main/CHANGELOG.md) · [Contributing](https://github.com/nimblescape/nimblescape-mindbug/blob/main/CONTRIBUTING.md) · [User guide](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/guide.md) · [Support](https://github.com/nimblescape/nimblescape-mindbug/blob/main/SUPPORT.md) · [Issues](https://github.com/nimblescape/nimblescape-mindbug/issues) · [Source](https://github.com/nimblescape/nimblescape-mindbug)
 
-`npm run record` records the example programs step by step with Deno into
-`test/render/snapshots`, which the screenshot test uses.
-
-## License
-
-[MIT](LICENSE)
+© 2026 Hannes Stauss (scalarion@nimblescape.com) · [MIT License](https://github.com/nimblescape/nimblescape-mindbug/blob/main/LICENSE).

@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // Function calls, and how long the objects that a function creates live.
 //
 // The call stack: the Global scope calls checkout, checkout calls makeBill, and makeBill calls lineTotal. So, when

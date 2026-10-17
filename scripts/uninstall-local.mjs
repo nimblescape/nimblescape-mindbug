@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // `npm run uninstall-local`: removes the extension (the id of package.json) from the VS Code of this computer
 // (`code --uninstall-extension …`), the counterpart of `npm run install-local`. It removes it from every VS Code
 // profile: the default profile and each profile listed in VS Code's storage.json (userDataProfiles). A profile in which

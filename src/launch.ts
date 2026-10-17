@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // The debug type "mindbug" and the command "Run with Mindbug".
 // A launch configuration of type "mindbug" names the TypeScript file and, if wanted, the runtime. Mindbug has no debug
 // adapter of its own: MindbugConfigurationProvider turns the configuration into one of VS Code's built-in JavaScript

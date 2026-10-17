@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // The step history of one debug session: every pause adds a snapshot.
 // The panel can show any earlier step; it follows the newest step only while it shows the newest step.
 // No DOM code here, so the unit tests can use it directly.

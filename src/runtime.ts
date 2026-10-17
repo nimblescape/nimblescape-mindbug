@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // The runtimes that the debug type "mindbug" can start a program with: Deno and Node.js.
 // Only the debug type "mindbug" and the command "Run with Mindbug" (launch.ts) use this file. The Mindbug view does not
 // know the runtime: it reads every debug session of VS Code's JavaScript debugger, also one that a launch configuration

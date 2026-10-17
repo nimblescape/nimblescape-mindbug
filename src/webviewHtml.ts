@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // HTML of the memory panel. Kept separate from panel.ts (no 'vscode' import),
 // so the screenshot tests can load exactly the same page in a browser.
 

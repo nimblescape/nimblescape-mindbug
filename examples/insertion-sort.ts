@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // Insertion sort. Step through the program and watch the array change.
 // Both arr and arr2 point to the same array: the function changes the array in the heap.
 

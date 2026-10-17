@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // Finds what changed between two snapshots, so the webview can highlight it.
 
 import type { ChangeSet, HeapObject, MemorySnapshot, Value } from './model.ts';

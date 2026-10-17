@@ -1,16 +1,25 @@
 {
   "name": "nimblescape-mindbug",
   "displayName": "nimblescape Mindbug",
-  "description": "Shows the stack (one scope for each function call) and the heap of a paused TypeScript program (Node.js or Deno) as a diagram, to help students learn how memory works.",
+  "description": "Shows the stack (one scope for each function call) and the heap of a paused TypeScript program as a diagram, to help students learn how memory works. Starts the program with Deno or Node.js in the JavaScript debugger of VS Code, and at each pause runs a small helper in the program that reads its objects and changes nothing.",
   "version": "0.1.0",
   "publisher": "nimblescape",
-  "private": true,
+  "license": "MIT",
+  "author": {
+    "name": "nimblescape e.U.",
+    "url": "https://nimblescape.com"
+  },
+  "homepage": "https://nimblescape.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/nimblescape/nimblescape-mindbug.git"
   },
+  "bugs": {
+    "url": "https://github.com/nimblescape/nimblescape-mindbug/issues"
+  },
+  "qna": "https://github.com/nimblescape/nimblescape-mindbug/issues",
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.125.0"
   },
   "categories": [
     "Debuggers",
@@ -28,10 +37,29 @@
     "python tutor",
     "uml"
   ],
+  "icon": "resources/icon.png",
+  "galleryBanner": {
+    "color": "#1a365d",
+    "theme": "dark"
+  },
+  "pricing": "Free",
+  "extensionKind": [
+    "workspace"
+  ],
   "activationEvents": [
     "onDebug"
   ],
   "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Mindbug starts the TypeScript program of the workspace with Deno or Node.js and runs code in it, and VS Code debugs a program only in a trusted workspace."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Deno and Node.js run a file on the disk, which a virtual workspace does not have."
+    }
+  },
   "contributes": {
     "commands": [
       {
@@ -57,7 +85,7 @@
         },
         {
           "command": "nimblescape.mindbug.open",
-          "when": "inDebugMode",
+          "when": "inDebugMode && debugType =~ /^(pwa-node|node|node-terminal)$/",
           "group": "navigation"
         }
       ],
@@ -223,7 +251,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "^24.19.2",
-    "@types/vscode": "~1.90.0",
+    "@types/vscode": "~1.125.0",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^4.0.0",
@@ -241,7 +269,6 @@
       }
     }
   },
-  "license": "MIT",
   "allowScripts": {
     "esbuild@0.28.2": true,
     "@vscode/vsce-sign@2.1.0": true,

@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // Classes and objects. Each object is made from a class (its template).
 // The static variable `count` belongs to the class: there is one value for all objects.
 

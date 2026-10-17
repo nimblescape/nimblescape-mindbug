@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
+// The build before a launch of the extension (see launch.json): one
+// development build of dist/extension.js and dist/webview.js with source maps.
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "type": "npm",
+      "script": "build",
+      "group": "build",
+      "presentation": { "reveal": "silent", "clear": true },
+      "problemMatcher": []
+    }
+  ]
+}

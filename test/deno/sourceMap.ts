@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // Minimal source map reader for the tests: maps a line in the JavaScript that Deno runs back to
 // the line in the TypeScript file. VS Code's JavaScript debugger does the same with the source
 // maps that Deno sends, so the test stand-in (fakeDap.ts) reports the same line numbers.

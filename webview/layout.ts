@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // Places heap objects in rows, in the style of Python Tutor:
 // each object that a frame variable points to starts a row, and the objects it points to
 // are placed to its right. An object is placed only once; later references to it are arrows.

@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 /// <reference types="mocha" />
 // Tests in a real VS Code (npm run test:vscode, .vscode-test.mjs): mocha runs them in the extension host. They debug
 // the example programs through VS Code's built-in JavaScript debugger and check the snapshots of the extension. The same
@@ -162,12 +166,17 @@ async function stop(): Promise<void> {
 
 async function insertionSort(api: MindbugApi, start: Start): Promise<void> {
   const file = path.join(examples(), 'insertion-sort.ts');
-  const entry = await debug(api, start, file, [15]);
+  // The breakpoint is not on line 19 (the line after the loop): before the source map of Node.js is loaded, the
+  // JavaScript debugger sets a breakpoint on the same line number of the code that Node.js generates from the
+  // TypeScript file. There, line 19 is the first statement of the program, so the start of the program hits that
+  // breakpoint; the debugger then removes it, resumes, and does not report the pause at the first line (js-debug
+  // 1.140, pause reason "ambiguous").
+  const entry = await debug(api, start, file, [10]);
   // The program pauses at its first statement, and the runtime's own code is not a frame.
   if (start.pausesAtFirstStatement) {
     assert.deepEqual(
       entry.frames.map((f) => [f.name, f.line, f.file]),
-      [['Global scope', 19, file]],
+      [['Global scope', 23, file]],
     );
   } else {
     assert.deepEqual(
@@ -175,7 +184,14 @@ async function insertionSort(api: MindbugApi, start: Start): Promise<void> {
       [['Global scope', file], ['insertionSort', file]],
     );
   }
-  const s = await runToLine(api, file, 15);
+  // On line 10, unsortedValue and sortedIndex are not declared yet. Two steps lead to line 14, where they have values.
+  let s = await runToLine(api, file, 10);
+  for (const line of [11, 14]) {
+    const next = api.nextSnapshot(TIMEOUT);
+    await vscode.commands.executeCommand('workbench.action.debug.stepOver');
+    s = await next;
+    assert.equal(top(s)?.line, line);
+  }
   assert.deepEqual(
     s.frames.map((f) => f.name),
     ['Global scope', 'insertionSort'],
@@ -200,16 +216,16 @@ async function insertionSort(api: MindbugApi, start: Start): Promise<void> {
 
 async function people(api: MindbugApi, start: Start): Promise<void> {
   const file = path.join(examples(), 'people.ts');
-  await debug(api, start, file, [9, 22, 38, 29]);
+  await debug(api, start, file, [13, 26, 42, 33]);
   // The frame of a method has the class that declares it; a constructor is "Class.constructor", also when
   // a subclass calls it with super(...).
-  const first = await runToLine(api, file, 9);
+  const first = await runToLine(api, file, 13);
   const pauses = [first];
-  while (top(pauses[pauses.length - 1]).line !== 29) {
+  while (top(pauses[pauses.length - 1]).line !== 33) {
     const next = api.nextSnapshot(TIMEOUT);
     await vscode.commands.executeCommand('workbench.action.debug.continue');
     pauses.push(await next);
-    assert.ok(pauses.length <= 6, 'the program did not pause at line 29');
+    assert.ok(pauses.length <= 6, 'the program did not pause at line 33');
   }
   assert.deepEqual(
     pauses.map((p) => p.frames.map((f) => f.name).join(' > ')),
@@ -234,9 +250,9 @@ async function people(api: MindbugApi, start: Start): Promise<void> {
   // An earlier step of the history shows its line in the editor, also when the file is closed.
   await closeTextEditors();
   api.viewStep(first.step);
-  await waitForVisibleLine(file, 9);
+  await waitForVisibleLine(file, 13);
   api.viewStep(s.step);
-  await waitForVisibleLine(file, 29);
+  await waitForVisibleLine(file, 33);
   await stop();
 }
 
@@ -256,10 +272,10 @@ async function continueToLine(api: MindbugApi, file: string, line: number): Prom
 
 async function callStack(api: MindbugApi, start: Start): Promise<void> {
   const file = path.join(examples(), 'call-stack.ts');
-  await debug(api, start, file, [57, 65, 76]);
+  await debug(api, start, file, [61, 69, 80]);
   // In lineTotal, the inner function, four scopes are on the stack, with the newest function call on top. The
   // variables of different scopes point to the same objects on the heap.
-  const first = await runToLine(api, file, 57);
+  const first = await runToLine(api, file, 61);
   assert.deepEqual(
     first.frames.map((f) => f.name),
     ['Global scope', 'checkout', 'makeBill', 'lineTotal'],
@@ -279,7 +295,7 @@ async function callStack(api: MindbugApi, start: Start): Promise<void> {
 
   // The object of the inner function does not survive its call: the next call has a new object, and the old object
   // is not on the heap any more. The object of the middle function survives the call of the inner function.
-  const second = await continueToLine(api, file, 57);
+  const second = await continueToLine(api, file, 61);
   assert.notEqual(idOf(variable(second, 'lineTotal', 'discount')), discount, 'the second call creates a new object');
   assert.equal(second.objects[discount], undefined, 'the object of the first call is not on the heap any more');
   assert.equal(idOf(variable(second, 'makeBill', 'bill')), bill, 'the bill of makeBill is the same object');
@@ -287,12 +303,12 @@ async function callStack(api: MindbugApi, start: Start): Promise<void> {
 
   // The object of the middle function also survives the middle function: at the end, bill of the Global scope
   // points to it.
-  const made = await continueToLine(api, file, 65);
+  const made = await continueToLine(api, file, 69);
   assert.deepEqual(
     made.frames.map((f) => f.name),
     ['Global scope', 'checkout', 'makeBill'],
   );
-  const end = await continueToLine(api, file, 76);
+  const end = await continueToLine(api, file, 80);
   assert.deepEqual(
     end.frames.map((f) => f.name),
     ['Global scope'],

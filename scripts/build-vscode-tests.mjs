@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
 // Bundles each test of test/vscode/ to out/test/vscode/<name>.test.js for the tests in a real VS Code
 // (.vscode-test.mjs). The module `vscode` comes from the extension host, and mocha from @vscode/test-cli.
 import * as fs from 'node:fs';
