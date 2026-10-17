@@ -49,6 +49,8 @@ test('frame names of constructors and methods name the class that declares them'
   assert.equal(frameLabel('birthday', bob, objects), 'Person.birthday', 'also without the class in front');
   assert.equal(frameLabel('Student.get label', bob, objects), 'Person.get label');
   assert.equal(frameLabel('Function.reset', ref(2), objects), 'Person.reset', 'a static method called on Student');
+  assert.equal(frameLabel('Person.constructor', ann, objects), 'Person.constructor', 'the name of the VS Code test');
+  assert.equal(frameLabel('Person.constructor', bob, objects), 'Person.constructor', 'super(...) in the VS Code test');
   assert.equal(frameLabel('Person', ann, objects), 'Person.constructor');
   assert.equal(frameLabel('Person.Person', ann, objects), 'Person.constructor');
   assert.equal(frameLabel('Student.Person', bob, objects), 'Person.constructor', 'super(...) of Student');
