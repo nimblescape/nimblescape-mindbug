@@ -47,22 +47,48 @@ async function runToLine(api: MindbugApi, file: string, line: number): Promise<M
   throw new Error(`the program did not pause at line ${line}`);
 }
 
-/** A way to start a program: the command "Run with Mindbug" with a runtime, or an own launch configuration. */
+/**
+ * A way to start a program: the command "Run with Mindbug" with a runtime, a launch configuration of type "mindbug",
+ * or an own launch configuration of VS Code's JavaScript debugger.
+ */
 interface Start {
   title: string;
   run(file: string): Thenable<unknown>;
   /** True when the first pause is at the first statement of the program. */
   pausesAtFirstStatement: boolean;
+  /** The runtime that Mindbug must start, for the starts through the debug type "mindbug". */
+  runtime?: 'node' | 'deno';
 }
 
-async function runWithMindbug(runtime: 'node' | 'deno', file: string): Promise<void> {
+async function setRuntime(runtime: 'node' | 'deno'): Promise<void> {
   await vscode.workspace.getConfiguration('nimblescape.mindbug').update('runtime', runtime, vscode.ConfigurationTarget.Global);
-  await vscode.commands.executeCommand('nimblescape.mindbug.run', vscode.Uri.file(file));
+}
+
+async function runWithMindbug(runtime: 'node' | 'deno', file: string): Promise<boolean | undefined> {
+  await setRuntime(runtime);
+  return vscode.commands.executeCommand<boolean>('nimblescape.mindbug.run', vscode.Uri.file(file));
 }
 
 const STARTS: Start[] = [
-  { title: 'Run with Mindbug, Deno', run: (file) => runWithMindbug('deno', file), pausesAtFirstStatement: true },
-  { title: 'Run with Mindbug, Node.js', run: (file) => runWithMindbug('node', file), pausesAtFirstStatement: true },
+  { title: 'Run with Mindbug, Deno', run: (file) => runWithMindbug('deno', file), pausesAtFirstStatement: true, runtime: 'deno' },
+  { title: 'Run with Mindbug, Node.js', run: (file) => runWithMindbug('node', file), pausesAtFirstStatement: true, runtime: 'node' },
+  {
+    // A launch.json configuration of type "mindbug" for the file of the active editor. Its attribute "runtime" wins
+    // over the setting.
+    title: 'launch configuration of type "mindbug", Deno',
+    pausesAtFirstStatement: true,
+    runtime: 'deno',
+    run: async () => {
+      await setRuntime('node');
+      return vscode.debug.startDebugging(vscode.workspace.workspaceFolders?.[0], {
+        type: 'mindbug',
+        request: 'launch',
+        name: 'Mindbug: current file',
+        program: '${file}',
+        runtime: 'deno',
+      });
+    },
+  },
   {
     // What a student writes in launch.json: nothing in it is about Mindbug. Node.js comes from the PATH.
     // With stopOnEntry, the debugger stops at the first line of the file that can stop, which can be inside a function.
@@ -89,8 +115,22 @@ async function debug(api: MindbugApi, start: Start, file: string, breakpointLine
   );
   await vscode.window.showTextDocument(uri);
   const first = api.nextSnapshot(TIMEOUT);
-  await start.run(file);
-  return first;
+  const sessions: vscode.DebugSession[] = [];
+  const started = vscode.debug.onDidStartDebugSession((s) => sessions.push(s));
+  try {
+    assert.ok(await start.run(file), 'the debug session starts');
+    const snapshot = await first;
+    if (start.runtime) {
+      // The debug type "mindbug" becomes a configuration of VS Code's JavaScript debugger for the runtime.
+      const config = sessions[0]?.configuration;
+      assert.equal(sessions[0]?.type, 'pwa-node');
+      assert.equal(config?.runtimeExecutable, start.runtime);
+      assert.equal(config?.program, file);
+    }
+    return snapshot;
+  } finally {
+    started.dispose();
+  }
 }
 
 /** Waits until an editor shows `line` of `file`. */

@@ -2,16 +2,20 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Deno: current file",
+      // Mindbug starts the file of the active editor with Deno, or with Node.js when Deno is not installed.
+      "name": "Mindbug: current file",
+      "type": "mindbug",
+      "request": "launch",
+      "program": "${file}"
+    },
+    {
+      // A launch configuration of VS Code's JavaScript debugger, without Mindbug: the Mindbug view shows it too.
+      "name": "Node.js: current file",
       "type": "node",
       "request": "launch",
       "program": "${file}",
-      "cwd": "${workspaceFolder}",
-      "runtimeExecutable": "deno",
-      "runtimeArgs": ["run", "--inspect-brk=127.0.0.1:9229", "--allow-all"],
-      "attachSimplePort": 9229,
-      "console": "internalConsole",
-      "outputCapture": "std"
+      "stopOnEntry": true,
+      "console": "internalConsole"
     }
   ]
 }

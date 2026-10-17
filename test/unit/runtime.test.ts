@@ -15,11 +15,23 @@ test('Node.js runs TypeScript files from version 22.7 on', () => {
 
 test('"auto" takes Deno when it runs, else Node.js when it runs TypeScript', async () => {
   const versions = (found: Record<string, string>) => async (program: string) => found[program];
-  assert.equal(await chooseRuntime(settings, versions({ deno: 'deno 2.9.7', node: 'v24.20.0' })), 'deno');
-  assert.equal(await chooseRuntime(settings, versions({ node: 'v24.20.0' })), 'node');
-  assert.equal(await chooseRuntime(settings, versions({ node: 'v20.19.1' })), undefined, 'Node.js 20 cannot run TypeScript');
-  assert.equal(await chooseRuntime(settings, versions({})), undefined);
-  assert.equal(await chooseRuntime({ ...settings, runtime: 'node' }, versions({ deno: 'deno 2.9.7' })), 'node', 'a set runtime is not probed');
+  assert.deepEqual(await chooseRuntime(settings, versions({ deno: 'deno 2.9.7', node: 'v24.20.0' })), { runtime: 'deno' });
+  assert.deepEqual(await chooseRuntime(settings, versions({ node: 'v24.20.0' })), { runtime: 'node' });
+  const old = await chooseRuntime(settings, versions({ node: 'v20.19.1' }));
+  assert.ok('problem' in old && old.problem.includes('Node.js v20.19.1'), 'Node.js 20 cannot run TypeScript');
+  const none = await chooseRuntime(settings, versions({}));
+  assert.ok('problem' in none && none.problem.includes('found neither'));
+});
+
+test('a runtime that is set must run', async () => {
+  const versions = (found: Record<string, string>) => async (program: string) => found[program];
+  assert.deepEqual(await chooseRuntime({ ...settings, runtime: 'node' }, versions({ deno: 'deno 2.9.7', node: 'v22.7.0' })), {
+    runtime: 'node',
+  });
+  const deno = await chooseRuntime({ ...settings, runtime: 'deno' }, versions({ node: 'v24.20.0' }));
+  assert.ok('problem' in deno && deno.problem.includes('did not find Deno'));
+  const node = await chooseRuntime({ ...settings, runtime: 'node', nodePath: '/opt/node' }, versions({ deno: 'deno 2.9.7' }));
+  assert.ok('problem' in node && node.problem.includes('did not find "/opt/node"'));
 });
 
 test('the debug configuration: the runtime waits for the debugger on the port, for Deno and Node.js', () => {

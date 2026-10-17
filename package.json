@@ -79,32 +79,32 @@
             "node"
           ],
           "enumDescriptions": [
-            "Deno when it is installed, else Node.js.",
+            "Deno when it is installed, else Node.js 22.7 or newer.",
             "Deno, the program of the setting nimblescape.mindbug.denoPath.",
-            "Node.js, the program of the setting nimblescape.mindbug.nodePath."
+            "Node.js 22.7 or newer, the program of the setting nimblescape.mindbug.nodePath."
           ],
           "default": "auto",
-          "markdownDescription": "The runtime that **Run with Mindbug** starts the program with. The Mindbug view works with every runtime that VS Code's JavaScript debugger runs, also when you start the program with your own launch configuration."
+          "markdownDescription": "The runtime that **Run with Mindbug** and a launch configuration of type `mindbug` start the program with (the attribute `runtime` of the launch configuration wins over this setting). The Mindbug view works with every runtime that VS Code's JavaScript debugger runs, also when you start the program with a launch configuration of another type."
         },
         "nimblescape.mindbug.nodePath": {
           "type": "string",
           "default": "node",
-          "markdownDescription": "Path to Node.js 22.7 or newer, used by **Run with Mindbug** when the runtime is `node` (or `auto` without Deno). The default `node` works when Node.js is on the `PATH`."
+          "markdownDescription": "Path to Node.js 22.7 or newer, used when the runtime is `node` (or `auto` without Deno). The default `node` works when Node.js is on the `PATH`."
         },
         "nimblescape.mindbug.denoPath": {
           "type": "string",
           "default": "deno",
-          "markdownDescription": "Path to the Deno program, used by **Run with Mindbug** when the runtime is `deno` or `auto`. The default `deno` works when Deno is on the `PATH`."
+          "markdownDescription": "Path to the Deno program, used when the runtime is `deno` or `auto`. The default `deno` works when Deno is on the `PATH`."
         },
         "nimblescape.mindbug.inspectPort": {
           "type": "number",
           "default": 9229,
-          "markdownDescription": "Port on which Deno or Node.js waits for the debugger when **Run with Mindbug** starts the program. Change it when another program uses port 9229."
+          "markdownDescription": "Port on which Deno or Node.js waits for the debugger when **Run with Mindbug** or a launch configuration of type `mindbug` starts the program. Change it when another program uses port 9229."
         },
         "nimblescape.mindbug.stopOnEntry": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "When on, **Run with Mindbug** pauses at the first line of the program, so you can step from the start."
+          "markdownDescription": "When on, **Run with Mindbug** and a launch configuration of type `mindbug` pause at the first line of the program, so you can step from the start."
         },
         "nimblescape.mindbug.openAutomatically": {
           "type": "boolean",
@@ -143,24 +143,63 @@
     },
     "debuggers": [
       {
-        "type": "node",
+        "type": "mindbug",
+        "label": "Mindbug",
+        "languages": [
+          "typescript"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "The TypeScript file to run. The default is the file of the active editor.",
+                "default": "${file}"
+              },
+              "runtime": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "deno",
+                  "node"
+                ],
+                "enumDescriptions": [
+                  "Deno when it is installed, else Node.js 22.7 or newer.",
+                  "Deno (setting nimblescape.mindbug.denoPath).",
+                  "Node.js 22.7 or newer (setting nimblescape.mindbug.nodePath)."
+                ],
+                "description": "The runtime that runs the program. The default is the setting nimblescape.mindbug.runtime."
+              },
+              "cwd": {
+                "type": "string",
+                "description": "The folder in which the program runs. The default is the workspace folder.",
+                "default": "${workspaceFolder}"
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Pause at the first statement of the program. The default is the setting nimblescape.mindbug.stopOnEntry.",
+                "default": true
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "mindbug",
+            "request": "launch",
+            "name": "Mindbug: current file",
+            "program": "${file}"
+          }
+        ],
         "configurationSnippets": [
           {
-            "label": "Mindbug: Debug a TypeScript file with Deno",
-            "description": "Runs a TypeScript file with Deno and shows its memory in the Mindbug view.",
+            "label": "Mindbug: Run a TypeScript file",
+            "description": "Runs a TypeScript file with Deno or Node.js and shows its memory in the Mindbug view.",
             "body": {
-              "type": "node",
+              "type": "mindbug",
               "request": "launch",
-              "name": "Deno: ${1:main.ts}",
-              "program": "^\"\\${workspaceFolder}/${1:main.ts}\"",
-              "cwd": "^\"\\${workspaceFolder}\"",
-              "runtimeExecutable": "deno",
-              "runtimeArgs": [
-                "run",
-                "--inspect-wait",
-                "--allow-all"
-              ],
-              "attachSimplePort": 9229
+              "name": "Mindbug: ${1:current file}",
+              "program": "^\"\\${file}\""
             }
           }
         ]
