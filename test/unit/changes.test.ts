@@ -8,7 +8,7 @@ const base = (): MemorySnapshot => ({
   frames: [
     {
       frameId: 0,
-      name: 'Global frame',
+      name: 'Global scope',
       isGlobal: true,
       line: 1,
       vars: [
@@ -37,7 +37,7 @@ test('changed variable, array cell, static variable and new object', () => {
   next.objects[5].fields![0].value = { k: 'num', v: '1' };
   next.objects[7] = { id: 7, kind: 'object', type: 'Object', fields: [] };
   const c = computeChanges(prev, next);
-  assert.deepEqual([...c.vars], [varKey(0, 'Global frame', 'i')]);
+  assert.deepEqual([...c.vars], [varKey(0, 'Global scope', 'i')]);
   assert.deepEqual([...c.slots].sort(), [slotKey(1, '1'), slotKey(5, '.count')].sort());
   assert.deepEqual([...c.newObjects], [7]);
 });

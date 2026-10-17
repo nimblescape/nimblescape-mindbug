@@ -1,187 +1,190 @@
-/* Memory panel of the heap-stack extension.
-   All colors are tokens (--hs-*). They are set for the light theme first, then changed for the
+/* Memory panel of the mindbug extension.
+   All colors are tokens (--mb-*). They are set for the light theme first, then changed for the
    dark theme and the high contrast themes. VS Code sets the classes vscode-light, vscode-dark,
    vscode-high-contrast and vscode-high-contrast-light on <body>. */
 
 :root {
-  --hs-bg: var(--vscode-editor-background, #ffffff);
-  --hs-fg: var(--vscode-editor-foreground, #1f2328);
-  --hs-dim: #5a6472;
-  --hs-rule: var(--vscode-panel-border, #e0e0e0);
-  --hs-mono: var(--vscode-editor-font-family, 'Cascadia Code', 'Menlo', 'Consolas', monospace);
-  --hs-ui: var(--vscode-font-family, system-ui, -apple-system, 'Segoe UI', sans-serif);
+  --mb-bg: var(--vscode-editor-background, #ffffff);
+  --mb-fg: var(--vscode-editor-foreground, #1f2328);
+  --mb-dim: #5a6472;
+  --mb-rule: var(--vscode-panel-border, #e0e0e0);
+  --mb-mono: var(--vscode-editor-font-family, 'Cascadia Code', 'Menlo', 'Consolas', monospace);
+  --mb-ui: var(--vscode-font-family, system-ui, -apple-system, 'Segoe UI', sans-serif);
 
   /* The two memory areas */
-  --hs-stack-bg: #eaf1fa;
-  --hs-stack-border: #c9d7ea;
-  --hs-stack-title: #2f5d9a;
-  --hs-stack-sub: #4a5868;
-  --hs-heap-bg: #fbf6e9;
-  --hs-heap-border: #e8dbb8;
-  --hs-heap-title: #8a5a00;
-  --hs-heap-sub: #6b5a33;
+  --mb-stack-bg: #eaf1fa;
+  --mb-stack-border: #c9d7ea;
+  --mb-stack-title: #2f5d9a;
+  --mb-stack-sub: #4a5868;
+  --mb-heap-bg: #fbf6e9;
+  --mb-heap-border: #e8dbb8;
+  --mb-heap-title: #8a5a00;
+  --mb-heap-sub: #6b5a33;
 
   /* Frames and variables */
-  --hs-frame-bg: #ffffff;
-  --hs-frame-border: #c9d3df;
-  --hs-frame-edge: #8fa1b6;
-  --hs-active-bg: #dce8f7;
-  --hs-active-border: #a9c1e0;
-  --hs-active-edge: #2f5d9a;
-  --hs-badge-bg: #2f5d9a;
-  --hs-badge-fg: #ffffff;
-  --hs-focus: #4b7bb4;
-  --hs-slot-bg: #ffffff;
-  --hs-slot-border: #9aa5b1;
+  --mb-frame-bg: #ffffff;
+  --mb-frame-border: #c9d3df;
+  --mb-frame-edge: #8fa1b6;
+  --mb-active-bg: #dce8f7;
+  --mb-active-border: #a9c1e0;
+  --mb-active-edge: #2f5d9a;
+  /* The triangle at the scope that runs: the colors of the debugger's arrow in the editor */
+  --mb-runs: var(--vscode-debugIcon-breakpointCurrentStackframeForeground, #ffcc00);
+  --mb-runs-edge: #9a7b00;
+  --mb-runs-past: var(--vscode-debugIcon-breakpointStackframeForeground, #89d185);
+  --mb-runs-past-edge: #4f8a3c;
+  --mb-focus: #4b7bb4;
+  --mb-slot-bg: #ffffff;
+  --mb-slot-border: #9aa5b1;
 
   /* Heap objects */
-  --hs-cell-bg: #fff6b8;
-  --hs-cell-border: #b5a85a;
-  --hs-idx: #6b6b4a;
-  --hs-uml-bg: #ffffff;
-  --hs-uml-border: #3c4652;
-  --hs-class-head: #e9eef4;
-  --hs-fn-bg: #f3f4f6;
+  --mb-cell-bg: #fff6b8;
+  --mb-cell-border: #b5a85a;
+  --mb-idx: #6b6b4a;
+  --mb-uml-bg: #ffffff;
+  --mb-uml-border: #3c4652;
+  --mb-class-head: #e9eef4;
+  --mb-fn-bg: #f3f4f6;
 
   /* Marks */
-  --hs-changed: #ffd36b;
-  --hs-changed-border: #c9a240;
-  --hs-new: #2f9e6b;
-  --hs-arrow: #8c96a3;
-  --hs-arrow-active: #2f5d9a;
-  --hs-hot: #c9622f;
+  --mb-changed: #ffd36b;
+  --mb-changed-border: #c9a240;
+  --mb-new: #2f9e6b;
+  --mb-arrow: #8c96a3;
+  --mb-arrow-active: #2f5d9a;
+  --mb-hot: #c9622f;
 
   /* Step history */
-  --hs-step-border: #c9d3df;
-  --hs-step-fg: #4a5868;
-  --hs-step-sel-bg: #dce8f7;
-  --hs-step-sel-border: #2f5d9a;
-  --hs-step-sel-fg: #1f3f6a;
-  --hs-now: #c9622f;
-  --hs-now-fg: #8a3e14;
-  --hs-button-bg: #f3f3f3;
-  --hs-button-border: #c8c8c8;
-  --hs-button-fg: #1f2328;
-  --hs-primary-bg: #2f5d9a;
-  --hs-primary-fg: #ffffff;
+  --mb-step-border: #c9d3df;
+  --mb-step-fg: #4a5868;
+  --mb-step-sel-bg: #dce8f7;
+  --mb-step-sel-border: #2f5d9a;
+  --mb-step-sel-fg: #1f3f6a;
+  --mb-now: #c9622f;
+  --mb-now-fg: #8a3e14;
+  --mb-button-bg: #f3f3f3;
+  --mb-button-border: #c8c8c8;
+  --mb-button-fg: #1f2328;
+  --mb-primary-bg: #2f5d9a;
+  --mb-primary-fg: #ffffff;
 
   /* Values: the colors of the Variables view of the current theme, with the default light colors as fallback */
-  --hs-str: var(--vscode-debugTokenExpression-string, #a31515);
-  --hs-num: var(--vscode-debugTokenExpression-number, #098658);
-  --hs-kw: var(--vscode-debugTokenExpression-boolean, #0000ff);
+  --mb-str: var(--vscode-debugTokenExpression-string, #a31515);
+  --mb-num: var(--vscode-debugTokenExpression-number, #098658);
+  --mb-kw: var(--vscode-debugTokenExpression-boolean, #0000ff);
 }
 
 body.vscode-dark {
-  --hs-dim: #9da5b0;
+  --mb-dim: #9da5b0;
 
-  --hs-stack-bg: #18222f;
-  --hs-stack-border: #2b3d55;
-  --hs-stack-title: #7cb0ee;
-  --hs-stack-sub: #a3b3c6;
-  --hs-heap-bg: #251f14;
-  --hs-heap-border: #4a3e22;
-  --hs-heap-title: #e2b45c;
-  --hs-heap-sub: #bfae88;
+  --mb-stack-bg: #18222f;
+  --mb-stack-border: #2b3d55;
+  --mb-stack-title: #7cb0ee;
+  --mb-stack-sub: #a3b3c6;
+  --mb-heap-bg: #251f14;
+  --mb-heap-border: #4a3e22;
+  --mb-heap-title: #e2b45c;
+  --mb-heap-sub: #bfae88;
 
-  --hs-frame-bg: #1f2731;
-  --hs-frame-border: #35455a;
-  --hs-frame-edge: #687b92;
-  --hs-active-bg: #1c3352;
-  --hs-active-border: #3a5f8f;
-  --hs-active-edge: #6ca8ee;
-  --hs-badge-bg: #3b78c4;
-  --hs-badge-fg: #ffffff;
-  --hs-focus: #6cb6ff;
-  --hs-slot-bg: #141a21;
-  --hs-slot-border: #5c6b7c;
+  --mb-frame-bg: #1f2731;
+  --mb-frame-border: #35455a;
+  --mb-frame-edge: #687b92;
+  --mb-active-bg: #1c3352;
+  --mb-active-border: #3a5f8f;
+  --mb-active-edge: #6ca8ee;
+  --mb-runs-edge: var(--mb-runs);
+  --mb-runs-past-edge: var(--mb-runs-past);
+  --mb-focus: #6cb6ff;
+  --mb-slot-bg: #141a21;
+  --mb-slot-border: #5c6b7c;
 
-  --hs-cell-bg: #38321d;
-  --hs-cell-border: #7d7140;
-  --hs-idx: #bdb28a;
-  --hs-uml-bg: #1b2028;
-  --hs-uml-border: #a9b4c2;
-  --hs-class-head: #262e39;
-  --hs-fn-bg: #23272e;
+  --mb-cell-bg: #38321d;
+  --mb-cell-border: #7d7140;
+  --mb-idx: #bdb28a;
+  --mb-uml-bg: #1b2028;
+  --mb-uml-border: #a9b4c2;
+  --mb-class-head: #262e39;
+  --mb-fn-bg: #23272e;
 
-  --hs-changed: #6b5212;
-  --hs-changed-border: #d9a932;
-  --hs-new: #3fbf86;
-  --hs-arrow: #7f8b9b;
-  --hs-arrow-active: #6cb6ff;
-  --hs-hot: #ff9248;
+  --mb-changed: #6b5212;
+  --mb-changed-border: #d9a932;
+  --mb-new: #3fbf86;
+  --mb-arrow: #7f8b9b;
+  --mb-arrow-active: #6cb6ff;
+  --mb-hot: #ff9248;
 
-  --hs-step-border: #3a4656;
-  --hs-step-fg: #a9b4c2;
-  --hs-step-sel-bg: #1c3352;
-  --hs-step-sel-border: #6ca8ee;
-  --hs-step-sel-fg: #dce8f7;
-  --hs-now: #e07a45;
-  --hs-now-fg: #f2a578;
-  --hs-button-bg: var(--vscode-button-secondaryBackground, #313131);
-  --hs-button-border: #4a4f57;
-  --hs-button-fg: var(--vscode-button-secondaryForeground, #cccccc);
-  --hs-primary-bg: #3b78c4;
-  --hs-primary-fg: #ffffff;
+  --mb-step-border: #3a4656;
+  --mb-step-fg: #a9b4c2;
+  --mb-step-sel-bg: #1c3352;
+  --mb-step-sel-border: #6ca8ee;
+  --mb-step-sel-fg: #dce8f7;
+  --mb-now: #e07a45;
+  --mb-now-fg: #f2a578;
+  --mb-button-bg: var(--vscode-button-secondaryBackground, #313131);
+  --mb-button-border: #4a4f57;
+  --mb-button-fg: var(--vscode-button-secondaryForeground, #cccccc);
+  --mb-primary-bg: #3b78c4;
+  --mb-primary-fg: #ffffff;
 
-  --hs-str: var(--vscode-debugTokenExpression-string, #ce9178);
-  --hs-num: var(--vscode-debugTokenExpression-number, #b5cea8);
-  --hs-kw: var(--vscode-debugTokenExpression-boolean, #569cd6);
+  --mb-str: var(--vscode-debugTokenExpression-string, #ce9178);
+  --mb-num: var(--vscode-debugTokenExpression-number, #b5cea8);
+  --mb-kw: var(--vscode-debugTokenExpression-boolean, #569cd6);
 }
 
 body.vscode-high-contrast:not(.vscode-high-contrast-light) {
-  --hs-str: var(--vscode-debugTokenExpression-string, #ce9178);
-  --hs-num: var(--vscode-debugTokenExpression-number, #b5cea8);
-  --hs-kw: var(--vscode-debugTokenExpression-boolean, #569cd6);
+  --mb-str: var(--vscode-debugTokenExpression-string, #ce9178);
+  --mb-num: var(--vscode-debugTokenExpression-number, #b5cea8);
+  --mb-kw: var(--vscode-debugTokenExpression-boolean, #569cd6);
 }
 
 /* High contrast: no colored areas, only clear borders. */
 body.vscode-high-contrast,
 body.vscode-high-contrast-light {
-  --hs-dim: var(--vscode-editor-foreground);
-  --hs-stack-bg: transparent;
-  --hs-stack-border: var(--vscode-contrastBorder, #6fc3df);
-  --hs-stack-title: var(--vscode-editor-foreground);
-  --hs-stack-sub: var(--vscode-editor-foreground);
-  --hs-heap-bg: transparent;
-  --hs-heap-border: var(--vscode-contrastBorder, #6fc3df);
-  --hs-heap-title: var(--vscode-editor-foreground);
-  --hs-heap-sub: var(--vscode-editor-foreground);
-  --hs-frame-bg: transparent;
-  --hs-frame-border: var(--vscode-contrastBorder, #6fc3df);
-  --hs-frame-edge: var(--vscode-contrastBorder, #6fc3df);
-  --hs-active-bg: transparent;
-  --hs-active-border: var(--vscode-focusBorder, #f38518);
-  --hs-active-edge: var(--vscode-focusBorder, #f38518);
-  --hs-badge-bg: var(--vscode-focusBorder, #f38518);
-  --hs-badge-fg: var(--vscode-editor-background, #000000);
-  --hs-slot-bg: transparent;
-  --hs-slot-border: var(--vscode-contrastBorder, #6fc3df);
-  --hs-cell-bg: transparent;
-  --hs-cell-border: var(--vscode-contrastBorder, #6fc3df);
-  --hs-idx: var(--vscode-editor-foreground);
-  --hs-uml-bg: transparent;
-  --hs-uml-border: var(--vscode-contrastBorder, #6fc3df);
-  --hs-class-head: transparent;
-  --hs-fn-bg: transparent;
-  --hs-changed: transparent;
-  --hs-changed-border: var(--vscode-focusBorder, #f38518);
-  --hs-arrow: var(--vscode-editor-foreground, #ffffff);
-  --hs-arrow-active: var(--vscode-focusBorder, #f38518);
-  --hs-step-border: var(--vscode-contrastBorder, #6fc3df);
-  --hs-step-fg: var(--vscode-editor-foreground);
-  --hs-step-sel-bg: transparent;
-  --hs-step-sel-border: var(--vscode-focusBorder, #f38518);
-  --hs-step-sel-fg: var(--vscode-editor-foreground);
-  --hs-button-bg: transparent;
-  --hs-button-border: var(--vscode-contrastBorder, #6fc3df);
-  --hs-button-fg: var(--vscode-editor-foreground);
-  --hs-primary-bg: transparent;
-  --hs-primary-fg: var(--vscode-editor-foreground);
+  --mb-dim: var(--vscode-editor-foreground);
+  --mb-stack-bg: transparent;
+  --mb-stack-border: var(--vscode-contrastBorder, #6fc3df);
+  --mb-stack-title: var(--vscode-editor-foreground);
+  --mb-stack-sub: var(--vscode-editor-foreground);
+  --mb-heap-bg: transparent;
+  --mb-heap-border: var(--vscode-contrastBorder, #6fc3df);
+  --mb-heap-title: var(--vscode-editor-foreground);
+  --mb-heap-sub: var(--vscode-editor-foreground);
+  --mb-frame-bg: transparent;
+  --mb-frame-border: var(--vscode-contrastBorder, #6fc3df);
+  --mb-frame-edge: var(--vscode-contrastBorder, #6fc3df);
+  --mb-active-bg: transparent;
+  --mb-active-border: var(--vscode-focusBorder, #f38518);
+  --mb-active-edge: var(--vscode-focusBorder, #f38518);
+  --mb-runs-edge: var(--vscode-contrastBorder, #6fc3df);
+  --mb-runs-past-edge: var(--vscode-contrastBorder, #6fc3df);
+  --mb-slot-bg: transparent;
+  --mb-slot-border: var(--vscode-contrastBorder, #6fc3df);
+  --mb-cell-bg: transparent;
+  --mb-cell-border: var(--vscode-contrastBorder, #6fc3df);
+  --mb-idx: var(--vscode-editor-foreground);
+  --mb-uml-bg: transparent;
+  --mb-uml-border: var(--vscode-contrastBorder, #6fc3df);
+  --mb-class-head: transparent;
+  --mb-fn-bg: transparent;
+  --mb-changed: transparent;
+  --mb-changed-border: var(--vscode-focusBorder, #f38518);
+  --mb-arrow: var(--vscode-editor-foreground, #ffffff);
+  --mb-arrow-active: var(--vscode-focusBorder, #f38518);
+  --mb-step-border: var(--vscode-contrastBorder, #6fc3df);
+  --mb-step-fg: var(--vscode-editor-foreground);
+  --mb-step-sel-bg: transparent;
+  --mb-step-sel-border: var(--vscode-focusBorder, #f38518);
+  --mb-step-sel-fg: var(--vscode-editor-foreground);
+  --mb-button-bg: transparent;
+  --mb-button-border: var(--vscode-contrastBorder, #6fc3df);
+  --mb-button-fg: var(--vscode-editor-foreground);
+  --mb-primary-bg: transparent;
+  --mb-primary-fg: var(--vscode-editor-foreground);
 }
 
 body.vscode-high-contrast .changed,
 body.vscode-high-contrast-light .changed {
-  outline: 2px dashed var(--hs-changed-border);
+  outline: 2px dashed var(--mb-changed-border);
   outline-offset: -2px;
 }
 
@@ -195,17 +198,17 @@ body {
 body {
   display: flex;
   flex-direction: column;
-  background: var(--hs-bg);
-  color: var(--hs-fg);
-  font-family: var(--hs-ui);
+  background: var(--mb-bg);
+  color: var(--mb-fg);
+  font-family: var(--mb-ui);
   font-size: 13px;
 }
 
 button {
   font: inherit;
-  color: var(--hs-button-fg);
-  background: var(--hs-button-bg);
-  border: 1px solid var(--hs-button-border);
+  color: var(--mb-button-fg);
+  background: var(--mb-button-bg);
+  border: 1px solid var(--mb-button-border);
   border-radius: 4px;
   height: 26px;
   padding: 0 10px;
@@ -231,9 +234,9 @@ button.icon {
 }
 
 button.primary {
-  color: var(--hs-primary-fg);
-  background: var(--hs-primary-bg);
-  border-color: var(--hs-primary-bg);
+  color: var(--mb-primary-fg);
+  background: var(--mb-primary-bg);
+  border-color: var(--mb-primary-bg);
 }
 
 button.primary[hidden] {
@@ -250,7 +253,7 @@ button.primary[hidden] {
   min-height: 40px;
   box-sizing: border-box;
   padding: 6px 16px;
-  border-bottom: 1px solid var(--hs-rule);
+  border-bottom: 1px solid var(--mb-rule);
 }
 
 .status {
@@ -262,7 +265,7 @@ button.primary[hidden] {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
   white-space: nowrap;
 }
 
@@ -273,7 +276,7 @@ button.primary[hidden] {
   flex-direction: column;
   gap: 8px;
   padding: 8px 16px;
-  border-bottom: 1px solid var(--hs-rule);
+  border-bottom: 1px solid var(--mb-rule);
 }
 
 .history[hidden] {
@@ -290,12 +293,12 @@ button.primary[hidden] {
 .history-controls input[type='range'] {
   flex: 0 1 180px;
   min-width: 80px;
-  accent-color: var(--hs-step-sel-border);
+  accent-color: var(--mb-step-sel-border);
 }
 
 .step-text {
   min-width: 90px;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
   font-variant-numeric: tabular-nums;
 }
 
@@ -323,9 +326,9 @@ button.step {
   padding: 0 6px;
   font-size: 12px;
   line-height: 1.3;
-  color: var(--hs-step-fg);
+  color: var(--mb-step-fg);
   background: transparent;
-  border: 1px solid var(--hs-step-border);
+  border: 1px solid var(--mb-step-border);
   border-radius: 6px;
 }
 
@@ -339,25 +342,25 @@ button.step {
 }
 
 button.step.now {
-  color: var(--hs-now-fg);
-  border-color: var(--hs-now);
+  color: var(--mb-now-fg);
+  border-color: var(--mb-now);
 }
 
 button.step.selected {
-  color: var(--hs-step-sel-fg);
-  background: var(--hs-step-sel-bg);
-  border: 2px solid var(--hs-step-sel-border);
+  color: var(--mb-step-sel-fg);
+  background: var(--mb-step-sel-bg);
+  border: 2px solid var(--mb-step-sel-border);
 }
 
 .empty {
   padding: 24px;
   max-width: 560px;
   line-height: 1.5;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
 }
 
 .empty strong {
-  color: var(--hs-fg);
+  color: var(--mb-fg);
 }
 
 .empty[hidden] {
@@ -422,15 +425,17 @@ body.running .diagram {
   flex-direction: column;
   flex: 0 0 auto;
   min-width: 260px;
-  background: var(--hs-stack-bg);
-  border: 1px solid var(--hs-stack-border);
+  background: var(--mb-stack-bg);
+  border: 1px solid var(--mb-stack-border);
 }
 
 .heap-region {
+  display: flex;
+  flex-direction: column;
   flex: 1 0 auto;
   min-width: 280px;
-  background: var(--hs-heap-bg);
-  border: 1px solid var(--hs-heap-border);
+  background: var(--mb-heap-bg);
+  border: 1px solid var(--mb-heap-border);
 }
 
 .region-title {
@@ -448,20 +453,20 @@ body.running .diagram {
 }
 
 .stack-region .region-title {
-  color: var(--hs-stack-title);
+  color: var(--mb-stack-title);
 }
 
 .stack-region .region-sub,
 .stack-region .hint {
-  color: var(--hs-stack-sub);
+  color: var(--mb-stack-sub);
 }
 
 .heap-region .region-title {
-  color: var(--hs-heap-title);
+  color: var(--mb-heap-title);
 }
 
 .heap-region .region-sub {
-  color: var(--hs-heap-sub);
+  color: var(--mb-heap-sub);
 }
 
 .hint {
@@ -490,16 +495,16 @@ body.running .diagram {
 .frame {
   position: relative;
   padding: 6px 12px 10px 10px;
-  background: var(--hs-frame-bg);
-  border: 1px solid var(--hs-frame-border);
-  border-left: 3px solid var(--hs-frame-edge);
+  background: var(--mb-frame-bg);
+  border: 1px solid var(--mb-frame-border);
+  border-left: 3px solid var(--mb-frame-edge);
   border-radius: 4px;
 }
 
 .frame.active {
-  background: var(--hs-active-bg);
-  border-color: var(--hs-active-border);
-  border-left-color: var(--hs-active-edge);
+  background: var(--mb-active-bg);
+  border-color: var(--mb-active-border);
+  border-left-color: var(--mb-active-edge);
 }
 
 body.vscode-high-contrast .frame.active,
@@ -507,8 +512,31 @@ body.vscode-high-contrast-light .frame.active {
   border-width: 2px 2px 2px 4px;
 }
 
+/* The triangle at the left of the scope that runs, in the padding of the STACK area, pointing to the scope. */
+.runs-mark {
+  position: absolute;
+  left: -16px;
+  top: 8px;
+  width: 10px;
+  height: 14px;
+  overflow: visible;
+}
+
+.runs-mark path,
+.lg-runs path {
+  fill: var(--mb-runs);
+  stroke: var(--mb-runs-edge);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.runs-mark.past path {
+  fill: var(--mb-runs-past);
+  stroke: var(--mb-runs-past-edge);
+}
+
 .frame.focused {
-  outline: 2px dashed var(--hs-focus);
+  outline: 2px dashed var(--mb-focus);
   outline-offset: 2px;
 }
 
@@ -517,7 +545,7 @@ body.vscode-high-contrast-light .frame.active {
   align-items: center;
   gap: 16px;
   margin-bottom: 8px;
-  font-family: var(--hs-mono);
+  font-family: var(--mb-mono);
   font-size: 13px;
   white-space: nowrap;
 }
@@ -531,23 +559,13 @@ body.vscode-high-contrast-light .frame.active {
 }
 
 .frame-line {
-  color: var(--hs-dim);
-}
-
-.badge {
-  margin-left: auto;
-  padding: 1px 8px;
-  font-family: var(--hs-ui);
-  font-size: 11px;
-  color: var(--hs-badge-fg);
-  background: var(--hs-badge-bg);
-  border-radius: 8px;
+  color: var(--mb-dim);
 }
 
 .frame-empty,
 .frame-note,
 .heap-empty {
-  color: var(--hs-dim);
+  color: var(--mb-dim);
   font-style: italic;
   padding: 2px 0;
 }
@@ -571,7 +589,7 @@ body.vscode-high-contrast-light .frame.active {
 }
 
 .var-name.this {
-  color: var(--hs-kw);
+  color: var(--mb-kw);
 }
 
 .slot {
@@ -582,18 +600,18 @@ body.vscode-high-contrast-light .frame.active {
   min-width: 80px;
   height: 28px;
   padding: 0 8px;
-  font-family: var(--hs-mono);
+  font-family: var(--mb-mono);
   font-size: 14px;
   white-space: nowrap;
-  background: var(--hs-slot-bg);
-  border: 1px solid var(--hs-slot-border);
+  background: var(--mb-slot-bg);
+  border: 1px solid var(--mb-slot-border);
 }
 
 .scope-sep {
   grid-column: 1 / -1;
   padding-top: 4px;
   font-size: 11px;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
   text-align: right;
 }
 
@@ -604,18 +622,18 @@ body.vscode-high-contrast-light .frame.active {
 }
 
 .v-str {
-  color: var(--hs-str);
+  color: var(--mb-str);
 }
 
 .v-num,
 .v-big {
-  color: var(--hs-num);
+  color: var(--mb-num);
 }
 
 .v-bool,
 .v-null,
 .v-undef {
-  color: var(--hs-kw);
+  color: var(--mb-kw);
 }
 
 .v-uninit,
@@ -623,12 +641,12 @@ body.vscode-high-contrast-light .frame.active {
 .v-unavail,
 .v-hole,
 .fn-inline {
-  color: var(--hs-dim);
+  color: var(--mb-dim);
   font-style: italic;
 }
 
 .v-uninit {
-  font-family: var(--hs-ui);
+  font-family: var(--mb-ui);
   font-size: 12px;
 }
 
@@ -643,21 +661,27 @@ body.vscode-high-contrast-light .frame.active {
 .cell.changed,
 tr.attr.changed > td,
 tr.entry.changed > td {
-  background: var(--hs-changed);
+  background: var(--mb-changed);
 }
 
 .slot.changed,
 .cell.changed {
-  border-color: var(--hs-changed-border);
+  border-color: var(--mb-changed-border);
 }
 
 /* Heap layout: a row of classes at the top (when shown), then the objects.
-   Each tree is a row; the objects that an object points to are placed to its right. */
+   Each tree is a row; the objects that an object points to are placed to its right.
+   The heap builds bottom up, like the stack: the objects sit at the bottom of the HEAP area. */
 
 .heap {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 24px;
+}
+
+.objects-part {
+  margin-top: auto;
 }
 
 .heap-part {
@@ -670,13 +694,13 @@ tr.entry.changed > td {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
-  color: var(--hs-heap-title);
+  color: var(--mb-heap-title);
 }
 
 .part-sub {
   margin-top: 1px;
   font-size: 12px;
-  color: var(--hs-heap-sub);
+  color: var(--mb-heap-sub);
 }
 
 .class-row {
@@ -709,7 +733,7 @@ tr.entry.changed > td {
 }
 
 .obj.new {
-  box-shadow: 0 0 0 2px var(--hs-new);
+  box-shadow: 0 0 0 2px var(--mb-new);
 }
 
 .array.new,
@@ -719,14 +743,14 @@ tr.entry.changed > td {
 
 .array.new .cells,
 .set.new .cells {
-  box-shadow: 0 0 0 2px var(--hs-new);
+  box-shadow: 0 0 0 2px var(--mb-new);
 }
 
 .oid {
-  font-family: var(--hs-ui);
+  font-family: var(--mb-ui);
   font-size: 11px;
   font-weight: 400;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
   text-decoration: none;
 }
 
@@ -738,12 +762,12 @@ tr.entry.changed > td {
   gap: 10px;
   margin-bottom: 4px;
   font-size: 12px;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
 }
 
 .obj-label .type {
-  font-family: var(--hs-mono);
-  color: var(--hs-fg);
+  font-family: var(--mb-mono);
+  color: var(--mb-fg);
 }
 
 .cells {
@@ -760,8 +784,8 @@ tr.entry.changed > td {
   height: 46px;
   margin: 0 -1px -1px 0;
   padding: 16px 8px 0;
-  background: var(--hs-cell-bg);
-  border: 1px solid var(--hs-cell-border);
+  background: var(--mb-cell-bg);
+  border: 1px solid var(--mb-cell-border);
 }
 
 .set .cell {
@@ -773,7 +797,7 @@ tr.entry.changed > td {
   display: flex;
   align-items: center;
   padding-top: 0;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
   font-style: italic;
   background: transparent;
 }
@@ -783,12 +807,12 @@ tr.entry.changed > td {
   left: 4px;
   top: 1px;
   font-size: 10px;
-  color: var(--hs-idx);
+  color: var(--mb-idx);
 }
 
 .cv {
   text-align: center;
-  font-family: var(--hs-mono);
+  font-family: var(--mb-mono);
   font-size: 16px;
   line-height: 22px;
   white-space: nowrap;
@@ -798,8 +822,8 @@ tr.entry.changed > td {
 
 .uml {
   min-width: 170px;
-  background: var(--hs-uml-bg);
-  border: 1.5px solid var(--hs-uml-border);
+  background: var(--mb-uml-bg);
+  border: 1.5px solid var(--mb-uml-border);
 }
 
 .uml-head {
@@ -810,12 +834,12 @@ tr.entry.changed > td {
   box-sizing: border-box;
   height: 32px;
   padding: 0 48px;
-  border-bottom: 1px solid var(--hs-uml-border);
+  border-bottom: 1px solid var(--mb-uml-border);
   white-space: nowrap;
 }
 
 .uml-name {
-  font-family: var(--hs-mono);
+  font-family: var(--mb-mono);
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -843,19 +867,19 @@ table.attrs td {
 
 .attr-name {
   padding: 0 4px 0 8px;
-  font-family: var(--hs-mono);
+  font-family: var(--mb-mono);
   white-space: nowrap;
 }
 
 .attr-eq {
   padding: 0 4px;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
 }
 
 .attr-value {
   min-width: 18px;
   padding: 0 12px 0 4px;
-  font-family: var(--hs-mono);
+  font-family: var(--mb-mono);
   white-space: nowrap;
 }
 
@@ -867,32 +891,32 @@ table.entries th {
   padding: 2px 10px;
   font-size: 11px;
   font-weight: 400;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
   text-align: left;
 }
 
 table.entries td {
   height: 26px;
   padding: 0 10px;
-  border-top: 1px solid var(--hs-cell-border);
-  font-family: var(--hs-mono);
+  border-top: 1px solid var(--mb-cell-border);
+  font-family: var(--mb-mono);
   white-space: nowrap;
 }
 
 td.entry-key {
-  border-right: 1px solid var(--hs-cell-border);
+  border-right: 1px solid var(--mb-cell-border);
 }
 
 .more-line {
   padding: 2px 8px;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
   font-style: italic;
   font-size: 0.9em;
 }
 
 .value-text {
   padding: 2px 8px;
-  font-family: var(--hs-mono);
+  font-family: var(--mb-mono);
 }
 
 /* Classes: UML class notation (name, static variables, attributes of each object, methods) */
@@ -906,8 +930,8 @@ td.entry-key {
   padding: 5px 44px 6px;
   text-align: center;
   white-space: nowrap;
-  background: var(--hs-class-head);
-  border-bottom: 1px solid var(--hs-uml-border);
+  background: var(--mb-class-head);
+  border-bottom: 1px solid var(--mb-uml-border);
 }
 
 .class-head .oid {
@@ -918,11 +942,11 @@ td.entry-key {
 
 .stereo {
   font-size: 11px;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
 }
 
 .class-name {
-  font-family: var(--hs-mono);
+  font-family: var(--mb-mono);
   font-size: 14px;
   font-weight: 600;
 }
@@ -930,12 +954,12 @@ td.entry-key {
 .extends {
   margin-top: 2px;
   font-size: 12px;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
 }
 
 .compartment {
   padding: 4px 10px 6px;
-  border-bottom: 1px solid var(--hs-uml-border);
+  border-bottom: 1px solid var(--mb-uml-border);
 }
 
 .compartment:last-child {
@@ -948,11 +972,11 @@ td.entry-key {
 
 .caption {
   font-size: 11px;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
 }
 
 .member {
-  font-family: var(--hs-mono);
+  font-family: var(--mb-mono);
   line-height: 24px;
   white-space: nowrap;
 }
@@ -965,11 +989,11 @@ td.entry-key {
 .none {
   font-style: italic;
   line-height: 22px;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
 }
 
 .obj.related {
-  outline: 2px solid var(--hs-hot);
+  outline: 2px solid var(--mb-hot);
   outline-offset: 2px;
 }
 
@@ -977,8 +1001,8 @@ td.entry-key {
 
 .function {
   padding: 4px 10px;
-  background: var(--hs-fn-bg);
-  border: 1px solid var(--hs-uml-border);
+  background: var(--mb-fn-bg);
+  border: 1px solid var(--mb-uml-border);
   border-radius: 10px;
 }
 
@@ -986,7 +1010,7 @@ td.entry-key {
   display: flex;
   gap: 10px;
   align-items: baseline;
-  font-family: var(--hs-mono);
+  font-family: var(--mb-mono);
   font-weight: 600;
 }
 
@@ -995,15 +1019,15 @@ td.entry-key {
 }
 
 .fn-text {
-  font-family: var(--hs-mono);
+  font-family: var(--mb-mono);
   font-size: 0.9em;
-  color: var(--hs-dim);
+  color: var(--mb-dim);
 }
 
 .obj.missing {
   padding: 6px 10px;
-  border: 1px dashed var(--hs-cell-border);
-  color: var(--hs-dim);
+  border: 1px dashed var(--mb-cell-border);
+  color: var(--mb-dim);
   font-style: italic;
 }
 
@@ -1011,39 +1035,39 @@ td.entry-key {
 
 .arrow {
   fill: none;
-  stroke: var(--hs-arrow);
+  stroke: var(--mb-arrow);
   stroke-width: 1.7;
 }
 
 .arrow.active {
-  stroke: var(--hs-arrow-active);
+  stroke: var(--mb-arrow-active);
   stroke-width: 2;
 }
 
 .arrow.hot {
-  stroke: var(--hs-hot);
+  stroke: var(--mb-hot);
   stroke-width: 2.5;
 }
 
 .head,
 .dot {
-  fill: var(--hs-arrow);
+  fill: var(--mb-arrow);
 }
 
 .head.active,
 .dot.active {
-  fill: var(--hs-arrow-active);
+  fill: var(--mb-arrow-active);
 }
 
 .head.hot,
 .dot.hot {
-  fill: var(--hs-hot);
+  fill: var(--mb-hot);
 }
 
 /* "made from this class" (dashed, only while the mouse is over an object or a class) */
 .inst {
   fill: none;
-  stroke: var(--hs-hot);
+  stroke: var(--mb-hot);
   stroke-width: 1.8;
   stroke-dasharray: 6 4;
 }
@@ -1051,13 +1075,13 @@ td.entry-key {
 /* "extends": UML generalization, a line with a hollow triangle at the superclass */
 .gen {
   fill: none;
-  stroke: var(--hs-uml-border);
+  stroke: var(--mb-uml-border);
   stroke-width: 1.5;
 }
 
 .genhead {
-  fill: var(--hs-uml-bg);
-  stroke: var(--hs-uml-border);
+  fill: var(--mb-uml-bg);
+  stroke: var(--mb-uml-border);
   stroke-width: 1.2;
 }
 
@@ -1070,8 +1094,8 @@ td.entry-key {
   gap: 6px 26px;
   padding: 8px 16px;
   font-size: 12px;
-  color: var(--hs-dim);
-  border-top: 1px solid var(--hs-rule);
+  color: var(--mb-dim);
+  border-top: 1px solid var(--mb-rule);
 }
 
 .legend[hidden] {
@@ -1083,29 +1107,29 @@ body:not(.has-classes) .legend-classes {
 }
 
 .lg-inst {
-  stroke: var(--hs-hot);
+  stroke: var(--mb-hot);
   stroke-width: 1.8;
   stroke-dasharray: 6 4;
 }
 
 .lg-hot {
-  fill: var(--hs-hot);
+  fill: var(--mb-hot);
 }
 
 .lg-gen {
-  stroke: var(--hs-uml-border);
+  stroke: var(--mb-uml-border);
   stroke-width: 1.5;
 }
 
 .lg-genhead {
-  fill: var(--hs-uml-bg);
-  stroke: var(--hs-uml-border);
+  fill: var(--mb-uml-bg);
+  stroke: var(--mb-uml-border);
   stroke-width: 1.2;
 }
 
 .legend .static {
-  font-family: var(--hs-mono);
-  color: var(--hs-fg);
+  font-family: var(--mb-mono);
+  color: var(--mb-fg);
 }
 
 .legend-item {
@@ -1115,11 +1139,11 @@ body:not(.has-classes) .legend-classes {
 }
 
 .lg-dot {
-  fill: var(--hs-arrow);
+  fill: var(--mb-arrow);
 }
 
 .lg-line {
-  stroke: var(--hs-arrow);
+  stroke: var(--mb-arrow);
   stroke-width: 1.7;
 }
 
@@ -1131,11 +1155,6 @@ body:not(.has-classes) .legend-classes {
 }
 
 .changed-swatch {
-  background: var(--hs-changed);
-  border: 1px solid var(--hs-changed-border);
-}
-
-.active-swatch {
-  background: var(--hs-active-bg);
-  border-left: 3px solid var(--hs-active-edge);
+  background: var(--mb-changed);
+  border: 1px solid var(--mb-changed-border);
 }

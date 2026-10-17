@@ -80,7 +80,7 @@ export interface Variable {
 export interface Frame {
   /** DAP frame id; only valid while the program is paused at this step. */
   frameId: number;
-  /** Function name, or "Global frame" for the module top level. */
+  /** Function name, or "Global scope" for the module top level. */
   name: string;
   isGlobal: boolean;
   line: number;

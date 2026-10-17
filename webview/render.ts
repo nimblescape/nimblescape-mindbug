@@ -79,6 +79,25 @@ export function renderValue(v: Value, snap: MemorySnapshot, opts: ViewOptions): 
   return s;
 }
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/**
+ * The triangle at the left of the scope that runs, in the colors of the debugger's arrow in the editor:
+ * yellow at the current step, green at an earlier step.
+ */
+function runsMark(live: boolean): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', live ? 'runs-mark' : 'runs-mark past');
+  svg.setAttribute('viewBox', '0 0 10 14');
+  svg.setAttribute('role', 'img');
+  const title = document.createElementNS(SVG_NS, 'title');
+  title.textContent = live ? 'This function runs now.' : 'This function runs at this step.';
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', 'M1 1L9 7L1 13Z');
+  svg.append(title, path);
+  return svg;
+}
+
 function renderFrame(frame: Frame, index: number, input: RenderInput, isTop: boolean): HTMLElement {
   const { snap, changes, opts } = input;
   const box = el('div', 'frame');
@@ -97,12 +116,8 @@ function renderFrame(frame: Frame, index: number, input: RenderInput, isTop: boo
     title.dataset.file = frame.file;
     title.dataset.line = String(frame.line);
   }
-  if (isTop) {
-    const badge = el('span', 'badge', input.live === false ? 'runs at this step' : 'runs now');
-    badge.title = 'This function call is the one that runs. A new call adds a frame on top of it.';
-    title.append(badge);
-  }
   box.append(title);
+  if (isTop) box.append(runsMark(input.live !== false));
 
   const vars = visibleVars(frame, snap, opts);
   if (vars.length === 0) {
@@ -138,7 +153,7 @@ export function renderFrames(container: HTMLElement, input: RenderInput): void {
     container.append(el('div', 'frame-empty', 'The program is paused outside your own code.'));
     return;
   }
-  // The stack builds bottom up: the Global frame is at the bottom, and the function that runs now is on top.
+  // The stack builds bottom up: the Global scope is at the bottom, and the function that runs now is on top.
   for (let i = frames.length - 1; i >= 0; i--) container.append(renderFrame(frames[i], i, input, i === frames.length - 1));
 }
 
@@ -329,7 +344,7 @@ function renderHeapObject(id: number, input: RenderInput): HTMLElement {
   let box: HTMLElement;
   if (!o) {
     box = el('div', 'obj missing', '… not loaded');
-    box.title = 'This object was not read, because the program has too many objects. Increase "heapStack.maxObjects" to see more.';
+    box.title = 'This object was not read, because the program has too many objects. Increase "mindbug.maxObjects" to see more.';
   } else if (o.kind === 'array') {
     box = renderArray(o, input);
   } else if (o.kind === 'set') {

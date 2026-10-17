@@ -1,11 +1,11 @@
-// Entry point of the heap-stack extension.
+// Entry point of the mindbug extension.
 
 import * as vscode from 'vscode';
 import { MemoryController } from './controller.ts';
-import { runWithHeapStack } from './denoLaunch.ts';
+import { runWithMindbug } from './denoLaunch.ts';
 import type { MemorySnapshot } from './model.ts';
 
-export interface HeapStackApi {
+export interface MindbugApi {
   /** The newest snapshot (used by the tests in VS Code, test/vscode). */
   lastSnapshot(): MemorySnapshot | undefined;
   /** Resolves with the next snapshot (used by the tests in VS Code, test/vscode). */
@@ -14,13 +14,13 @@ export interface HeapStackApi {
   viewStep(step: number): void;
 }
 
-export function activate(context: vscode.ExtensionContext): HeapStackApi {
+export function activate(context: vscode.ExtensionContext): MindbugApi {
   const controller = new MemoryController(context.extensionUri);
   context.subscriptions.push(
     controller,
-    vscode.commands.registerCommand('heapStack.open', () => controller.open()),
-    vscode.commands.registerCommand('heapStack.run', async (resource?: vscode.Uri) => {
-      const started = await runWithHeapStack(resource);
+    vscode.commands.registerCommand('mindbug.open', () => controller.open()),
+    vscode.commands.registerCommand('mindbug.run', async (resource?: vscode.Uri) => {
+      const started = await runWithMindbug(resource);
       if (started) controller.open();
     }),
   );

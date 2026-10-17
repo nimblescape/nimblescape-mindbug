@@ -9,7 +9,7 @@ const num = (v: number) => ({ k: 'num', v: String(v) }) as const;
 function snapshot(vars: Variable[], objects: HeapObject[]): MemorySnapshot {
   return {
     step: 1,
-    frames: [{ frameId: 0, name: 'Global frame', isGlobal: true, line: 1, vars }],
+    frames: [{ frameId: 0, name: 'Global scope', isGlobal: true, line: 1, vars }],
     objects: Object.fromEntries(objects.map((o) => [o.id, o])),
     missing: [],
   };
@@ -46,6 +46,32 @@ test('a long chain starts a new row after maxDepth objects', () => {
   );
 });
 
+test('the heap builds bottom up: the rows of a newer scope are above the rows of the Global scope', () => {
+  const s = snapshot(
+    [v('a', ref(1)), v('b', ref(2))],
+    [
+      { id: 1, kind: 'array', type: 'Array', items: [] },
+      { id: 2, kind: 'array', type: 'Array', items: [] },
+      { id: 3, kind: 'object', type: 'Object', fields: [] },
+      { id: 4, kind: 'object', type: 'Object', fields: [] },
+    ],
+  );
+  s.frames.push({
+    frameId: 1,
+    name: 'f',
+    isGlobal: false,
+    line: 2,
+    vars: [v('x', ref(3)), v('y', ref(4)), v('z', ref(1))],
+  });
+  const { rows } = layoutHeap(s, DEFAULT_VIEW_OPTIONS);
+  // The Global scope is at the bottom; the rows of one scope keep the order of its variables;
+  // the array that both scopes point to stays in the rows of the Global scope.
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    [3, 4, 1, 2],
+  );
+});
+
 test('classes: superclass first, class variables hidden, static references start rows', () => {
   const s = snapshot(
     [v('Student', ref(10)), v('Person', ref(11)), v('bob', ref(1)), v('f', ref(20))],
@@ -64,9 +90,10 @@ test('classes: superclass first, class variables hidden, static references start
   );
   const { rows, classes } = layoutHeap(s, opts);
   assert.deepEqual(classes, [11, 10]);
+  // The rows that only a static variable reaches are at the top, below the classes.
   assert.deepEqual(
     rows.map((r) => r.id),
-    [1, 12],
+    [12, 1],
   );
 });
 

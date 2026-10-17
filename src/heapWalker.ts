@@ -10,7 +10,7 @@
 import type { Value } from './model.ts';
 
 export const WALKER_VERSION = 2;
-export const GLOBAL_NAME = '__heapStack';
+export const GLOBAL_NAME = '__mindbug';
 
 export interface WalkerLimits {
   /** Maximum number of heap objects described per frame. */
@@ -26,7 +26,7 @@ export interface WalkerLimits {
 export const DEFAULT_LIMITS: WalkerLimits = { objects: 300, items: 100, fields: 50, str: 200 };
 
 /**
- * Installs `globalThis.__heapStack` in the program. Returns "installed" or "ready" (already there).
+ * Installs `globalThis.__mindbug` in the program. Returns "installed" or "ready" (already there).
  * The api: begin(limits), v(name, value), err(name, error), end() -> JSON text, chunk(i, size).
  */
 export function installHeapWalker(version: number, globalName: string): string {
