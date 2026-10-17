@@ -114,8 +114,8 @@ function classChain(objects: Record<number, HeapObject>, id: number | undefined)
 /**
  * The name of a frame of a constructor or a method: "Person.constructor", "Person.birthday".
  * The class is the class that declares the function, not the class of `this`: VS Code's debugger
- * writes the class of `this` in front of a method name, so the constructor of Person that a Student
- * calls with super(...) would be "Student.Person". `debuggerName` is the name from the debugger,
+ * writes the class of `this` in front of a method name ("Student.birthday" for a method of Person),
+ * and V8 alone names a constructor only by its class ("Person"). `debuggerName` is the name from the debugger,
  * `thisValue` the value of `this` in the frame, and `caller` the name of the frame that called it.
  */
 export function frameLabel(
@@ -124,6 +124,8 @@ export function frameLabel(
   objects: Record<number, HeapObject>,
   caller?: string,
 ): string {
+  // VS Code's debugger already names a constructor by its class, also for super(...).
+  if (/^[^.]+\.constructor$/.test(debuggerName)) return debuggerName;
   const thisObj = thisValue?.k === 'ref' ? objects[thisValue.id] : undefined;
   const isStatic = thisObj?.kind === 'class';
   const chain = classChain(objects, isStatic ? thisObj?.id : thisObj?.cls);

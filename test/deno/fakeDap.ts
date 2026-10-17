@@ -20,14 +20,16 @@ const SCOPE_NAMES: Record<string, string> = {
 
 /**
  * The name that VS Code's JavaScript debugger shows for a frame. It writes the class of `this` in
- * front of the function name of a method: the VS Code test showed "Person.birthday". The snapshot
- * (frameLabel in src/snapshot.ts) turns the names into the names of the memory view.
+ * front of the function name of a method, and names a constructor "Person.constructor": the VS Code
+ * test showed these names. The snapshot (frameLabel in src/snapshot.ts) turns the names into the
+ * names of the memory view.
  */
 function frameLabel(cf: PausedEvent['callFrames'][number]): string {
   const fn = cf.functionName || '<anonymous>';
   const cls = cf.this?.type === 'object' ? cf.this.className : undefined;
   if (!cf.functionName || !cls || ['Object', 'Function', 'global', 'Window'].includes(cls)) return fn;
-  if (fn === cls || fn.includes('.')) return fn;
+  if (fn === cls) return `${fn}.constructor`;
+  if (fn.includes('.')) return fn;
   return `${cls}.${fn}`;
 }
 
