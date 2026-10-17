@@ -32,7 +32,7 @@ security model.
 | `package.json` | The extension manifest. The section [Manifest](#manifest) explains it. |
 | `package-lock.json` | The locked development tools. npm writes this file, and nobody edits it by hand. |
 | `.node-version` | The Node release of the development tools. `actions/setup-node` in the workflows and local Node version managers read it. |
-| `.vscodeignore` | Lists the files of the package: the bundles, `dist/webview.css`, the icons of `media/`, `resources/icon.png`, `package.json`, `README.md`, `CHANGELOG.md` and `LICENSE`. |
+| `.vscodeignore` | Lists the files of the package: the bundles, `dist/webview.css`, the icons of `media/`, `resources/icon.png`, `package.json`, `README.md`, `CHANGELOG.md`, `LICENSE` and `SUPPORT.md`. |
 | `.github/workflows/ci.yml` | Checks the types, runs all tests and packages every push to `main`, every pull request and the commit of every release, and checks the [release rules](#release-rules) of the source. The release publishes the VSIX of this workflow, so a change of it needs a dry run (rule 4 of the [release rules](#release-rules)). |
 | `.github/workflows/vscode-versions.yml` | Runs the tests in VS Code once per week on VS Code Insiders and on the lowest supported version. |
 | `.github/workflows/release.yml` | Releases a version on a manual start: commits the version to a temporary branch, tests and packages it with `ci.yml`, and only then moves `main` to it, creates its tag and GitHub release and publishes it to the Marketplace. A dry run tests without a change. The section [Release](#release) explains it. |
@@ -97,7 +97,7 @@ locked versions of the tools, the build gives the same files.
 - The version is the only source of the package version, and the tag of a release names it.
 - The engine range defines the compatible VS Code versions. `@types/vscode` stays at the lowest version of that range, and the workflow "VS Code versions" tests that version.
 - `main` selects the bundle `dist/extension.js`. A test checks it.
-- `.vscodeignore` lists the files of the package, not a `files` field: it ignores everything and keeps the bundles, the style sheet, the icons, `package.json`, `README.md`, `CHANGELOG.md` and `LICENSE`. A test checks the list and that the bundle of the extension leaves out the editor API and the built-in modules of Node.js only.
+- `.vscodeignore` lists the files of the package, not a `files` field: it ignores everything and keeps the bundles, the style sheet, the icons, `package.json`, `README.md`, `CHANGELOG.md`, `LICENSE` and `SUPPORT.md`. A test checks the list and that the bundle of the extension leaves out the editor API and the built-in modules of Node.js only.
 - `extensionKind` selects the workspace host, where the files and the runtimes are, also on a remote host.
 - The activation event `onDebug` activates the extension when a debug session starts; the commands activate it too.
 - `contributes` declares the commands, the menus, the settings and the debug type `mindbug`, with the attributes of its launch configuration and its snippet.
