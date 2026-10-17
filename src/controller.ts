@@ -30,14 +30,12 @@ export class MemoryController implements vscode.Disposable {
   private history: MemorySnapshot[] = [];
   /** The last status message (running, ended, error), sent again to a panel that opens later. */
   private lastStatus: ToWebview | undefined;
-  /** Marks the line of an earlier step in the editor while the panel shows that step. */
-  private readonly stepDecoration = vscode.window.createTextEditorDecorationType({
-    isWholeLine: true,
-    backgroundColor: new vscode.ThemeColor('editor.rangeHighlightBackground'),
-    overviewRulerColor: new vscode.ThemeColor('editorOverviewRuler.rangeHighlightForeground'),
-    overviewRulerLane: vscode.OverviewRulerLane.Center,
-    after: { margin: '0 0 0 2em', color: new vscode.ThemeColor('editorCodeLens.foreground') },
-  });
+  /**
+   * Marks the line of an earlier step in the editor while the panel shows that step, as the debugger marks a stack
+   * frame that you select and that is not the current position: an arrow in the gutter and a green line. The yellow
+   * line of the debugger stays the current position of the program.
+   */
+  private readonly stepDecoration: vscode.TextEditorDecorationType;
   private viewedStep: Extract<FromWebview, { type: 'viewStep' }> | undefined;
   /** Resolvers waiting for the next snapshot (used by tests). */
   private readonly snapshotWaiters: ((s: MemorySnapshot) => void)[] = [];
@@ -47,6 +45,14 @@ export class MemoryController implements vscode.Disposable {
 
   constructor(extensionUri: vscode.Uri) {
     this.extensionUri = extensionUri;
+    this.stepDecoration = vscode.window.createTextEditorDecorationType({
+      isWholeLine: true,
+      backgroundColor: new vscode.ThemeColor('editor.focusedStackFrameHighlightBackground'),
+      gutterIconPath: vscode.Uri.joinPath(extensionUri, 'media', 'step-arrow.svg'),
+      gutterIconSize: 'contain',
+      overviewRulerColor: new vscode.ThemeColor('debugIcon.breakpointStackframeForeground'),
+      overviewRulerLane: vscode.OverviewRulerLane.Full,
+    });
     this.disposables.push(
       vscode.debug.registerDebugAdapterTrackerFactory('*', {
         createDebugAdapterTracker: (session) => ({
@@ -172,7 +178,6 @@ export class MemoryController implements vscode.Disposable {
         {
           range: new vscode.Range(line, 0, line, 0),
           hoverMessage: `Heap Stack shows step ${m.step}. At that step the program was at this line.`,
-          renderOptions: { after: { contentText: `◀ Heap Stack: step ${m.step}` } },
         },
       ]);
     }
