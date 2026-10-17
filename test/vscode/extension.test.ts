@@ -180,6 +180,11 @@ async function insertionSort(api: MindbugApi, start: Start): Promise<void> {
     s.frames.map((f) => f.name),
     ['Global scope', 'insertionSort'],
   );
+  // The variables are in the order of the program: the view draws them bottom up, with arr at the bottom.
+  assert.deepEqual(
+    s.frames[1].vars.map((v) => v.name).filter((n) => n !== 'this'),
+    ['arr', 'unsortedIndex', 'unsortedValue', 'sortedIndex'],
+  );
   const arr = idOf(variable(s, 'insertionSort', 'arr'));
   assert.equal(idOf(variable(s, 'Global scope', 'arr2')), arr, 'arr and arr2 point to the same array');
   assert.equal(s.objects[arr].kind, 'array');
@@ -235,6 +240,61 @@ async function people(api: MindbugApi, start: Start): Promise<void> {
   await stop();
 }
 
+/**
+ * Continues until the program pauses at `line` of `file` again. Other pauses are skipped: with stopOnEntry, the
+ * JavaScript debugger can also pause at the first line of a function each time it is called.
+ */
+async function continueToLine(api: MindbugApi, file: string, line: number): Promise<MemorySnapshot> {
+  for (let i = 0; i < 10; i++) {
+    const next = api.nextSnapshot(TIMEOUT);
+    await vscode.commands.executeCommand('workbench.action.debug.continue');
+    const s = await next;
+    if (top(s)?.file === file && top(s)?.line === line) return s;
+  }
+  throw new Error(`the program did not pause at line ${line} again`);
+}
+
+async function callStack(api: MindbugApi, start: Start): Promise<void> {
+  const file = path.join(examples(), 'call-stack.ts');
+  await debug(api, start, file, [35, 43, 57]);
+  // In lineTotal, the inner function, four scopes are on the stack, with the newest function call on top. The
+  // variables of different scopes point to the same objects on the heap.
+  const first = await runToLine(api, file, 35);
+  assert.deepEqual(
+    first.frames.map((f) => f.name),
+    ['Global scope', 'checkout', 'makeBill', 'lineTotal'],
+  );
+  const cart = idOf(variable(first, 'Global scope', 'cart'));
+  assert.equal(idOf(variable(first, 'makeBill', 'items')), cart, 'items in makeBill points to cart');
+  assert.equal(idOf(variable(first, 'lineTotal', 'item')), idOf(first.objects[cart].items![0]), 'item points to cart[0]');
+  assert.deepEqual(variable(first, 'lineTotal', 'total'), { k: 'num', v: '5.4' });
+  const bill = idOf(variable(first, 'makeBill', 'bill'));
+  const discount = idOf(variable(first, 'lineTotal', 'discount'));
+
+  // The object of the inner function does not survive its call: the next call has a new object, and the old object
+  // is not on the heap any more. The object of the middle function survives the call of the inner function.
+  const second = await continueToLine(api, file, 35);
+  assert.notEqual(idOf(variable(second, 'lineTotal', 'discount')), discount, 'the second call creates a new object');
+  assert.equal(second.objects[discount], undefined, 'the object of the first call is not on the heap any more');
+  assert.equal(idOf(variable(second, 'makeBill', 'bill')), bill, 'the bill of makeBill is the same object');
+  assert.deepEqual(second.objects[bill].fields?.find((f) => f.name === 'total')?.value, { k: 'num', v: '5.4' });
+
+  // The object of the middle function also survives the middle function: at the end, bill of the Global scope
+  // points to it.
+  const made = await continueToLine(api, file, 43);
+  assert.deepEqual(
+    made.frames.map((f) => f.name),
+    ['Global scope', 'checkout', 'makeBill'],
+  );
+  const end = await continueToLine(api, file, 57);
+  assert.deepEqual(
+    end.frames.map((f) => f.name),
+    ['Global scope'],
+  );
+  assert.equal(idOf(variable(end, 'Global scope', 'bill')), bill, 'bill of the Global scope points to the object of makeBill');
+  await stop();
+}
+
 describe('the Mindbug view in VS Code', () => {
   let api: MindbugApi;
 
@@ -253,6 +313,7 @@ describe('the Mindbug view in VS Code', () => {
     describe(start.title, () => {
       it('shows the scopes, the arrays and the aliasing of insertion sort', () => insertionSort(api, start));
       it('shows classes, static variables and the scopes of constructors and methods', () => people(api, start));
+      it('shows a call stack of several functions that share the objects on the heap', () => callStack(api, start));
     });
   }
 });

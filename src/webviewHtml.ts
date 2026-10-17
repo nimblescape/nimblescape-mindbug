@@ -53,9 +53,11 @@ export function webviewHtml(o: WebviewHtmlInput): string {
     <section class="region stack-region" aria-labelledby="stackTitle">
       <h2 id="stackTitle" class="region-title">STACK</h2>
       <p class="region-sub">Local variables live here.</p>
-      <div class="stack-pile">
-        <p class="hint">&#8593; A new function call adds a scope on top.</p>
-        <div id="frames" class="frames"></div>
+      <div class="stack-body">
+        <div class="stack-pile">
+          <p class="hint">&#8593; A new function call adds a scope on top.</p>
+          <div id="frames" class="frames"></div>
+        </div>
       </div>
     </section>
     <section class="region heap-region" aria-labelledby="heapTitle">
@@ -82,7 +84,11 @@ export function webviewHtml(o: WebviewHtmlInput): string {
   <span class="legend-item"><span class="swatch changed-swatch"></span>Changed in the last step</span>
   <span class="legend-item">
     <svg class="lg-runs" width="10" height="14" viewBox="0 0 10 14" aria-hidden="true"><path d="M1 1L9 7L1 13Z"></path></svg>
-    The function that runs at this step
+    The function that runs now
+  </span>
+  <span class="legend-item">
+    <svg class="lg-runs past" width="10" height="14" viewBox="0 0 10 14" aria-hidden="true"><path d="M1 1L9 7L1 13Z"></path></svg>
+    The function that ran at the earlier step that you look at
   </span>
 </footer>
 <script nonce="${o.nonce}" src="${o.scriptUri}"></script>

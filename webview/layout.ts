@@ -44,6 +44,16 @@ export function visibleVars(frame: Frame, snap: MemorySnapshot, opts: ViewOption
   return frame.vars.filter((v) => !isHiddenRef(v.value, snap, opts));
 }
 
+/**
+ * The visible variables of a frame from the bottom up, as the view draws them: the variables of a scope build bottom
+ * up, like the stack. The variables of an enclosing function (closure) come first, because that function ran first;
+ * then the function's own variables, in the order of the program.
+ */
+export function varsBottomUp(frame: Frame, snap: MemorySnapshot, opts: ViewOptions): Variable[] {
+  const vars = visibleVars(frame, snap, opts);
+  return [...vars.filter((v) => v.scope === 'closure'), ...vars.filter((v) => v.scope !== 'closure')];
+}
+
 /** Ids that an object points to, in display order. */
 export function refsOf(o: HeapObject): number[] {
   const out: number[] = [];
@@ -65,9 +75,11 @@ export function refsOf(o: HeapObject): number[] {
  * a new row below. Classes go to their own list (when shown).
  *
  * The heap builds bottom up, like the stack: the rows of the Global scope are at the bottom, and the rows
- * of each newer function call are above them. The rows of one scope keep the order of its variables.
+ * of each newer function call are above them. In one scope, the rows of each variable are at the height of the
+ * variable, which also build bottom up (varsBottomUp).
  * Objects that only a static variable points to start rows at the top, below the classes.
- * An object belongs to the oldest scope that points to it, so it does not move when a function is called.
+ * An object belongs to the oldest scope and the oldest variable that point to it, so it does not move when a function
+ * is called or a new variable points to it.
  */
 export function layoutHeap(snap: MemorySnapshot, opts: ViewOptions, maxDepth = 6): HeapLayout {
   const placed = new Set<number>();
@@ -107,11 +119,14 @@ export function layoutHeap(snap: MemorySnapshot, opts: ViewOptions, maxDepth = 6
   // snap.frames starts with the oldest scope, usually the Global scope.
   const scopeRows: HeapTree[][] = [];
   for (const frame of snap.frames) {
-    rows = [];
-    for (const v of visibleVars(frame, snap, opts)) {
+    // The rows of each variable, from the bottom up; a row that is too deep stays below the row it comes from.
+    const rowsOfVars: HeapTree[][] = [];
+    for (const v of varsBottomUp(frame, snap, opts)) {
+      rows = [];
       if (v.value.k === 'ref') addRoot(v.value.id);
+      rowsOfVars.push(rows);
     }
-    scopeRows.push(rows);
+    scopeRows.push(rowsOfVars.reverse().flat());
   }
   rows = [];
 
