@@ -3,7 +3,7 @@
 
 import type { ChangeSet, Frame, HeapObject, MemorySnapshot, Value } from '../src/model.ts';
 import { slotKey, varKey } from '../src/changes.ts';
-import { isHiddenRef, layoutHeap, visibleVars, type HeapTree, type ViewOptions } from './layout.ts';
+import { isHiddenRef, layoutHeap, varsBottomUp, type HeapTree, type ViewOptions } from './layout.ts';
 
 export interface RenderInput {
   snap: MemorySnapshot;
@@ -91,7 +91,7 @@ function runsMark(live: boolean): SVGSVGElement {
   svg.setAttribute('viewBox', '0 0 10 14');
   svg.setAttribute('role', 'img');
   const title = document.createElementNS(SVG_NS, 'title');
-  title.textContent = live ? 'This function runs now.' : 'This function runs at this step.';
+  title.textContent = live ? 'This function runs now.' : 'This function ran at this earlier step.';
   const path = document.createElementNS(SVG_NS, 'path');
   path.setAttribute('d', 'M1 1L9 7L1 13Z');
   svg.append(title, path);
@@ -119,7 +119,8 @@ function renderFrame(frame: Frame, index: number, input: RenderInput, isTop: boo
   box.append(title);
   if (isTop) box.append(runsMark(input.live !== false));
 
-  const vars = visibleVars(frame, snap, opts);
+  // The variables build bottom up, like the stack: the first variable of the function is at the bottom.
+  const vars = varsBottomUp(frame, snap, opts).reverse();
   if (vars.length === 0) {
     box.append(el('div', 'frame-empty', 'no variables'));
   }

@@ -1,6 +1,6 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { DEFAULT_VIEW_OPTIONS, layoutHeap, visibleVars } from '../../webview/layout.ts';
+import { DEFAULT_VIEW_OPTIONS, layoutHeap, varsBottomUp, visibleVars } from '../../webview/layout.ts';
 import type { HeapObject, MemorySnapshot, Variable } from '../../src/model.ts';
 
 const ref = (id: number) => ({ k: 'ref', id }) as const;
@@ -17,6 +17,21 @@ function snapshot(vars: Variable[], objects: HeapObject[]): MemorySnapshot {
 
 const v = (name: string, value: Variable['value']): Variable => ({ name, value, scope: 'module' });
 
+test('the variables of a scope build bottom up: closure variables first, then the own variables in program order', () => {
+  const s = snapshot(
+    [
+      { name: 'a', value: num(1), scope: 'local' },
+      { name: 'b', value: num(2), scope: 'block' },
+      { name: 'outer', value: num(3), scope: 'closure' },
+    ],
+    [],
+  );
+  assert.deepEqual(
+    varsBottomUp(s.frames[0], s, DEFAULT_VIEW_OPTIONS).map((x) => x.name),
+    ['outer', 'a', 'b'],
+  );
+});
+
 test('rows start at objects of frame variables; a shared object is placed once', () => {
   const s = snapshot(
     [v('a', ref(1)), v('b', ref(1)), v('c', ref(2))],
@@ -28,9 +43,11 @@ test('rows start at objects of frame variables; a shared object is placed once',
   );
   const { rows, classes } = layoutHeap(s, DEFAULT_VIEW_OPTIONS);
   assert.deepEqual(classes, []);
+  // The rows are at the height of their variables, which build bottom up: the row of c is above the row of a.
+  // The first variable that points to an object (a, not b) gets it.
   assert.deepEqual(rows, [
-    { id: 1, children: [{ id: 3, children: [] }] },
     { id: 2, children: [] },
+    { id: 1, children: [{ id: 3, children: [] }] },
   ]);
 });
 
@@ -64,11 +81,11 @@ test('the heap builds bottom up: the rows of a newer scope are above the rows of
     vars: [v('x', ref(3)), v('y', ref(4)), v('z', ref(1))],
   });
   const { rows } = layoutHeap(s, DEFAULT_VIEW_OPTIONS);
-  // The Global scope is at the bottom; the rows of one scope keep the order of its variables;
+  // The Global scope is at the bottom; in each scope, the row of the first variable is at the bottom;
   // the array that both scopes point to stays in the rows of the Global scope.
   assert.deepEqual(
     rows.map((r) => r.id),
-    [3, 4, 1, 2],
+    [4, 3, 2, 1],
   );
 });
 

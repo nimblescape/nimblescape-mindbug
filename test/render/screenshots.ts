@@ -138,6 +138,7 @@ async function main(): Promise<void> {
   const sort = loadSteps('insertion-sort');
   const people = loadSteps('people');
   const list = loadSteps('linked-list');
+  const calls = loadSteps('call-stack');
 
   try {
     for (const theme of Object.keys(THEMES) as ThemeName[]) {
@@ -184,6 +185,19 @@ async function main(): Promise<void> {
       await send(page, { type: 'history', snapshots: list.slice(0, listEnd + 1), sessionId: 'list' });
       await checkArrows(page, `list ${theme}`);
       await shot('linked-list');
+
+      // 5. Call stack: the program is in lineTotal, so four scopes are on the stack. The variables of each scope
+      //    build bottom up: cart, the first variable of the Global scope, is at the bottom.
+      const inLineTotal = lastIndex(calls, (s) => s.frames.at(-1)?.name === 'lineTotal');
+      // Four scopes need a taller panel.
+      await page.setViewportSize({ width: 1100, height: 1060 });
+      await send(page, { type: 'history', snapshots: calls.slice(0, inLineTotal + 1), sessionId: 'calls' });
+      await checkArrows(page, `calls ${theme}`);
+      const scopes = await page.$$eval('.frame .frame-name', (els) => els.map((e) => e.textContent));
+      if (scopes.join(',') !== 'lineTotal,makeBill,checkout,Global scope') throw new Error(`scopes: ${scopes.join(',')}`);
+      const globals = await page.$$eval('.frame:last-child .var-name', (els) => els.map((e) => e.textContent));
+      if (globals.join(',') !== 'bill,cart') throw new Error(`variables of the Global scope: ${globals.join(',')}`);
+      await shot('call-stack');
 
       if (errors.length > 0) throw new Error(`page errors in ${theme}:\n${errors.join('\n')}`);
       await page.close();

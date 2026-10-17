@@ -15,12 +15,15 @@ of the JavaScript debugger that is built into VS Code.
   builds bottom up: the Global scope is at the bottom, and each function call adds a scope on top.
   The top scope is the function that runs: a triangle at its left points to it. The triangle is
   yellow at the current step and green at an earlier step, as the arrow of the debugger in the
-  editor. Each variable is a box. A number, a string or a boolean is written in the box.
+  editor. Each variable is a box. A number, a string or a boolean is written in the box. The
+  variables of a scope also build bottom up: the first variable of the function (its first
+  parameter) is at the bottom, and each later variable is above it.
 - **HEAP** (yellow area): objects and arrays. A variable that holds an object stores only *where*
   the object is. The view draws this as an arrow from the variable to the object. Two arrows to the
   same object mean that two variables point to the same object. The heap also builds bottom up: the
   objects of the Global scope are at the bottom, next to the Global scope, and the objects of each
-  newer function call are above them.
+  newer function call are above them. An object that only the variables of a function point to
+  goes away from the view when the function returns (see [examples/call-stack.ts](examples/call-stack.ts)).
 - **Objects** use UML object notation: `:Person` (underlined) in the head, and one line
   `name = value` for each attribute.
 - **Arrays** are a row of cells, with the index at the top left of each cell.
@@ -30,6 +33,8 @@ of the JavaScript debugger that is built into VS Code.
   "extends" and the UML arrow to its superclass. Move the mouse over an object to see a dashed arrow
   to the class it was made from.
 - **Changes**: everything that changed in the last step has a yellow background.
+
+![Four scopes on the stack, lineTotal on top of makeBill, checkout and the Global scope; the object of lineTotal is at the top of the heap, the objects of the Global scope at the bottom](docs/images/call-stack.png)
 
 ![Classes with static variables, objects made from them, and the dashed arrow from an object to its class](docs/images/classes.png)
 
@@ -94,8 +99,15 @@ Without a `launch.json` file, press F5 in a TypeScript file and select **Mindbug
 
 The view also works with a launch configuration of another type, for example type `node` of the
 JavaScript debugger: it opens at the first pause of any JavaScript or TypeScript debug session. The
-folder [examples](examples) has three small programs and a
-[launch.json](examples/.vscode/launch.json) with both kinds of launch configuration.
+folder [examples](examples) has four small programs and a
+[launch.json](examples/.vscode/launch.json) with both kinds of launch configuration:
+
+- [insertion-sort.ts](examples/insertion-sort.ts): two variables point to the same array.
+- [people.ts](examples/people.ts): classes, static variables, constructors and methods.
+- [linked-list.ts](examples/linked-list.ts): objects that point to each other.
+- [call-stack.ts](examples/call-stack.ts): three functions on the stack at the same time. An object
+  that the inner function creates does not survive its call; an object that the middle function
+  creates survives the call of the inner function and is still there in the Global scope at the end.
 
 ## Settings
 
