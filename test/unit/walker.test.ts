@@ -1,7 +1,7 @@
 // The heap walker runs inside the debugged program. Node uses the same V8 engine as Deno,
 // so these tests install the walker in this Node process and read local variables with it.
 
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { DEFAULT_LIMITS, frameExpression, installExpression, isIdentifier, type WalkerResult } from '../../src/heapWalker.ts';
 import type { HeapObject } from '../../src/model.ts';

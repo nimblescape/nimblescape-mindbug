@@ -6,9 +6,9 @@ import { debugCurrentFileWithDeno } from './denoLaunch.ts';
 import type { MemorySnapshot } from './model.ts';
 
 export interface HeapStackApi {
-  /** The newest snapshot (used by the integration tests). */
+  /** The newest snapshot (used by the tests in VS Code, test/vscode). */
   lastSnapshot(): MemorySnapshot | undefined;
-  /** Resolves with the next snapshot (used by the integration tests). */
+  /** Resolves with the next snapshot (used by the tests in VS Code, test/vscode). */
   nextSnapshot(timeoutMs?: number): Promise<MemorySnapshot>;
 }
 

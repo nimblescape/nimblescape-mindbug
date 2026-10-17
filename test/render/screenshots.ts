@@ -166,7 +166,7 @@ async function main(): Promise<void> {
       await shot('history');
 
       // 3. Classes and static variables: the program is in birthday(); the mouse is over bob.
-      const inBirthday = lastIndex(people, (s) => s.frames.at(-1)?.name === 'birthday');
+      const inBirthday = lastIndex(people, (s) => s.frames.at(-1)?.name === 'Person.birthday');
       await send(page, { type: 'history', snapshots: people.slice(0, inBirthday + 1), sessionId: 'people' });
       await checkArrows(page, `people ${theme}`);
       const classes = await page.$$eval('.class-box .class-name', (els) => els.map((e) => e.textContent));

@@ -15,3 +15,8 @@ esbuild.mjs
 tsconfig.json
 package-lock.json
 .gitignore
+scripts/**
+.node-version
+.vscode-test.mjs
+vitest.config.mts
+vitest.deno.config.mts

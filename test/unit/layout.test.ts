@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { DEFAULT_VIEW_OPTIONS, layoutHeap, visibleVars } from '../../webview/layout.ts';
 import type { HeapObject, MemorySnapshot, Variable } from '../../src/model.ts';

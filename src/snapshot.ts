@@ -101,6 +101,59 @@ export function frameName(name: string): string {
   return name;
 }
 
+/** The class `id` and its superclasses, the class first. */
+function classChain(objects: Record<number, HeapObject>, id: number | undefined): HeapObject[] {
+  const chain: HeapObject[] = [];
+  for (let c = id === undefined ? undefined : objects[id]; c && c.kind === 'class' && chain.length < 50; ) {
+    chain.push(c);
+    c = c.superId === undefined ? undefined : objects[c.superId];
+  }
+  return chain;
+}
+
+/**
+ * The name of a frame of a constructor or a method: "Person.constructor", "Person.birthday".
+ * The class is the class that declares the function, not the class of `this`: VS Code's debugger
+ * writes the class of `this` in front of a method name, so the constructor of Person that a Student
+ * calls with super(...) would be "Student.Person". `debuggerName` is the name from the debugger,
+ * `thisValue` the value of `this` in the frame, and `caller` the name of the frame that called it.
+ */
+export function frameLabel(
+  debuggerName: string,
+  thisValue: Value | undefined,
+  objects: Record<number, HeapObject>,
+  caller?: string,
+): string {
+  const thisObj = thisValue?.k === 'ref' ? objects[thisValue.id] : undefined;
+  const isStatic = thisObj?.kind === 'class';
+  const chain = classChain(objects, isStatic ? thisObj?.id : thisObj?.cls);
+
+  // The debugger names the class of `this` ("Function" for a class) in front of the function name.
+  let base = debuggerName;
+  for (const p of [chain[0]?.type, 'Function']) {
+    if (p && base.startsWith(`${p}.`)) {
+      base = base.slice(p.length + 1);
+      break;
+    }
+  }
+
+  if (base === '<instance_members_initializer>') {
+    // The constructor of the class that declares the fields runs them.
+    const owner = caller?.endsWith('.constructor') ? caller.slice(0, -'.constructor'.length) : chain[0]?.type;
+    return owner ? `${owner} (set up fields)` : '(set up fields)';
+  }
+  if (base === '<static_initializer>') return frameName(chain[0] ? `${chain[0].type}.${base}` : base);
+
+  const declares = (c: HeapObject) =>
+    c.methods?.some((m) => m.isStatic === isStatic && (m.name === `${base}()` || m.name === base));
+  const owner = chain.find(declares);
+  if (owner) return `${owner.type}.${base}`;
+  // A constructor: in a subclass before super(...) returns, `this` cannot be read yet.
+  const classes = chain.length > 0 ? chain : Object.values(objects).filter((o) => o.kind === 'class');
+  if (!isStatic && classes.some((c) => c.type === base)) return `${base}.constructor`;
+  return frameName(base);
+}
+
 /** Removes the quotes that a debugger may put around a string result. */
 export function unquote(text: string): string {
   const t = text.trim();
@@ -202,6 +255,13 @@ export async function collectSnapshot(
 
   // Oldest frame first, like Python Tutor.
   snapshot.frames = frames.reverse();
+  // The names of constructors and methods need the classes on the heap, which all frames together have read.
+  const names = userFrames.map((f) => f.name).reverse();
+  snapshot.frames.forEach((frame, i) => {
+    if (frame.isGlobal) return;
+    const self = frame.vars.find((v) => v.name === 'this')?.value;
+    frame.name = frameLabel(names[i], self, snapshot.objects, snapshot.frames[i - 1]?.name);
+  });
   snapshot.missing = [...missing].filter((id) => !(id in snapshot.objects));
   return snapshot;
 }
