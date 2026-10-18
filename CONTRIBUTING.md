@@ -103,7 +103,7 @@ locked versions of the tools, the build gives the same files.
 - `contributes` declares the commands, the menus, the settings and the debug type `mindbug`, with the attributes of its launch configuration and its snippet.
 - `capabilities` states that the extension supports neither untrusted nor virtual workspaces: it starts programs, and the runtimes need files on the disk.
 - The icon, the description, the categories, the keywords and the banner color complete the Marketplace page.
-- The development dependencies are the build, test and packaging tools. `overrides` pins newer versions of packages inside `@vscode/test-cli` (mocha's `diff`, `glob` and `serialize-javascript`), and `allowScripts` lists the install scripts that npm 11.19 and later may run: those of esbuild and `@vscode/vsce-sign`, not the one of fsevents. The manifest declares no runtime dependency.
+- The development dependencies are the build, test and packaging tools. `overrides` pins newer versions of packages inside `@vscode/test-cli` (mocha's `diff`, `glob` and `serialize-javascript`), and `allowScripts` lists the install scripts of dependencies that npm 11.19 and later may run: those of esbuild and `@vscode/vsce-sign` in every version, because the build and the packaging (`npm run package`) run the code of both packages anyway and Dependabot updates them, and not the one of fsevents, an optional package for macOS that already contains its built binary. The manifest declares no runtime dependency.
 
 The settings table of the README and of the user guide follows the
 configuration contribution. A test checks that both name every setting.
