@@ -23,7 +23,7 @@ security model.
 | `test/gif/` | The recorder of the animation of the README (`record.ts`), and the driver (`driver.ts`) that steps through `examples/return-object.ts` in a real VS Code. |
 | `test/vscode/`, `.vscode-test.mjs`, `scripts/build-vscode-tests.mjs` | The tests in a real VS Code, their settings, and their build into `out/`. |
 | `examples/` | The example programs, with a `launch.json` file. The tests in VS Code and the screenshot test use them. |
-| `docs/` | The user guide, the architecture, the security model, and the images of the README (`docs/images/`, copied from the output of the screenshot test and of `npm run gif`). |
+| `docs/` | The user guide, the architecture, the security model, and their images in `docs/images/`: the GIF of the README, from `npm run gif`, and the screenshots of the user guide, from the screenshot test. `stack-and-heap.png` is a screenshot of the README of the release 0.1.1, whose page on the Marketplace still shows it; delete it after the next release. |
 | `dist/` | The bundles `dist/extension.js` and `dist/webview.js`, and `dist/webview.css`, built by `esbuild.mjs` and kept out of Git. |
 | `media/` | The icons of the command **Open Mindbug** and of the line of an earlier step in the editor. |
 | `resources/icon.png`, `resources/icon.svg` | The Marketplace icon (256 × 256 PNG, because the Marketplace takes no SVG icon) and its source: two scopes of the stack and one object on the heap, on the tile of the nimblescape extensions. |
