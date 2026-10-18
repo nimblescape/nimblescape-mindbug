@@ -67,9 +67,9 @@ function showOptions(): void {
 }
 showOptions();
 
-/** A switch changed: the extension saves the switches in the settings, so that the view has them again. */
-function saveOptions(): void {
-  vscode.postMessage({ type: 'viewOptions', opts: state.opts });
+/** A click on a switch: the extension saves that switch in the settings, so that the view has it again. */
+function saveOption(name: keyof ViewOptions): void {
+  vscode.postMessage({ type: 'viewOption', name, value: state.opts[name] });
 }
 
 function statusLine(): string {
@@ -258,17 +258,17 @@ document.addEventListener('keydown', (e) => {
 
 showFunctions.addEventListener('change', () => {
   state.opts = { ...state.opts, showFunctions: showFunctions.checked };
-  saveOptions();
+  saveOption('showFunctions');
   render();
 });
 showIds.addEventListener('change', () => {
   state.opts = { ...state.opts, showIds: showIds.checked };
-  saveOptions();
+  saveOption('showIds');
   render();
 });
 showClasses.addEventListener('change', () => {
   state.opts = { ...state.opts, showClasses: showClasses.checked };
-  saveOptions();
+  saveOption('showClasses');
   render();
 });
 

@@ -16,8 +16,8 @@ export interface MindbugApi {
   nextSnapshot(timeoutMs?: number): Promise<MemorySnapshot>;
   /** Shows a step as the step list of the panel does (used by the tests in VS Code, test/vscode). */
   viewStep(step: number): void;
-  /** Saves the switches of the view as a switch of the panel does (used by the tests in VS Code, test/vscode). */
-  saveViewOptions(opts: ViewOptions): Promise<void>;
+  /** Saves a switch of the view as a click on it in the panel does (used by the tests in VS Code, test/vscode). */
+  saveViewOption(name: keyof ViewOptions, value: boolean): Promise<void>;
 }
 
 export function activate(context: vscode.ExtensionContext): MindbugApi {
@@ -41,7 +41,7 @@ export function activate(context: vscode.ExtensionContext): MindbugApi {
     lastSnapshot: () => controller.lastSnapshot,
     nextSnapshot: (timeoutMs) => controller.nextSnapshot(timeoutMs),
     viewStep: (step) => controller.viewStep(step),
-    saveViewOptions: (opts) => controller.saveViewOptions(opts),
+    saveViewOption: (name, value) => controller.saveViewOption(name, value),
   };
 }
 

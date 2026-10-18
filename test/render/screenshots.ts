@@ -87,7 +87,7 @@ function writePage(): string {
   // The VS Code api does not exist in a normal browser: a stand-in records the messages.
   const stub = `<script nonce="${nonce}">
 window.__sent = [];
-window.acquireVsCodeApi = () => ({ postMessage: (m) => window.__sent.push(m), getState: () => undefined, setState: () => {} });
+window.acquireVsCodeApi = () => ({ postMessage: (m) => window.__sent.push(m) });
 </script>
 `;
   html = html.replace(`<script nonce="${nonce}" src=`, `${stub}<script nonce="${nonce}" src=`);

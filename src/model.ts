@@ -123,6 +123,9 @@ export interface ViewOptions {
 /** The switches of the view when no setting changes them: the defaults of the three settings in package.json. */
 export const DEFAULT_VIEW_OPTIONS: ViewOptions = { showFunctions: false, showIds: true, showClasses: true };
 
+/** The names of the switches of the view; each one is the setting `nimblescape.mindbug.<name>`. */
+export const VIEW_OPTION_NAMES = ['showFunctions', 'showIds', 'showClasses'] as const satisfies readonly (keyof ViewOptions)[];
+
 /**
  * The text at the end of the line of an earlier step in the editor, for example "Mindbug: step 8 of 14". It names the
  * step that the view shows and the newest step, as the view does above its step list.
@@ -157,8 +160,8 @@ export type FromWebview =
    * For an earlier step, the extension marks its line in the editor.
    */
   | { type: 'viewStep'; step: number; live: boolean; file?: string; line?: number }
-  /** A switch of the view changed; the extension saves the switches in the settings. */
-  | { type: 'viewOptions'; opts: ViewOptions };
+  /** A click on a switch of the view; the extension saves that switch in the settings. */
+  | { type: 'viewOption'; name: keyof ViewOptions; value: boolean };
 
 /**
  * What changed since the previous snapshot.

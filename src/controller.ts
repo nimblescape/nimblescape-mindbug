@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import {
   DEFAULT_VIEW_OPTIONS,
   stepMarkText,
+  VIEW_OPTION_NAMES,
   type FromWebview,
   type MemorySnapshot,
   type ToWebview,
@@ -17,9 +18,6 @@ import {
 import { DEFAULT_LIMITS, type WalkerLimits } from './heapWalker.ts';
 import { collectSnapshot } from './snapshot.ts';
 import { MemoryPanel } from './panel.ts';
-
-/** The switches of the view; each one is the setting `nimblescape.mindbug.<name>`. */
-const VIEW_OPTION_NAMES = ['showFunctions', 'showIds', 'showClasses'] as const;
 
 /** Requests that make the program run again. */
 const RUN_COMMANDS = new Set(['continue', 'next', 'stepIn', 'stepOut', 'stepBack', 'reverseContinue', 'goto', 'restartFrame']);
@@ -71,9 +69,12 @@ export class MemoryController implements vscode.Disposable {
   private pendingSaves = 0;
   /**
    * Clicks on switches that the settings of the workspace set. Mindbug does not change the settings of a workspace,
-   * which are a file of the workspace (`.vscode/settings.json`), so these clicks last only until the view closes.
+   * which are a file of the workspace (`.vscode/settings.json`), so these clicks last only until the view closes or
+   * the setting changes.
    */
   private viewOverrides: Partial<ViewOptions> = {};
+  /** The switches that the view shows: from the opening of the panel, the clicks, and the messages `viewOptions`. */
+  private shownOptions: ViewOptions = { ...DEFAULT_VIEW_OPTIONS };
   /** Resolvers waiting for the next snapshot (used by tests). */
   private readonly snapshotWaiters: ((s: MemorySnapshot) => void)[] = [];
 
@@ -106,7 +107,7 @@ export class MemoryController implements vscode.Disposable {
         const changed = VIEW_OPTION_NAMES.filter((name) => e.affectsConfiguration(`nimblescape.mindbug.${name}`));
         if (changed.length === 0 || this.pendingSaves > 0) return;
         for (const name of changed) delete this.viewOverrides[name];
-        this.post({ type: 'viewOptions', opts: this.viewOptions() });
+        this.showViewOptions();
       }),
       this.stepDecoration,
     );
@@ -122,6 +123,7 @@ export class MemoryController implements vscode.Disposable {
     if (this.panel) {
       this.panel.reveal();
     } else {
+      this.shownOptions = this.viewOptions();
       this.panel = MemoryPanel.create(
         this.extensionUri,
         {
@@ -131,10 +133,12 @@ export class MemoryController implements vscode.Disposable {
             this.onViewStep(undefined);
           },
           onViewStep: (m) => this.onViewStep(m),
-          onViewOptions: (opts) => void this.saveViewOptions(opts),
+          onViewOption: (name, value) => void this.saveViewOption(name, value),
+          // A page that loaded again shows the switches of its HTML, which can be older than the settings.
+          onReady: () => this.showViewOptions(true),
         },
         this.maxSteps(),
-        this.viewOptions(),
+        this.shownOptions,
       );
       if (this.history.length > 0) {
         this.post({ type: 'history', snapshots: this.history, sessionId: this.lastSessionId });
@@ -176,47 +180,55 @@ export class MemoryController implements vscode.Disposable {
     const config = vscode.workspace.getConfiguration('nimblescape.mindbug');
     const opts = { ...DEFAULT_VIEW_OPTIONS };
     for (const name of VIEW_OPTION_NAMES) {
-      const value = config.get<unknown>(name);
+      const override = this.viewOverrides[name];
+      const value = override !== undefined && config.inspect(name)?.workspaceValue !== undefined ? override : config.get<unknown>(name);
       if (typeof value === 'boolean') opts[name] = value;
     }
-    return { ...opts, ...this.viewOverrides };
+    return opts;
+  }
+
+  /** Sends the switches to the view when they differ from the switches that it shows, or always with `force`. */
+  private showViewOptions(force = false): void {
+    const opts = this.viewOptions();
+    if (!force && VIEW_OPTION_NAMES.every((name) => opts[name] === this.shownOptions[name])) return;
+    this.shownOptions = opts;
+    this.post({ type: 'viewOptions', opts });
   }
 
   /**
-   * Saves the switches of the view in the user settings, so that the view has them again after it was closed and after
-   * a restart of VS Code. A user setting with the default value is removed, so that the settings file keeps only what
+   * Saves a switch of the view in the user settings, so that the view has it again after it was closed and after a
+   * restart of VS Code. A user setting with the default value is removed, so that the settings file keeps only what
    * you changed. A switch that the settings of the workspace set is not saved (see `viewOverrides`).
    */
-  saveViewOptions(opts: ViewOptions): Promise<void> {
+  saveViewOption(name: keyof ViewOptions, value: boolean): Promise<void> {
+    // The message comes from the page of the view: only the three switches, only true or false.
+    if (!(VIEW_OPTION_NAMES as readonly string[]).includes(name) || typeof value !== 'boolean') return this.saving;
+    this.shownOptions = { ...this.shownOptions, [name]: value };
     this.pendingSaves++;
     this.saving = this.saving
-      .then(() => this.writeViewOptions(opts))
+      .then(() => this.writeViewOption(name, value))
       .finally(() => {
-        // After the last save, the view gets the settings: the same switches, or the old ones if a save failed.
-        if (--this.pendingSaves === 0) this.post({ type: 'viewOptions', opts: this.viewOptions() });
+        // After the last save, the view gets the settings again only if they differ, for example after a failed save.
+        if (--this.pendingSaves === 0) this.showViewOptions();
       });
     return this.saving;
   }
 
-  private async writeViewOptions(opts: ViewOptions): Promise<void> {
-    const config = vscode.workspace.getConfiguration('nimblescape.mindbug');
+  private async writeViewOption(name: keyof ViewOptions, value: boolean): Promise<void> {
+    const config = () => vscode.workspace.getConfiguration('nimblescape.mindbug');
     try {
-      for (const name of VIEW_OPTION_NAMES) {
-        const value = opts[name];
-        if (typeof value !== 'boolean') continue;
-        const workspaceValue = config.inspect(name)?.workspaceValue;
-        if (workspaceValue !== undefined) {
-          if (value === workspaceValue) delete this.viewOverrides[name];
-          else this.viewOverrides[name] = value;
-          continue;
-        }
-        if (config.get<unknown>(name) === value) continue;
-        const userValue = value === DEFAULT_VIEW_OPTIONS[name] ? undefined : value;
-        await config.update(name, userValue, vscode.ConfigurationTarget.Global);
+      if (config().inspect(name)?.workspaceValue !== undefined) {
+        if (this.panel) this.viewOverrides[name] = value;
+        return;
       }
+      delete this.viewOverrides[name];
+      if (config().get<unknown>(name) === value) return;
+      await config().update(name, value === DEFAULT_VIEW_OPTIONS[name] ? undefined : value, vscode.ConfigurationTarget.Global);
+      // In a remote window, the removal reaches only the remote user settings; a local user setting can still differ.
+      if (config().get<unknown>(name) !== value) await config().update(name, value, vscode.ConfigurationTarget.Global);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      void vscode.window.showWarningMessage(`Mindbug could not save the switches of its view in the settings: ${message}`);
+      void vscode.window.showWarningMessage(`Mindbug could not save the setting nimblescape.mindbug.${name}: ${message}`);
     }
   }
 

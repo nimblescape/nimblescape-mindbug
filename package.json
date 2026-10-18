@@ -142,17 +142,17 @@
         "nimblescape.mindbug.showClasses": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Show the classes, with their static variables, at the top of the heap in the Mindbug view. The switch **Show classes** of the view changes this setting."
+          "markdownDescription": "Show the classes, with their static variables, at the top of the heap in the Mindbug view. A click on the switch **Show classes** of the view changes this setting in the user settings, unless the settings of the workspace set it."
         },
         "nimblescape.mindbug.showFunctions": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Show functions, and the variables that hold functions or classes, in the Mindbug view. The switch **Show functions** of the view changes this setting."
+          "markdownDescription": "Show functions, and the variables that hold functions or classes, in the Mindbug view. A click on the switch **Show functions** of the view changes this setting in the user settings, unless the settings of the workspace set it."
         },
         "nimblescape.mindbug.showIds": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Show the number of each object in the Mindbug view, which stays the same from step to step. The switch **Show ids** of the view changes this setting."
+          "markdownDescription": "Show the number of each object in the Mindbug view, which stays the same from step to step. A click on the switch **Show ids** of the view changes this setting in the user settings, unless the settings of the workspace set it."
         },
         "nimblescape.mindbug.maxHistorySteps": {
           "type": "number",

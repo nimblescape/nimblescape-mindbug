@@ -9,7 +9,7 @@ The README and the Marketplace page list these behaviors at the top. Each item l
 - **When it works.** Mindbug activates when a debug session starts in VS Code (`onDebug`), or when you run one of its commands. Before that, it does nothing. It does not run in Restricted Mode (see [Workspace trust](#workspace-trust)).
 - **Runtimes.** **Run with Mindbug** and a launch configuration of type `mindbug` run `deno --version` or `node --version` to find a runtime: the programs of the settings `nimblescape.mindbug.denoPath` and `nimblescape.mindbug.nodePath`, `deno` and `node` on the `PATH` by default. Then the JavaScript debugger of VS Code starts your TypeScript file with `deno run --inspect-brk=127.0.0.1:<port> --allow-all` or `node --inspect-brk=127.0.0.1:<port> --experimental-transform-types`, in the workspace folder, and connects to `127.0.0.1:<port>`. **Run with Mindbug** saves the file before it starts it. See [The program that you run](#the-program-that-you-run).
 - **Code in your program.** At each pause of a debug session of the JavaScript debugger for Node.js and Deno (the debug types `pwa-node`, `node` and `node-terminal`), also of one that Mindbug did not start, Mindbug sends the debugger `evaluate` requests that run its helper in the paused program. The helper adds the hidden global `__mindbug`, reads the variables and the objects that they reach, calls no getter, and changes no variable and no object of the program. A `Proxy` runs its traps when the helper reads it. Mindbug sends no request to the sessions of other debuggers. See [The heap helper](#the-heap-helper).
-- **Files and data.** Mindbug changes no file, except the save of **Run with Mindbug**. It keeps the steps of the step history in memory, until the next debug session starts. A click on a switch of the view changes the user setting of that switch, which VS Code saves in its user settings; Mindbug writes nothing else to the disk and does not change the settings of a workspace. See [Stored data](#stored-data).
+- **Files and data.** Mindbug changes no file of your workspace, except the save of **Run with Mindbug**. It keeps the steps of the step history in memory, until the next debug session starts. A click on a switch of the view changes the user setting of that switch, which VS Code saves in its user settings; Mindbug writes nothing else to the disk and does not change the settings of a workspace. See [Stored data](#stored-data).
 - **Network.** Mindbug connects to no address. The debugger connects to the runtime on `127.0.0.1`. Deno downloads the modules that your program imports from the web, as `deno run` always does. Mindbug collects no telemetry. See [The view](#the-view).
 
 ## The trust model
@@ -70,7 +70,7 @@ Where its protection ends:
 
 The view is a webview of VS Code. Its content security policy (`src/webviewHtml.ts`) allows only the script of the extension with the nonce of the page, and the styles and images of the extension (`default-src 'none'`). It loads nothing from the network, and it reaches no file: it gets the snapshots from the extension as messages.
 
-The view sends three kinds of messages to the extension: `viewStep` and `openLocation`, which open a file of a stack frame of a snapshot at its line in the editor, and `viewOptions`, which carries the three switches of the view. The extension opens the file as a text document; it runs nothing. Of a `viewOptions` message, it saves only the values `true` and `false` of the three user settings `nimblescape.mindbug.showClasses`, `showFunctions` and `showIds`.
+The view sends three kinds of messages to the extension: `viewStep` and `openLocation`, which open a file of a stack frame of a snapshot at its line in the editor, and `viewOption`, which carries the name and the value of a switch of the view after a click. The extension opens the file as a text document; it runs nothing. Of a `viewOption` message, it saves only the values `true` and `false` of the three user settings `nimblescape.mindbug.showClasses`, `showFunctions` and `showIds`, and ignores any other name or value.
 
 ## Stored data
 
@@ -79,7 +79,7 @@ The view sends three kinds of messages to the extension: `viewStep` and `openLoc
 | The steps of the step history | The memory of the extension host and of the view | Until the next debug session starts, or VS Code closes |
 | The settings of Mindbug, also the three switches of the toolbar of the view | The settings of VS Code (`settings.json`), when you change them or click a switch | Until you change them |
 
-Mindbug writes no file, uses neither `globalState` nor `workspaceState` of VS Code, stores no secret, and sends nothing to any address.
+Mindbug itself writes no file: VS Code saves the user settings, also the switches of the view. Mindbug uses neither `globalState` nor `workspaceState` of VS Code, stores no secret, and sends nothing to any address.
 
 ## Known limits
 
