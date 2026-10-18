@@ -4,7 +4,9 @@ See the memory of your TypeScript program while you debug it: the stack and the 
 
 Mindbug is a VS Code extension for teaching. It shows the **stack**, with one scope for each function call and its local variables, and the **heap**, with the objects and arrays that the variables point to. Arrows go from the variables to the objects. Mindbug works like [Python Tutor](https://pythontutor.com), but inside VS Code, with its normal debugger. It runs the program with [Deno](https://deno.com) or [Node.js](https://nodejs.org).
 
-![The Mindbug view next to the code: scopes on the stack on the left, arrays on the heap on the right](https://raw.githubusercontent.com/nimblescape/nimblescape-mindbug/main/docs/images/stack-and-heap.png)
+![Mindbug in VS Code, step by step: the call of createBook adds a scope with the parameters title and pages to the stack, new Book creates an object on the heap, after the return the variable myBook of the Global scope points to the object, and after myBook = null the object is gone](https://raw.githubusercontent.com/nimblescape/nimblescape-mindbug/main/docs/images/return-object.gif)
+
+The animation steps through the example [return-object.ts](https://github.com/nimblescape/nimblescape-mindbug/blob/main/examples/return-object.ts) in VS Code: a function creates one object and returns it. The call adds a scope with its parameters to the stack. The object stays on the heap after the return, because a variable of the Global scope points to it, and it goes away when no variable points to it any more.
 
 ## What Mindbug does on your computer
 
@@ -27,6 +29,8 @@ Mindbug is a VS Code extension for teaching. It shows the **stack**, with one sc
 - **Any runtime.** The view shows every debug session of the JavaScript debugger of VS Code, also one that a launch configuration of type `node` starts.
 - **Themes.** The view follows the light, dark and high contrast themes of VS Code.
 
+![The Mindbug view next to the code: scopes on the stack on the left, arrays on the heap on the right](https://raw.githubusercontent.com/nimblescape/nimblescape-mindbug/main/docs/images/stack-and-heap.png)
+
 ![Four scopes on the stack, lineTotal on top of makeBill, checkout and the Global scope; the classes Item, Discount and Bill at the top of the heap](https://raw.githubusercontent.com/nimblescape/nimblescape-mindbug/main/docs/images/call-stack.png)
 
 ## Requirements
@@ -41,7 +45,7 @@ Mindbug is a VS Code extension for teaching. It shows the **stack**, with one sc
 3. The program pauses at its first line, and the **Mindbug** view opens next to the code.
 4. Use **Step Over** (F10) and **Step Into** (F11) of the debugger. The view changes at each step.
 
-Without a `launch.json` file, F5 in a TypeScript file also offers **Mindbug**. The [user guide](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/guide.md#launch-configurations) explains the launch configurations of type `mindbug`, and the [examples](https://github.com/nimblescape/nimblescape-mindbug/tree/main/examples) are four small programs to start with.
+Without a `launch.json` file, F5 in a TypeScript file also offers **Mindbug**. The [user guide](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/guide.md#launch-configurations) explains the launch configurations of type `mindbug`, and the [examples](https://github.com/nimblescape/nimblescape-mindbug/tree/main/examples) are five small programs to start with.
 
 ## Settings
 

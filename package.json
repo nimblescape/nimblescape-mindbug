@@ -246,7 +246,8 @@
     "package": "vsce package --no-dependencies --no-rewrite-relative-links",
     "install-local": "node scripts/install-local.mjs",
     "uninstall-local": "node scripts/uninstall-local.mjs",
-    "record": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/render/record.ts"
+    "record": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/render/record.ts",
+    "gif": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/gif/record.ts"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

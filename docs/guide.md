@@ -146,8 +146,9 @@ A higher limit shows more of a large program, and makes each step slower, becaus
 
 ## Examples
 
-The folder [examples](../examples) has four small programs:
+The folder [examples](../examples) has five small programs:
 
+- [return-object.ts](../examples/return-object.ts): a function creates one object and returns it. The call adds a scope with the parameters title and pages to the stack. The object stays on the heap after the return, because the variable myBook of the Global scope points to it, and it goes away when myBook is set to `null`. The animation at the top of the [README](../README.md) steps through this example.
 - [insertion-sort.ts](../examples/insertion-sort.ts): two variables point to the same array, and the function changes the array on the heap.
 - [people.ts](../examples/people.ts): classes, a static variable, constructors, a subclass and methods.
 - [linked-list.ts](../examples/linked-list.ts): objects that point to each other.
