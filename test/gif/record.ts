@@ -4,12 +4,13 @@
 
 // Records the animation of the README from a real VS Code: VS Code runs examples/return-object.ts with the Mindbug
 // package, and the driver (driver.ts) steps through it, goes back through the step history, and takes a screenshot of
-// the screen after each action. Each screenshot gets a caption bar that says what the user does.
+// the screen after each action. Each screenshot gets the captions of the GIF of nimblescape-plantuml: a blue band
+// above the window with the scene, and a label with the key that the user pressed.
 //
 //   xvfb-run -a -s "-screen 0 1440x900x24" npm run gif
 //
-// Linux only: it needs Xvfb (or another X display), ffmpeg with x11grab and drawtext, and Deno or Node.js 22.7 or newer on the
-// PATH. It builds the package (npm run package), packs the driver as a second extension, downloads VS Code to
+// Linux only: it needs Xvfb (or another X display), ffmpeg with x11grab and drawtext, the font Inter (fc-match finds
+// it; Debian and Ubuntu: fonts-inter), and Deno or Node.js 22.7 or newer on the PATH. It builds the package (npm run package), packs the driver as a second extension, downloads VS Code to
 // .vscode-test/, installs both extensions into a new profile in test/gif/output/, and writes
 // test/gif/output/return-object.gif. Copy it to docs/images/ after a check.
 
@@ -124,27 +125,51 @@ function startVSCode(executable: string): Promise<void> {
   });
 }
 
-/** Height and font size of the caption bar under each screenshot, in pixels. */
-const CAPTION_HEIGHT = 64;
-const CAPTION_SIZE = 28;
+/**
+ * The captions, in the style of the GIF of the README of nimblescape-plantuml (docs/images/demo.gif): a band in the
+ * blue of VS Code above the window, with the number and the caption of the scene in white Inter SemiBold in the middle,
+ * and after a key press a label with the key and its command in white Inter on a dark box. That GIF is 1200 pixels
+ * wide and this one 1440, so the sizes in pixels are 1.2 times its sizes. The label is under the code, in the middle of
+ * the editor (0.4 of the width, see driver.ts), so that it covers nothing of the view.
+ */
+const BAND = { height: 53, baseline: 33, fontSize: 23, color: '0x0078d4' };
+const LABEL = { fontSize: 26, paddingY: 9, paddingX: 16, bottom: 48, center: 0.2 };
+
+/** The file of the font Inter in a style, from the font configuration of the system. */
+function inter(style: string): string {
+  const pattern = `Inter:style=${style}`;
+  const [family, found, file] = execFileSync('fc-match', ['-f', '%{family[0]}|%{style[0]}|%{file}', pattern], { encoding: 'utf8' }).split('|');
+  if (family !== 'Inter' || found !== style) throw new Error(`the captions need the font ${pattern} (Debian and Ubuntu: fonts-inter)`);
+  return file;
+}
 
 /**
- * Adds the caption of each screenshot (the file .txt that the driver writes next to it) in a bar under the screenshot,
- * in the color of the Marketplace banner. The screenshot of VS Code itself stays as it is.
+ * Adds the captions of a screenshot (the files .band.txt and .key.txt that the driver writes next to it). The
+ * screenshot of VS Code itself stays as it is: the band goes above it.
  */
-function caption(shot: string, captioned: string): void {
-  const text = join(frames, shot.replace(/\.png$/, '.txt'));
-  const bar = `pad=iw:ih+${CAPTION_HEIGHT}:0:0:color=${manifest.galleryBanner.color.replace('#', '0x')}`;
-  const words = `drawtext=font=Sans:textfile='${text}':expansion=none:fontsize=${CAPTION_SIZE}:fontcolor=white:x=24:y_align=font:y=h-${CAPTION_HEIGHT}+(${CAPTION_HEIGHT}-${CAPTION_SIZE})/2-2`;
-  run('ffmpeg', ['-loglevel', 'error', '-i', join(frames, shot), '-vf', `${bar},${words}`, '-y', captioned]);
+function caption(shot: string, captioned: string, fonts: { band: string; label: string }): void {
+  const base = join(frames, shot.replace(/\.png$/, ''));
+  const filters = [
+    `pad=iw:ih+${BAND.height}:0:${BAND.height}:color=${BAND.color}`,
+    `drawtext=fontfile='${fonts.band}':textfile='${base}.band.txt':expansion=none:fontsize=${BAND.fontSize}:fontcolor=white` +
+      `:x=(w-text_w)/2:y_align=baseline:y=${BAND.baseline}`,
+  ];
+  if (existsSync(`${base}.key.txt`)) {
+    filters.push(
+      `drawtext=fontfile='${fonts.label}':textfile='${base}.key.txt':expansion=none:fontsize=${LABEL.fontSize}:fontcolor=white` +
+        `:box=1:boxcolor=black@0.85:boxborderw=${LABEL.paddingY}|${LABEL.paddingX}` +
+        `:x=w*${LABEL.center}-text_w/2:y_align=font:y=h-${LABEL.bottom}-${LABEL.paddingY}-text_h`,
+    );
+  }
+  run('ffmpeg', ['-loglevel', 'error', '-i', join(frames, shot), '-vf', filters.join(','), '-y', captioned]);
 }
 
 /** Joins the captioned screenshots to a GIF that repeats, with one GIF frame for each screenshot. */
-function makeGif(gif: string): void {
+function makeGif(gif: string, fonts: { band: string; label: string }): void {
   const shots = readdirSync(frames).filter((f) => f.endsWith('.png')).sort();
   const captioned = join(out, 'captioned');
   mkdirSync(captioned, { recursive: true });
-  for (const shot of shots) caption(shot, join(captioned, shot));
+  for (const shot of shots) caption(shot, join(captioned, shot), fonts);
   const lines = shots.flatMap((shot, i) => [`file '${join(captioned, shot)}'`, `duration ${i === 0 ? FIRST_SECONDS : STEP_SECONDS}`]);
   const list = join(out, 'frames.txt');
   writeFileSync(list, `${lines.join('\n')}\n`);
@@ -161,6 +186,8 @@ function makeGif(gif: string): void {
   ]);
 }
 
+// Before the recording: the captions need the font.
+const fonts = { band: inter('SemiBold'), label: inter('Regular') };
 rmSync(out, { recursive: true, force: true });
 for (const dir of [frames, driver, join(userData, 'User'), extensions]) mkdirSync(dir, { recursive: true });
 writeFileSync(join(userData, 'User', 'settings.json'), JSON.stringify(SETTINGS, null, 2));
@@ -184,5 +211,5 @@ if (!existsSync(join(frames, 'done'))) {
   throw new Error(`the recording failed: ${existsSync(error) ? readFileSync(error, 'utf8') : 'VS Code closed before the end'}`);
 }
 const gif = join(out, 'return-object.gif');
-makeGif(gif);
+makeGif(gif, fonts);
 console.log(`Wrote ${gif}`);
