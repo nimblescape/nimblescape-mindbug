@@ -4,8 +4,9 @@
 
 // Records the animation of the README from a real VS Code: VS Code runs examples/return-object.ts with the Mindbug
 // package, and the driver (driver.ts) steps through it, goes back through the step history, and takes a screenshot of
-// the screen after each action. Each screenshot gets the captions of the GIFs of all nimblescape extensions: a blue
-// band above the window with the scene, and for a short time a label with the key that the user pressed.
+// the screen after each action. Each screenshot gets the captions of the GIFs of nimblescape PlantUML and nimblescape
+// Comment Links: a blue band above the window with the scene, and for a short time a label with the key that the user
+// pressed.
 //
 //   xvfb-run -a -s "-screen 0 1440x816x24" npm run gif
 //
@@ -135,10 +136,10 @@ function startVSCode(executable: string): Promise<void> {
 }
 
 /**
- * The captions, the same in the GIFs of all nimblescape extensions (1440 pixels wide): a band of 53 pixels in the blue
- * of VS Code above the window, with the number and the caption of the scene in white Inter SemiBold 23, centered, and
- * after a key press a label with the key and its command in white Inter 25 on a black box (85 %), padding 12 | 16, its
- * bottom 71 pixels above the bottom of the GIF, centered.
+ * The captions, the same as in the GIFs of nimblescape PlantUML and nimblescape Comment Links (1440 pixels wide): a
+ * band of 53 pixels in the blue of VS Code above the window, with the number and the caption of the scene in white
+ * Inter SemiBold 23, centered, and after a key press a label with the key and its command in white Inter 25 on a black
+ * box (85 %), padding 12 | 16, its bottom 71 pixels above the bottom of the GIF, centered.
  */
 const BAND = { height: 53, fontSize: 23, color: '0x0078d4' };
 const LABEL = { fontSize: 25, paddingY: 12, paddingX: 16, bottom: 71 };
