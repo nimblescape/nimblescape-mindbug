@@ -39,7 +39,8 @@ const KEYS = {
 
 /**
  * The place of the check box "Show classes" on the screen. The check boxes are at the right end of the toolbar of the
- * view, so the place depends on the width of the window, not on the split between the code and the view.
+ * view, so the place depends on the width and the zoom of the window, not on the split between the code and the view,
+ * as long as the toolbar has one line. Check the GIF after a change: when the click misses, it shows the classes.
  */
 const SHOW_CLASSES = { x: 1008, y: 101 };
 
@@ -100,8 +101,8 @@ async function record(frames: string): Promise<void> {
   const first = api.nextSnapshot(TIMEOUT);
   await vscode.commands.executeCommand('workbench.action.debug.start');
   await pausesAt(first, START.line);
-  // The view opens beside the editor. It gets more of the width than the code, and the code keeps room for its longest
-  // line. With more width for the code, the toolbar of the view needs two lines.
+  // The view opens beside the editor. It gets more of the width than the code, and the code keeps room for the lines
+  // that the GIF shows. With more width for the code, the toolbar of the view needs two lines.
   await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: 0.47 }, { size: 0.53 }] });
   // At 120 % in the window of 1440 x 816 pixels, the heap has no room for the classes and the objects. A click on the
   // check box "Show classes" of the view (xdotool) turns the classes off, so that the heap shows the objects. Then the
