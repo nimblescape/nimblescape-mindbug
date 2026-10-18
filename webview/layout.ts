@@ -6,16 +6,9 @@
 // each object that a frame variable points to starts a row, and the objects it points to
 // are placed to its right. An object is placed only once; later references to it are arrows.
 
-import type { Frame, HeapObject, MemorySnapshot, Value, Variable } from '../src/model.ts';
+import type { Frame, HeapObject, MemorySnapshot, Value, Variable, ViewOptions } from '../src/model.ts';
 
-export interface ViewOptions {
-  showFunctions: boolean;
-  showIds: boolean;
-  /** Show the classes (with their static variables) in their own part at the top of the heap. */
-  showClasses: boolean;
-}
-
-export const DEFAULT_VIEW_OPTIONS: ViewOptions = { showFunctions: false, showIds: true, showClasses: true };
+export { DEFAULT_VIEW_OPTIONS, type ViewOptions } from '../src/model.ts';
 
 /** The heap, ready to draw: class boxes in a row at the top, then rows of objects. */
 export interface HeapLayout {

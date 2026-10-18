@@ -109,6 +109,28 @@ export interface MemorySnapshot {
   fallback?: boolean;
 }
 
+/**
+ * The switches of the view. The settings `nimblescape.mindbug.showFunctions`, `showIds` and `showClasses` keep them,
+ * so that the view has them again after it was closed and after a restart of VS Code.
+ */
+export interface ViewOptions {
+  showFunctions: boolean;
+  showIds: boolean;
+  /** Show the classes (with their static variables) in their own part at the top of the heap. */
+  showClasses: boolean;
+}
+
+/** The switches of the view when no setting changes them: the defaults of the three settings in package.json. */
+export const DEFAULT_VIEW_OPTIONS: ViewOptions = { showFunctions: false, showIds: true, showClasses: true };
+
+/**
+ * The text at the end of the line of an earlier step in the editor, for example "Mindbug: step 8 of 14". It names the
+ * step that the view shows and the newest step, as the view does above its step list.
+ */
+export function stepMarkText(step: number, newest: number | undefined): string {
+  return newest !== undefined && newest > 0 ? `Mindbug: step ${step} of ${newest}` : `Mindbug: step ${step}`;
+}
+
 /** State of the debugged program, shown in the status line of the panel. */
 export type ProgramState = 'paused' | 'running' | 'ended' | 'idle' | 'error';
 
@@ -122,7 +144,9 @@ export type ToWebview =
   /** The frame selected in the VS Code Call Stack view. */
   | { type: 'focusFrame'; frameId: number | undefined }
   /** Show the step with this number, as when it is selected in the step list (for tests). */
-  | { type: 'showStep'; step: number };
+  | { type: 'showStep'; step: number }
+  /** The switches of the view, from the settings; sent again when a setting changes. */
+  | { type: 'viewOptions'; opts: ViewOptions };
 
 /** Messages from the webview to the extension. */
 export type FromWebview =
@@ -132,7 +156,9 @@ export type FromWebview =
    * The step that the panel shows. `live` is true for the newest step.
    * For an earlier step, the extension marks its line in the editor.
    */
-  | { type: 'viewStep'; step: number; live: boolean; file?: string; line?: number };
+  | { type: 'viewStep'; step: number; live: boolean; file?: string; line?: number }
+  /** A switch of the view changed; the extension saves the switches in the settings. */
+  | { type: 'viewOptions'; opts: ViewOptions };
 
 /**
  * What changed since the previous snapshot.

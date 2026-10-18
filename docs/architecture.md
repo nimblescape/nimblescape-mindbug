@@ -27,7 +27,7 @@ flowchart LR
   EXT -- "DAP requests: stackTrace, scopes, variables, evaluate" --> JSD
   JSD -- "evaluate" --> HW
   EXT -- "snapshots (postMessage)" --> VIEW
-  VIEW -- "viewStep" --> EXT
+  VIEW -- "viewStep, viewOptions" --> EXT
   EXT -- "marks the line of a step" --> ED
 ```
 
@@ -104,7 +104,7 @@ A DAP request `continue`, `next`, `stepIn` or `stepOut`, or the event `continued
 ### Step history
 
 1. The step list, the slider or a key selects an earlier step. The view draws the snapshot of that step and sends `viewStep` with its file and line.
-2. The controller opens that file when it is not visible, shows the line, and marks it with a green arrow and a green line, as the debugger marks a selected stack frame. The yellow line of the debugger stays the current position.
+2. The controller opens that file when it is not visible, shows the line, and marks it with a green arrow and a green line, as the debugger marks a selected stack frame, and with the text "Mindbug: step 8 of 14" at its end (`stepMarkText` in `src/model.ts`). The yellow line of the debugger stays the current position.
 3. **Show current step** (or End) selects the newest step again, and the controller removes the mark.
 
 A view that opens later receives the whole history of the newest session (message `history`). A new session starts a new history.
@@ -133,11 +133,11 @@ The view draws the stack and the heap bottom up, as a stack of memory grows:
 | Data | Where | How long |
 | --- | --- | --- |
 | The step history | The memory of the extension host (controller) and of the webview | Until the next debug session starts, or VS Code closes |
-| The switches of the toolbar | The state of the webview (`setState`) | While the view is open |
+| The switches of the toolbar | The settings `nimblescape.mindbug.showClasses`, `showFunctions` and `showIds`: the page of the view gets them in the attribute `data-view-options`, a click on a switch sends `viewOptions`, and the controller saves it in the user settings with `WorkspaceConfiguration.update`. A click on a switch that the settings of the workspace set stays in the memory of the controller (`viewOverrides`) until the view closes | Until you change them |
 | The numbers of the objects | A `WeakMap` of the helper in the program | While the program runs |
 | The global `__mindbug` | The program | While the program runs |
 
-Mindbug writes no file, uses neither `globalState` nor `workspaceState` of VS Code, and stores no secret.
+Mindbug writes no file, uses neither `globalState` nor `workspaceState` of VS Code, and stores no secret. It does not use `globalState` for the switches on purpose: VS Code keeps the state of an extension after its uninstall, and the settings are visible and stay under your control.
 
 ## Naming
 

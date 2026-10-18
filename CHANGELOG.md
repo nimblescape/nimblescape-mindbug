@@ -3,6 +3,20 @@
 Each section lists the changes of one released version. The release workflow
 takes the section of a version as the notes of its GitHub release.
 
+## 0.1.2
+
+**Step history.** When the view shows an earlier step, the editor writes the
+step at the end of its green line, for example "Mindbug: step 8 of 14": the
+view shows step 8, and the program is at step 14. Before, only the green color
+told that the line was not the position of the program.
+
+**The switches of the view are settings.** **Show classes**, **Show
+functions** and **Show ids** are now the settings
+`nimblescape.mindbug.showClasses`, `nimblescape.mindbug.showFunctions` and
+`nimblescape.mindbug.showIds`. A click on a switch changes its setting, so the
+view has the switches again after you close it and after a restart of VS
+Code. Before, they went back to their defaults each time the view opened.
+
 ## 0.1.1
 
 **Remote windows.** The Mindbug view shows the stack and the heap also in VS

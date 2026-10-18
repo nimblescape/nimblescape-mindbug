@@ -5,6 +5,8 @@
 // HTML of the memory panel. Kept separate from panel.ts (no 'vscode' import),
 // so the screenshot tests can load exactly the same page in a browser.
 
+import type { ViewOptions } from './model.ts';
+
 export interface WebviewHtmlInput {
   /** Value for the Content-Security-Policy, for example `webview.cspSource`. */
   cspSource: string;
@@ -13,6 +15,13 @@ export interface WebviewHtmlInput {
   styleUri: string;
   /** Maximum number of steps the panel keeps (setting `nimblescape.mindbug.maxHistorySteps`). */
   maxSteps?: number;
+  /** The switches of the view, from the settings, so that the first picture already has them. */
+  viewOptions?: ViewOptions;
+}
+
+/** A text as the value of an HTML attribute in double quotes. */
+function attribute(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 export function webviewHtml(o: WebviewHtmlInput): string {
@@ -25,7 +34,7 @@ export function webviewHtml(o: WebviewHtmlInput): string {
 <link href="${o.styleUri}" rel="stylesheet">
 <title>Mindbug</title>
 </head>
-<body data-max-steps="${o.maxSteps ?? 500}">
+<body data-max-steps="${o.maxSteps ?? 500}" data-view-options="${attribute(JSON.stringify(o.viewOptions ?? {}))}">
 <header class="toolbar">
   <div class="status" id="status" role="status">No program is paused.</div>
   <label class="toggle" title="Show the classes, with their static variables, at the top of the heap"><input type="checkbox" id="showClasses"> Show classes</label>

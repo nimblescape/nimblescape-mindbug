@@ -11,6 +11,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_VIEW_OPTIONS } from '../../src/model.ts';
 
 /** The root folder of this repository, which holds the manifest and the documents. */
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -69,6 +70,15 @@ describe('the manifest', () => {
     const list = types![1].split(',').map((t) => t.trim().replace(/^'|'$/g, ''));
     const open = manifest.contributes.menus['editor/title'].find((m: { command: string }) => m.command === 'nimblescape.mindbug.open');
     expect(open.when).toBe(`inDebugMode && debugType =~ /^(${list.join('|')})$/`);
+  });
+
+  it('gives the settings of the switches of the view the defaults of the view', () => {
+    for (const [name, value] of Object.entries(DEFAULT_VIEW_OPTIONS)) {
+      const setting = manifest.contributes.configuration.properties[`nimblescape.mindbug.${name}`];
+      expect(setting, `setting nimblescape.mindbug.${name}`).toBeDefined();
+      expect(setting.type).toBe('boolean');
+      expect(setting.default, `default of nimblescape.mindbug.${name}`).toBe(value);
+    }
   });
 
   it('declares no runtime dependency', () => {

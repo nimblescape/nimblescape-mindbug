@@ -5,13 +5,15 @@
 // The webview panel "Mindbug" beside the editor that shows the memory diagram.
 
 import * as vscode from 'vscode';
-import type { FromWebview, ToWebview } from './model.ts';
+import type { FromWebview, ToWebview, ViewOptions } from './model.ts';
 import { webviewHtml } from './webviewHtml.ts';
 
 export interface MemoryPanelHandlers {
   onDisposed(): void;
   /** The panel shows another step (see the `viewStep` message). */
   onViewStep(msg: Extract<FromWebview, { type: 'viewStep' }>): void;
+  /** A switch of the panel changed (see the `viewOptions` message). */
+  onViewOptions(opts: ViewOptions): void;
 }
 
 export class MemoryPanel {
@@ -23,7 +25,7 @@ export class MemoryPanel {
   private readonly queue: ToWebview[] = [];
   private handlers: MemoryPanelHandlers | undefined;
 
-  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, maxSteps: number) {
+  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, maxSteps: number, viewOptions: ViewOptions) {
     this.panel = panel;
     const webview = panel.webview;
     const dist = vscode.Uri.joinPath(extensionUri, 'dist');
@@ -34,12 +36,18 @@ export class MemoryPanel {
       scriptUri: webview.asWebviewUri(vscode.Uri.joinPath(dist, 'webview.js')).toString(),
       styleUri: webview.asWebviewUri(vscode.Uri.joinPath(dist, 'webview.css')).toString(),
       maxSteps,
+      viewOptions,
     });
     webview.onDidReceiveMessage((m: FromWebview) => this.onMessage(m), null, this.disposables);
     panel.onDidDispose(() => this.dispose(), null, this.disposables);
   }
 
-  static create(extensionUri: vscode.Uri, handlers: MemoryPanelHandlers, maxSteps: number): MemoryPanel {
+  static create(
+    extensionUri: vscode.Uri,
+    handlers: MemoryPanelHandlers,
+    maxSteps: number,
+    viewOptions: ViewOptions,
+  ): MemoryPanel {
     const panel = vscode.window.createWebviewPanel(
       MemoryPanel.viewType,
       'Mindbug',
@@ -50,7 +58,7 @@ export class MemoryPanel {
       light: vscode.Uri.joinPath(extensionUri, 'media', 'memory-light.svg'),
       dark: vscode.Uri.joinPath(extensionUri, 'media', 'memory-dark.svg'),
     };
-    const p = new MemoryPanel(panel, extensionUri, maxSteps);
+    const p = new MemoryPanel(panel, extensionUri, maxSteps, viewOptions);
     p.handlers = handlers;
     return p;
   }
@@ -83,6 +91,8 @@ export class MemoryPanel {
       for (const q of this.queue.splice(0)) void this.panel.webview.postMessage(q);
     } else if (m.type === 'viewStep') {
       this.handlers?.onViewStep(m);
+    } else if (m.type === 'viewOptions') {
+      this.handlers?.onViewOptions(m.opts);
     } else if (m.type === 'openLocation') {
       const uri = vscode.Uri.file(m.file);
       const line = Math.max(0, m.line - 1);
