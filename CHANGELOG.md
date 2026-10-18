@@ -3,6 +3,14 @@
 Each section lists the changes of one released version. The release workflow
 takes the section of a version as the notes of its GitHub release.
 
+## 0.1.1
+
+**Remote windows.** The Mindbug view shows the stack and the heap also in VS
+Code in the browser and in the windows of a Dev Container, SSH or WSL. Before,
+it showed "The program is paused outside your own code." at every pause there,
+because VS Code names the files of the remote computer with `vscode-remote://`
+addresses, which Mindbug did not take as files of your program.
+
 ## 0.1.0
 
 Initial release.

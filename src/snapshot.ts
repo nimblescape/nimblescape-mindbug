@@ -73,6 +73,34 @@ export function classifyScope(scope: DapScope): ScopeClass {
   return 'other';
 }
 
+/**
+ * The file path of a source path. In a remote window (VS Code in the browser, or a Dev Container, SSH or WSL
+ * window), the stack frames that `customRequest` returns name the files of the remote computer as URIs, for example
+ * `vscode-remote://dev-container+abc/workspaces/app/sort.ts`: VS Code turns the paths of the debugger into URIs on
+ * the way to the window and does not turn them back. Mindbug runs on the remote computer, where the path of such a
+ * URI is the path of the file. Every other path stays as it is.
+ */
+export function localPath(path: string): string {
+  const m = /^(?:vscode-remote:\/\/[^/]*|file:\/\/)(\/.*)$/i.exec(path);
+  if (!m) return path;
+  let p: string;
+  try {
+    p = decodeURIComponent(m[1]);
+  } catch {
+    return path;
+  }
+  // A Windows path: "/c:/Users/s/sort.ts" is "c:\Users\s\sort.ts", as the debugger names it
+  return /^\/[a-z]:\//i.test(p) ? p.slice(1).replace(/\//g, '\\') : p;
+}
+
+/** The frame with the file path of its source (see `localPath`). */
+function withLocalPath(frame: DapStackFrame): DapStackFrame {
+  const path = frame.source?.path;
+  if (!path) return frame;
+  const local = localPath(path);
+  return local === path ? frame : { ...frame, source: { ...frame.source, path: local } };
+}
+
 /** True when the frame belongs to the student's own code (not Deno or Node internals). */
 export function isUserFrame(frame: DapStackFrame): boolean {
   if (frame.presentationHint === 'label' || frame.presentationHint === 'subtle') return false;
@@ -238,7 +266,7 @@ export async function collectSnapshot(
   const maxFrames = options.maxFrames ?? 30;
 
   const trace = await dap.request('stackTrace', { threadId, startFrame: 0, levels: 200 });
-  const allFrames: DapStackFrame[] = trace?.stackFrames ?? [];
+  const allFrames: DapStackFrame[] = (trace?.stackFrames ?? []).map(withLocalPath);
 
   // Keep the frames of the student's code. Stop at the first async boundary: the frames
   // after it are not on the stack any more and cannot be read.
