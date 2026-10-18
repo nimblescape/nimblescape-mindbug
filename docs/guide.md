@@ -183,7 +183,7 @@ The folder [examples](../examples) has five small programs:
 
 ## Uninstall
 
-Uninstall **nimblescape Mindbug** in the Extensions view of VS Code, or run `code --uninstall-extension nimblescape.nimblescape-mindbug`. Mindbug stores no data on the disk, so nothing else is left; your settings of Mindbug stay in the settings of VS Code. A launch configuration of type `mindbug` in a `launch.json` file stays; VS Code then shows that it does not know the type.
+Uninstall **nimblescape Mindbug** in the Extensions view of VS Code, or run `code --uninstall-extension nimblescape.nimblescape-mindbug`. Mindbug stores no data of its own on the disk; only your settings of Mindbug stay in the settings of VS Code. A launch configuration of type `mindbug` in a `launch.json` file stays; VS Code then shows that it does not know the type.
 
 ## Build from source
 

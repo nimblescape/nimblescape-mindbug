@@ -331,15 +331,36 @@ describe('the Mindbug view in VS Code', () => {
     if (vscode.debug.activeDebugSession) await stop();
   });
 
-  it('saves the switches of the view in the user settings, and only the switches that differ from the default', async () => {
+  it('saves a switch of the view in the user settings, and removes the setting at the default', async () => {
     const config = () => vscode.workspace.getConfiguration('nimblescape.mindbug');
-    await api.saveViewOptions({ showFunctions: true, showIds: true, showClasses: false });
-    assert.equal(config().inspect('showFunctions')?.globalValue, true);
-    assert.equal(config().inspect('showClasses')?.globalValue, false);
-    assert.equal(config().inspect('showIds')?.globalValue, undefined, 'a switch at its default writes no setting');
-    await api.saveViewOptions({ showFunctions: false, showIds: true, showClasses: true });
-    assert.equal(config().inspect('showFunctions')?.globalValue, undefined, 'the default removes the user setting');
-    assert.equal(config().inspect('showClasses')?.globalValue, undefined, 'the default removes the user setting');
+    try {
+      await api.saveViewOption('showFunctions', true);
+      await api.saveViewOption('showClasses', false);
+      await api.saveViewOption('showIds', true);
+      assert.equal(config().inspect('showFunctions')?.globalValue, true);
+      assert.equal(config().inspect('showClasses')?.globalValue, false);
+      assert.equal(config().inspect('showIds')?.globalValue, undefined, 'a switch at its default writes no setting');
+      await api.saveViewOption('showFunctions', false);
+      assert.equal(config().inspect('showFunctions')?.globalValue, undefined, 'the default removes the user setting');
+    } finally {
+      for (const name of ['showFunctions', 'showClasses', 'showIds']) await config().update(name, undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  it('saves the clicks on the switches in their order, so that the last click wins', async () => {
+    const config = () => vscode.workspace.getConfiguration('nimblescape.mindbug');
+    try {
+      await Promise.all([
+        api.saveViewOption('showFunctions', true),
+        api.saveViewOption('showClasses', false),
+        api.saveViewOption('showFunctions', false),
+        api.saveViewOption('showFunctions', true),
+      ]);
+      assert.equal(config().inspect('showFunctions')?.globalValue, true);
+      assert.equal(config().inspect('showClasses')?.globalValue, false);
+    } finally {
+      for (const name of ['showFunctions', 'showClasses']) await config().update(name, undefined, vscode.ConfigurationTarget.Global);
+    }
   });
 
   it('does not change the settings of the workspace when they set a switch', async () => {
@@ -348,7 +369,7 @@ describe('the Mindbug view in VS Code', () => {
     const existed = await Promise.resolve(vscode.workspace.fs.stat(settings)).then(() => true, () => false);
     await config().update('showIds', false, vscode.ConfigurationTarget.Workspace);
     try {
-      await api.saveViewOptions({ showFunctions: false, showIds: true, showClasses: true });
+      await api.saveViewOption('showIds', true);
       assert.equal(config().inspect('showIds')?.workspaceValue, false, 'the setting of the workspace stays');
       assert.equal(config().inspect('showIds')?.globalValue, undefined, 'no user setting');
     } finally {

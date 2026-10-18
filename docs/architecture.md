@@ -27,7 +27,7 @@ flowchart LR
   EXT -- "DAP requests: stackTrace, scopes, variables, evaluate" --> JSD
   JSD -- "evaluate" --> HW
   EXT -- "snapshots (postMessage)" --> VIEW
-  VIEW -- "viewStep, viewOptions" --> EXT
+  VIEW -- "viewStep, viewOption" --> EXT
   EXT -- "marks the line of a step" --> ED
 ```
 
@@ -133,11 +133,11 @@ The view draws the stack and the heap bottom up, as a stack of memory grows:
 | Data | Where | How long |
 | --- | --- | --- |
 | The step history | The memory of the extension host (controller) and of the webview | Until the next debug session starts, or VS Code closes |
-| The switches of the toolbar | The settings `nimblescape.mindbug.showClasses`, `showFunctions` and `showIds`: the page of the view gets them in the attribute `data-view-options`, a click on a switch sends `viewOptions`, and the controller saves it in the user settings with `WorkspaceConfiguration.update`. A click on a switch that the settings of the workspace set stays in the memory of the controller (`viewOverrides`) until the view closes | Until you change them |
+| The switches of the toolbar | The settings `nimblescape.mindbug.showClasses`, `showFunctions` and `showIds`: the page of the view gets them in the attribute `data-view-options`, a click on a switch sends `viewOption` with the name and the value of that switch, and the controller saves it in the user settings with `WorkspaceConfiguration.update`. A click on a switch that the settings of the workspace set stays in the memory of the controller (`viewOverrides`) until the view closes or the setting changes. The controller sends `viewOptions` when the settings change, and when the page of the view loads again | Until you change them |
 | The numbers of the objects | A `WeakMap` of the helper in the program | While the program runs |
 | The global `__mindbug` | The program | While the program runs |
 
-Mindbug writes no file, uses neither `globalState` nor `workspaceState` of VS Code, and stores no secret. It does not use `globalState` for the switches on purpose: VS Code keeps the state of an extension after its uninstall, and the settings are visible and stay under your control.
+Mindbug itself writes no file (VS Code saves the user settings), uses neither `globalState` nor `workspaceState` of VS Code, and stores no secret. It does not use `globalState` for the switches on purpose: VS Code keeps the state of an extension after its uninstall, and the settings are visible and stay under your control.
 
 ## Naming
 

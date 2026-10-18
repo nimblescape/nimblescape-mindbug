@@ -16,6 +16,8 @@ functions** and **Show ids** are now the settings
 `nimblescape.mindbug.showIds`. A click on a switch changes its setting, so the
 view has the switches again after you close it and after a restart of VS
 Code. Before, they went back to their defaults each time the view opened.
+Mindbug changes only your user settings: when the settings of a workspace
+set a switch, a click changes the view only until you close it.
 
 ## 0.1.1
 

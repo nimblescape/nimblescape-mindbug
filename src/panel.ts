@@ -12,8 +12,10 @@ export interface MemoryPanelHandlers {
   onDisposed(): void;
   /** The panel shows another step (see the `viewStep` message). */
   onViewStep(msg: Extract<FromWebview, { type: 'viewStep' }>): void;
-  /** A switch of the panel changed (see the `viewOptions` message). */
-  onViewOptions(opts: ViewOptions): void;
+  /** A click on a switch of the panel (see the `viewOption` message). */
+  onViewOption(name: keyof ViewOptions, value: boolean): void;
+  /** The page of the panel is ready, also after it loaded again (for example after "Reload Webviews"). */
+  onReady(): void;
 }
 
 export class MemoryPanel {
@@ -89,10 +91,11 @@ export class MemoryPanel {
     if (m.type === 'ready') {
       this.ready = true;
       for (const q of this.queue.splice(0)) void this.panel.webview.postMessage(q);
+      this.handlers?.onReady();
     } else if (m.type === 'viewStep') {
       this.handlers?.onViewStep(m);
-    } else if (m.type === 'viewOptions') {
-      this.handlers?.onViewOptions(m.opts);
+    } else if (m.type === 'viewOption') {
+      this.handlers?.onViewOption(m.name, m.value);
     } else if (m.type === 'openLocation') {
       const uri = vscode.Uri.file(m.file);
       const line = Math.max(0, m.line - 1);
