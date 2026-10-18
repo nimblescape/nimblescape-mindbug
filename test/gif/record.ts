@@ -28,10 +28,15 @@ const userData = join(out, 'user-data');
 const extensions = join(out, 'extensions');
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 
-/** Seconds that the GIF shows each screenshot: the editor before the start, each step, and the last step. */
+/**
+ * Seconds that the GIF shows each screenshot: the editor before the start, each step, and the last step. They follow the
+ * GIF of the README of nimblescape-markdown-comment-links, which shows its first state for about 2 s, each next state
+ * for about 1.6 s, and its last state for about 3 s. Each value is a multiple of 0.04 s, the time step of ffmpeg for
+ * images: 1.5 s would give 1.52 s and 1.48 s in turn.
+ */
 const FIRST_SECONDS = 2;
-const STEP_SECONDS = 3;
-const LAST_SECONDS = 5;
+const STEP_SECONDS = 1.6;
+const LAST_SECONDS = 3;
 
 /**
  * VS Code in the dark theme, with nothing that is not about the program: no activity bar (it gives its width to the
