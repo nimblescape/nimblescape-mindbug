@@ -162,7 +162,8 @@ The view says "scope", not "frame", because students know the word from the less
 | `test/deno/` | Tests against real Deno programs through the V8 inspector, with a fake debug session. |
 | `test/render/` | The recorded steps of the examples and the screenshot test. |
 | `test/vscode/` | Tests in a real VS Code with mocha. |
-| `examples/` | The example programs, which the tests in VS Code and the screenshot test also use. |
+| `test/gif/` | The recorder of the animation of the README: a real VS Code with the package steps through `examples/return-object.ts` (`npm run gif`). |
+| `examples/` | The example programs, which the tests in VS Code, the screenshot test and the animation of the README also use. |
 | `scripts/` | The local install and uninstall, the build of the VS Code tests, and the shared release scripts. |
 | `media/`, `resources/` | The icons of the commands and the editor, and the icon of the Marketplace. |
 

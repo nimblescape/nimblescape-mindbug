@@ -20,9 +20,10 @@ security model.
 | `test/unit/` | The unit tests with vitest. They need no Deno and no VS Code. `test/unit/manifest.test.ts` checks the manifest, `.vscodeignore` and the documents. |
 | `test/deno/` | The tests against real Deno programs through the V8 inspector, with their programs in `test/deno/fixtures/`. |
 | `test/render/` | The screenshot test (`screenshots.ts`), the recorder of its steps (`record.ts`) and the recorded steps (`snapshots/`). |
+| `test/gif/` | The recorder of the animation of the README (`record.ts`), and the driver (`driver.ts`) that steps through `examples/return-object.ts` in a real VS Code. |
 | `test/vscode/`, `.vscode-test.mjs`, `scripts/build-vscode-tests.mjs` | The tests in a real VS Code, their settings, and their build into `out/`. |
 | `examples/` | The example programs, with a `launch.json` file. The tests in VS Code and the screenshot test use them. |
-| `docs/` | The user guide, the architecture, the security model, and the images of the README (`docs/images/`, copied from the output of the screenshot test). |
+| `docs/` | The user guide, the architecture, the security model, and the images of the README (`docs/images/`, copied from the output of the screenshot test and of `npm run gif`). |
 | `dist/` | The bundles `dist/extension.js` and `dist/webview.js`, and `dist/webview.css`, built by `esbuild.mjs` and kept out of Git. |
 | `media/` | The icons of the command **Open Mindbug** and of the line of an earlier step in the editor. |
 | `resources/icon.png`, `resources/icon.svg` | The Marketplace icon (256 × 256 PNG, because the Marketplace takes no SVG icon) and its source: two scopes of the stack and one object on the heap, on the tile of the nimblescape extensions. |
@@ -64,6 +65,7 @@ and checks its SHA-256 sum).
 | `npm run test:deno` | Runs the tests against real Deno programs (Deno on the `PATH`, or `DENO_PATH`). |
 | `npm run record` | Records the steps of the examples with Deno into `test/render/snapshots/`, after a change of the examples or of the snapshot. |
 | `npm run test:render` | Draws the recorded steps in Chromium and writes screenshots in the light, dark and high contrast themes to `test/render/output/`. Copy changed screenshots to `docs/images/`. |
+| `npm run gif` | Records the animation of the README from a real VS Code, on Linux only: `xvfb-run -a -s "-screen 0 1440x900x24" npm run gif`. It builds the package, installs it with the driver of `test/gif/` into a new profile of the downloaded VS Code, steps through `examples/return-object.ts` with **Run with Mindbug**, Step Into and Step Over, and joins the screenshots with ffmpeg to `test/gif/output/return-object.gif`. It needs ffmpeg (with `x11grab`), and Deno or Node.js on the `PATH`. Run it as a user that is not root: VS Code shows a warning and "[Superuser]" in the title for root. Copy the GIF to `docs/images/` after a check. |
 | `npm run test:vscode` | Downloads VS Code to `.vscode-test/`, and runs the tests in VS Code with Deno and Node.js. On Linux without a display, run it under `xvfb-run -a`. `VSCODE_TEST_VERSION` selects the VS Code version: `stable` (the default), `insiders` or a version such as `1.125.0`. |
 | `npm run build` | Bundles `dist/` with source maps; `npm run watch` bundles again after each change. |
 | `npm run package` | Builds `nimblescape-mindbug-<version>.vsix` with vsce, which first runs the production build (`vscode:prepublish`). vsce also validates the manifest and the README. |
@@ -78,7 +80,8 @@ The examples are part of the tests: the tests in VS Code set breakpoints at
 lines of `examples/*.ts`, and the screenshot test draws the recorded steps of
 the examples. After a change of an example, adapt the lines in
 `test/vscode/extension.test.ts`, run `npm run record`, and check the
-screenshots.
+screenshots. After a change of `examples/return-object.ts`, adapt the lines in
+`test/gif/driver.ts` and run `npm run gif`.
 
 ## Reviewing the package
 

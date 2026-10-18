@@ -10,5 +10,6 @@ out/
 .vscode-test/
 *.vsix
 test/render/output/
+test/gif/output/
 test-results/
 coverage/
