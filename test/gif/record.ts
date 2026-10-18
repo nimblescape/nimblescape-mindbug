@@ -3,11 +3,12 @@
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
 // Records the animation of the README from a real VS Code: VS Code runs examples/return-object.ts with the Mindbug
-// package, and the driver (driver.ts) steps through it and takes a screenshot of the screen at each step.
+// package, and the driver (driver.ts) steps through it, goes back through the step history, and takes a screenshot of
+// the screen after each action. Each screenshot gets a caption bar that says what the user does.
 //
 //   xvfb-run -a -s "-screen 0 1440x900x24" npm run gif
 //
-// Linux only: it needs Xvfb (or another X display), ffmpeg with x11grab, and Deno or Node.js 22.7 or newer on the
+// Linux only: it needs Xvfb (or another X display), ffmpeg with x11grab and drawtext, and Deno or Node.js 22.7 or newer on the
 // PATH. It builds the package (npm run package), packs the driver as a second extension, downloads VS Code to
 // .vscode-test/, installs both extensions into a new profile in test/gif/output/, and writes
 // test/gif/output/return-object.gif. Copy it to docs/images/ after a check.
@@ -123,10 +124,28 @@ function startVSCode(executable: string): Promise<void> {
   });
 }
 
-/** Joins the screenshots to a GIF that repeats, with one GIF frame for each screenshot. */
+/** Height and font size of the caption bar under each screenshot, in pixels. */
+const CAPTION_HEIGHT = 64;
+const CAPTION_SIZE = 28;
+
+/**
+ * Adds the caption of each screenshot (the file .txt that the driver writes next to it) in a bar under the screenshot,
+ * in the color of the Marketplace banner. The screenshot of VS Code itself stays as it is.
+ */
+function caption(shot: string, captioned: string): void {
+  const text = join(frames, shot.replace(/\.png$/, '.txt'));
+  const bar = `pad=iw:ih+${CAPTION_HEIGHT}:0:0:color=${manifest.galleryBanner.color.replace('#', '0x')}`;
+  const words = `drawtext=font=Sans:textfile='${text}':expansion=none:fontsize=${CAPTION_SIZE}:fontcolor=white:x=24:y_align=font:y=h-${CAPTION_HEIGHT}+(${CAPTION_HEIGHT}-${CAPTION_SIZE})/2-2`;
+  run('ffmpeg', ['-loglevel', 'error', '-i', join(frames, shot), '-vf', `${bar},${words}`, '-y', captioned]);
+}
+
+/** Joins the captioned screenshots to a GIF that repeats, with one GIF frame for each screenshot. */
 function makeGif(gif: string): void {
   const shots = readdirSync(frames).filter((f) => f.endsWith('.png')).sort();
-  const lines = shots.flatMap((shot, i) => [`file '${join(frames, shot)}'`, `duration ${i === 0 ? FIRST_SECONDS : STEP_SECONDS}`]);
+  const captioned = join(out, 'captioned');
+  mkdirSync(captioned, { recursive: true });
+  for (const shot of shots) caption(shot, join(captioned, shot));
+  const lines = shots.flatMap((shot, i) => [`file '${join(captioned, shot)}'`, `duration ${i === 0 ? FIRST_SECONDS : STEP_SECONDS}`]);
   const list = join(out, 'frames.txt');
   writeFileSync(list, `${lines.join('\n')}\n`);
   run('ffmpeg', [
