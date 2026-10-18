@@ -6,10 +6,20 @@
 // snapshot at every pause and sends it to the panel.
 
 import * as vscode from 'vscode';
-import type { FromWebview, MemorySnapshot, ToWebview } from './model.ts';
+import {
+  DEFAULT_VIEW_OPTIONS,
+  stepMarkText,
+  type FromWebview,
+  type MemorySnapshot,
+  type ToWebview,
+  type ViewOptions,
+} from './model.ts';
 import { DEFAULT_LIMITS, type WalkerLimits } from './heapWalker.ts';
 import { collectSnapshot } from './snapshot.ts';
 import { MemoryPanel } from './panel.ts';
+
+/** The switches of the view; each one is the setting `nimblescape.mindbug.<name>`. */
+const VIEW_OPTION_NAMES = ['showFunctions', 'showIds', 'showClasses'] as const;
 
 /** Requests that make the program run again. */
 const RUN_COMMANDS = new Set(['continue', 'next', 'stepIn', 'stepOut', 'stepBack', 'reverseContinue', 'goto', 'restartFrame']);
@@ -45,12 +55,25 @@ export class MemoryController implements vscode.Disposable {
   /**
    * Marks the line of an earlier step in the editor while the panel shows that step, as the debugger marks a stack
    * frame that you select and that is not the current position: an arrow in the gutter and a green line. The yellow
-   * line of the debugger stays the current position of the program.
+   * line of the debugger stays the current position of the program. A text at the end of the line names the step, so
+   * that the green line needs no knowledge of the colors of the debugger.
    */
   private readonly stepDecoration: vscode.TextEditorDecorationType;
   private viewedStep: Extract<FromWebview, { type: 'viewStep' }> | undefined;
   /** The reveals of revealLine, one after the other: a reveal that waits for an editor to open must not undo a later one. */
   private revealing: Promise<void> = Promise.resolve();
+  /** The saves of the switches, one after the other, so that the last click wins. */
+  private saving: Promise<void> = Promise.resolve();
+  /**
+   * The saves of the switches that have not finished. Their own changes of the settings are not sent to the view: the
+   * view already shows them, and an older value must not undo a newer click.
+   */
+  private pendingSaves = 0;
+  /**
+   * Clicks on switches that the settings of the workspace set. Mindbug does not change the settings of a workspace,
+   * which are a file of the workspace (`.vscode/settings.json`), so these clicks last only until the view closes.
+   */
+  private viewOverrides: Partial<ViewOptions> = {};
   /** Resolvers waiting for the next snapshot (used by tests). */
   private readonly snapshotWaiters: ((s: MemorySnapshot) => void)[] = [];
 
@@ -79,6 +102,12 @@ export class MemoryController implements vscode.Disposable {
       ...JS_DEBUG_TYPES.map((type) => vscode.debug.registerDebugAdapterTrackerFactory(type, tracker)),
       vscode.debug.onDidTerminateDebugSession((s) => this.onTerminated(s)),
       vscode.window.onDidChangeVisibleTextEditors(() => this.markViewedStep()),
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        const changed = VIEW_OPTION_NAMES.filter((name) => e.affectsConfiguration(`nimblescape.mindbug.${name}`));
+        if (changed.length === 0 || this.pendingSaves > 0) return;
+        for (const name of changed) delete this.viewOverrides[name];
+        this.post({ type: 'viewOptions', opts: this.viewOptions() });
+      }),
       this.stepDecoration,
     );
     // `onDidChangeActiveStackItem` exists since VS Code 1.90.
@@ -98,11 +127,14 @@ export class MemoryController implements vscode.Disposable {
         {
           onDisposed: () => {
             this.panel = undefined;
+            this.viewOverrides = {};
             this.onViewStep(undefined);
           },
           onViewStep: (m) => this.onViewStep(m),
+          onViewOptions: (opts) => void this.saveViewOptions(opts),
         },
         this.maxSteps(),
+        this.viewOptions(),
       );
       if (this.history.length > 0) {
         this.post({ type: 'history', snapshots: this.history, sessionId: this.lastSessionId });
@@ -137,6 +169,55 @@ export class MemoryController implements vscode.Disposable {
 
   private maxSteps(): number {
     return vscode.workspace.getConfiguration('nimblescape.mindbug').get<number>('maxHistorySteps', 500);
+  }
+
+  /** The switches of the view: the settings, and the clicks on switches that the settings of the workspace set. */
+  private viewOptions(): ViewOptions {
+    const config = vscode.workspace.getConfiguration('nimblescape.mindbug');
+    const opts = { ...DEFAULT_VIEW_OPTIONS };
+    for (const name of VIEW_OPTION_NAMES) {
+      const value = config.get<unknown>(name);
+      if (typeof value === 'boolean') opts[name] = value;
+    }
+    return { ...opts, ...this.viewOverrides };
+  }
+
+  /**
+   * Saves the switches of the view in the user settings, so that the view has them again after it was closed and after
+   * a restart of VS Code. A user setting with the default value is removed, so that the settings file keeps only what
+   * you changed. A switch that the settings of the workspace set is not saved (see `viewOverrides`).
+   */
+  saveViewOptions(opts: ViewOptions): Promise<void> {
+    this.pendingSaves++;
+    this.saving = this.saving
+      .then(() => this.writeViewOptions(opts))
+      .finally(() => {
+        // After the last save, the view gets the settings: the same switches, or the old ones if a save failed.
+        if (--this.pendingSaves === 0) this.post({ type: 'viewOptions', opts: this.viewOptions() });
+      });
+    return this.saving;
+  }
+
+  private async writeViewOptions(opts: ViewOptions): Promise<void> {
+    const config = vscode.workspace.getConfiguration('nimblescape.mindbug');
+    try {
+      for (const name of VIEW_OPTION_NAMES) {
+        const value = opts[name];
+        if (typeof value !== 'boolean') continue;
+        const workspaceValue = config.inspect(name)?.workspaceValue;
+        if (workspaceValue !== undefined) {
+          if (value === workspaceValue) delete this.viewOverrides[name];
+          else this.viewOverrides[name] = value;
+          continue;
+        }
+        if (config.get<unknown>(name) === value) continue;
+        const userValue = value === DEFAULT_VIEW_OPTIONS[name] ? undefined : value;
+        await config.update(name, userValue, vscode.ConfigurationTarget.Global);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      void vscode.window.showWarningMessage(`Mindbug could not save the switches of its view in the settings: ${message}`);
+    }
   }
 
   /**
@@ -195,7 +276,17 @@ export class MemoryController implements vscode.Disposable {
       editor.setDecorations(this.stepDecoration, [
         {
           range: new vscode.Range(line, 0, line, 0),
-          hoverMessage: `Mindbug shows step ${m.step}. At that step the program was at this line.`,
+          hoverMessage:
+            `Mindbug shows step ${m.step}. At that step the program was at this line. ` +
+            'While the program is paused, the yellow line of the debugger shows where it is now.',
+          renderOptions: {
+            after: {
+              contentText: stepMarkText(m.step, this.history[this.history.length - 1]?.step),
+              color: new vscode.ThemeColor('editorCodeLens.foreground'),
+              fontStyle: 'italic',
+              margin: '0 0 0 3em',
+            },
+          },
         },
       ]);
     }
@@ -281,12 +372,18 @@ export class MemoryController implements vscode.Disposable {
       if (seq !== this.refreshSeq) return; // the program moved on; this result is old
       this.steps.set(sessionKey, step);
       this.lastSnapshot = snapshot;
-      if (this.lastSessionId !== sessionKey) this.history = [];
+      if (this.lastSessionId !== sessionKey) {
+        // A new session starts a new history, and the view shows its newest step.
+        this.history = [];
+        this.viewedStep = undefined;
+      }
       this.lastSessionId = sessionKey;
       this.history.push(snapshot);
       const max = this.maxSteps();
       if (this.history.length > max) this.history.splice(0, this.history.length - max);
       this.post({ type: 'snapshot', snapshot, sessionId: sessionKey });
+      // The view stays at an earlier step; the text at its line names the new newest step.
+      this.markViewedStep();
       this.postFocusFrame();
       for (const w of this.snapshotWaiters.splice(0)) w(snapshot);
     } catch (e) {

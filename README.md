@@ -13,7 +13,7 @@ The animation steps through the example [return-object.ts](https://github.com/ni
 - **When it works.** Mindbug starts when a debug session starts in VS Code, or when you run one of its commands. Before that, it does nothing. It does not run in VS Code for the Web.
 - **Runtimes.** **Run with Mindbug** and a launch configuration of type `mindbug` first run `deno --version` or `node --version` (the programs of the settings `nimblescape.mindbug.denoPath` and `nimblescape.mindbug.nodePath`) to find a runtime. Then the JavaScript debugger of VS Code starts your TypeScript file with Deno (`deno run --inspect-brk=127.0.0.1:9229 --allow-all`) or with Node.js 22.7 or newer (`node --inspect-brk=127.0.0.1:9229 --experimental-transform-types`), in the workspace folder, and connects to it on your computer only (`127.0.0.1`, port of the setting `nimblescape.mindbug.inspectPort`). With `--allow-all`, Deno gives your program all the rights of your user, as Node.js does: a program that you run with Mindbug is code that you run, so run only programs that you trust. **Run with Mindbug** saves the file before it starts it.
 - **Code in your program.** At each pause of a debug session of the JavaScript debugger, also of one that Mindbug did not start, Mindbug runs a small helper in the paused program with the `evaluate` request of the debugger. The helper reads the variables of the scopes and the objects that they reach, and gives each object a number that stays the same from step to step. It adds one hidden global variable, `__mindbug`, to the program, calls no getter, and changes no variable and no object of the program. Only an object that is a `Proxy` runs code of the program when the helper reads it.
-- **Files and data.** Mindbug changes no file, except the save of **Run with Mindbug**. It keeps the steps of the step history in the memory of VS Code, until the next debug session starts, and the view keeps its three switches while it is open. Mindbug writes nothing to the disk, so an uninstall leaves no data of Mindbug. Your settings of Mindbug and a `launch.json` file with a configuration of type `mindbug` stay; VS Code then shows that it does not know the type.
+- **Files and data.** Mindbug changes no file, except the save of **Run with Mindbug**. It keeps the steps of the step history in the memory of VS Code, until the next debug session starts. The three switches of the view are settings: a click on a switch changes its setting, and VS Code saves it in your user settings. Mindbug writes nothing else to the disk, so an uninstall leaves only your settings of Mindbug and a `launch.json` file with a configuration of type `mindbug`; VS Code then shows that it does not know the type.
 - **Network.** Mindbug connects to no address. The debugger connects to the runtime on your computer. Deno downloads the modules that your program imports from the web (for example `npm:` and `jsr:` imports), as `deno run` always does. Mindbug collects no telemetry.
 - **Restricted Mode and virtual workspaces.** Mindbug does not run in Restricted Mode, because VS Code debugs a program only in a trusted workspace, and not in virtual workspaces, because Deno and Node.js run a file on the disk.
 
@@ -26,7 +26,7 @@ The animation steps through the example [return-object.ts](https://github.com/ni
 - **Classes.** The classes are at the top of the heap, with their static variables, attributes, methods and superclass, because in JavaScript a class is also an object on the heap.
 - **Aliasing.** Two arrows to one object show that two variables point to the same object.
 - **Changes.** Everything that changed in the last step has a yellow background.
-- **Step history.** Go back to an earlier step. The view then shows the memory of that step, and the editor marks its line.
+- **Step history.** Go back to an earlier step. The view then shows the memory of that step, and the editor marks its line with the text "Mindbug: step 8 of 14" at its end.
 - **Any runtime.** The view shows every debug session of the JavaScript debugger of VS Code, also one that a launch configuration of type `node` starts.
 - **Themes.** The view follows the light, dark and high contrast themes of VS Code.
 
@@ -54,6 +54,9 @@ Without a `launch.json` file, F5 in a TypeScript file also offers **Mindbug**. T
 | `nimblescape.mindbug.inspectPort` | `9229` | Port on which Deno or Node.js waits for the debugger. |
 | `nimblescape.mindbug.stopOnEntry` | `true` | Pause at the first line of the program. |
 | `nimblescape.mindbug.openAutomatically` | `true` | Open the Mindbug view at the first pause of a debug session. |
+| `nimblescape.mindbug.showClasses` | `true` | Show the classes at the top of the heap (the switch **Show classes** of the view). |
+| `nimblescape.mindbug.showFunctions` | `false` | Show functions, and the variables that hold functions or classes (the switch **Show functions**). |
+| `nimblescape.mindbug.showIds` | `true` | Show the number of each object (the switch **Show ids**). |
 | `nimblescape.mindbug.maxHistorySteps` | `500` | Number of steps that the view keeps for the step history. |
 | `nimblescape.mindbug.maxObjects` | `300` | Number of heap objects that are read per scope. |
 | `nimblescape.mindbug.maxArrayItems` | `100` | Number of array items, set members and map entries per object. |

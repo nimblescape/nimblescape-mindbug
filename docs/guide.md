@@ -69,13 +69,15 @@ Everything that changed in the last step has a yellow background: a new or chang
 | **Show functions** | Shows functions, and the variables that hold functions or classes. |
 | **Show ids** | Shows the number of each object, which stays the same from step to step. |
 
+Each switch is a setting (see [Settings](#settings)). A click on a switch changes its setting, so the view has the switches again after you close it and after a restart of VS Code. When the settings of a workspace set a switch, they decide: a click on that switch changes the view only until you close it, because Mindbug does not change the settings of a workspace, a file of the workspace (`.vscode/settings.json`).
+
 The view follows the color theme of VS Code: light, dark and high contrast.
 
 ## Step history
 
 Each time the program pauses, at a breakpoint or after a step, the view saves a **step**. The step list, the slider, and the Left and Right arrow keys go back to an earlier step; Home shows the first step, and End the newest step. The view then shows the memory as it was at that step.
 
-The editor shows the line where the program was at that step, also when that line is in another file or the file was closed. It marks the line as the debugger marks a function call that you select in its Call Stack view: a green arrow and a green line. The yellow line of the debugger stays the current position of the program. **Show current step** (or End) goes back to the newest step.
+The editor shows the line where the program was at that step, also when that line is in another file or the file was closed. It marks the line as the debugger marks a function call that you select in its Call Stack view, with a green arrow and a green line, and writes the step at the end of the line, for example "Mindbug: step 8 of 14": the view shows step 8, and the program is at step 14. The yellow line of the debugger stays the current position of the program. **Show current step** (or End) goes back to the newest step.
 
 ![An earlier step in the dark theme: step 8 is selected in the step list](https://raw.githubusercontent.com/nimblescape/nimblescape-mindbug/main/docs/images/history-dark.png)
 
@@ -137,6 +139,9 @@ With `--allow-all`, Deno gives the program all the rights of your user, as Node.
 | `nimblescape.mindbug.inspectPort` | `9229` | Port on which Deno or Node.js waits for the debugger. Change it when another program uses port 9229. |
 | `nimblescape.mindbug.stopOnEntry` | `true` | Pause at the first line of the program, so that you can step from the start. |
 | `nimblescape.mindbug.openAutomatically` | `true` | Open the Mindbug view at the first pause of a debug session. |
+| `nimblescape.mindbug.showClasses` | `true` | Show the classes, with their static variables, at the top of the heap. The switch **Show classes** of the view changes it. |
+| `nimblescape.mindbug.showFunctions` | `false` | Show functions, and the variables that hold functions or classes. The switch **Show functions** of the view changes it. |
+| `nimblescape.mindbug.showIds` | `true` | Show the number of each object. The switch **Show ids** of the view changes it. |
 | `nimblescape.mindbug.maxHistorySteps` | `500` | Number of steps that the view keeps for the step history (1 to 5000). |
 | `nimblescape.mindbug.maxObjects` | `300` | Number of heap objects that are read per scope (10 to 5000). |
 | `nimblescape.mindbug.maxArrayItems` | `100` | Number of array items, set members and map entries that are shown per object (5 to 2000). |
@@ -178,7 +183,7 @@ The folder [examples](../examples) has five small programs:
 
 ## Uninstall
 
-Uninstall **nimblescape Mindbug** in the Extensions view of VS Code, or run `code --uninstall-extension nimblescape.nimblescape-mindbug`. Mindbug stores no data on the disk, so nothing else is left. A launch configuration of type `mindbug` in a `launch.json` file stays; VS Code then shows that it does not know the type.
+Uninstall **nimblescape Mindbug** in the Extensions view of VS Code, or run `code --uninstall-extension nimblescape.nimblescape-mindbug`. Mindbug stores no data on the disk, so nothing else is left; your settings of Mindbug stay in the settings of VS Code. A launch configuration of type `mindbug` in a `launch.json` file stays; VS Code then shows that it does not know the type.
 
 ## Build from source
 

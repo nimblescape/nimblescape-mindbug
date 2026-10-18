@@ -7,7 +7,7 @@
 import * as vscode from 'vscode';
 import { MemoryController } from './controller.ts';
 import { DEBUG_TYPE, MindbugConfigurationProvider, runWithMindbug } from './launch.ts';
-import type { MemorySnapshot } from './model.ts';
+import type { MemorySnapshot, ViewOptions } from './model.ts';
 
 export interface MindbugApi {
   /** The newest snapshot (used by the tests in VS Code, test/vscode). */
@@ -16,6 +16,8 @@ export interface MindbugApi {
   nextSnapshot(timeoutMs?: number): Promise<MemorySnapshot>;
   /** Shows a step as the step list of the panel does (used by the tests in VS Code, test/vscode). */
   viewStep(step: number): void;
+  /** Saves the switches of the view as a switch of the panel does (used by the tests in VS Code, test/vscode). */
+  saveViewOptions(opts: ViewOptions): Promise<void>;
 }
 
 export function activate(context: vscode.ExtensionContext): MindbugApi {
@@ -39,6 +41,7 @@ export function activate(context: vscode.ExtensionContext): MindbugApi {
     lastSnapshot: () => controller.lastSnapshot,
     nextSnapshot: (timeoutMs) => controller.nextSnapshot(timeoutMs),
     viewStep: (step) => controller.viewStep(step),
+    saveViewOptions: (opts) => controller.saveViewOptions(opts),
   };
 }
 

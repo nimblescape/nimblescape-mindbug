@@ -331,6 +331,32 @@ describe('the Mindbug view in VS Code', () => {
     if (vscode.debug.activeDebugSession) await stop();
   });
 
+  it('saves the switches of the view in the user settings, and only the switches that differ from the default', async () => {
+    const config = () => vscode.workspace.getConfiguration('nimblescape.mindbug');
+    await api.saveViewOptions({ showFunctions: true, showIds: true, showClasses: false });
+    assert.equal(config().inspect('showFunctions')?.globalValue, true);
+    assert.equal(config().inspect('showClasses')?.globalValue, false);
+    assert.equal(config().inspect('showIds')?.globalValue, undefined, 'a switch at its default writes no setting');
+    await api.saveViewOptions({ showFunctions: false, showIds: true, showClasses: true });
+    assert.equal(config().inspect('showFunctions')?.globalValue, undefined, 'the default removes the user setting');
+    assert.equal(config().inspect('showClasses')?.globalValue, undefined, 'the default removes the user setting');
+  });
+
+  it('does not change the settings of the workspace when they set a switch', async () => {
+    const config = () => vscode.workspace.getConfiguration('nimblescape.mindbug');
+    const settings = vscode.Uri.file(path.join(examples(), '.vscode', 'settings.json'));
+    const existed = await Promise.resolve(vscode.workspace.fs.stat(settings)).then(() => true, () => false);
+    await config().update('showIds', false, vscode.ConfigurationTarget.Workspace);
+    try {
+      await api.saveViewOptions({ showFunctions: false, showIds: true, showClasses: true });
+      assert.equal(config().inspect('showIds')?.workspaceValue, false, 'the setting of the workspace stays');
+      assert.equal(config().inspect('showIds')?.globalValue, undefined, 'no user setting');
+    } finally {
+      await config().update('showIds', undefined, vscode.ConfigurationTarget.Workspace);
+      if (!existed) await vscode.workspace.fs.delete(settings);
+    }
+  });
+
   for (const start of STARTS) {
     describe(start.title, () => {
       it('shows the scopes, the arrays and the aliasing of insertion sort', () => insertionSort(api, start));

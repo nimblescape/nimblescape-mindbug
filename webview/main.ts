@@ -14,21 +14,23 @@ import { renderFrames, renderHeap } from './render.ts';
 
 interface VsCodeApi {
   postMessage(msg: FromWebview): void;
-  getState(): unknown;
-  setState(state: unknown): void;
 }
 declare function acquireVsCodeApi(): VsCodeApi;
 
-interface SavedState {
-  opts: ViewOptions;
+/** The switches of the settings, which the extension writes into the page (attribute `data-view-options`). */
+function initialOptions(): Partial<ViewOptions> {
+  try {
+    return JSON.parse(document.body.dataset.viewOptions ?? '{}') as Partial<ViewOptions>;
+  } catch {
+    return {};
+  }
 }
 
 const vscode = acquireVsCodeApi();
-const saved = (vscode.getState() as SavedState | undefined) ?? undefined;
 
 const history = new StepHistory(Number(document.body.dataset.maxSteps) || undefined);
 const state = {
-  opts: { ...DEFAULT_VIEW_OPTIONS, ...saved?.opts } as ViewOptions,
+  opts: { ...DEFAULT_VIEW_OPTIONS, ...initialOptions() } as ViewOptions,
   focusFrameId: undefined as number | undefined,
   programState: 'idle' as ProgramState,
   statusText: '',
@@ -58,12 +60,16 @@ const showFunctions = $<HTMLInputElement>('showFunctions');
 const showIds = $<HTMLInputElement>('showIds');
 const showClasses = $<HTMLInputElement>('showClasses');
 
-showFunctions.checked = state.opts.showFunctions;
-showIds.checked = state.opts.showIds;
-showClasses.checked = state.opts.showClasses;
+function showOptions(): void {
+  showFunctions.checked = state.opts.showFunctions;
+  showIds.checked = state.opts.showIds;
+  showClasses.checked = state.opts.showClasses;
+}
+showOptions();
 
-function saveState(): void {
-  vscode.setState({ opts: state.opts } satisfies SavedState);
+/** A switch changed: the extension saves the switches in the settings, so that the view has them again. */
+function saveOptions(): void {
+  vscode.postMessage({ type: 'viewOptions', opts: state.opts });
 }
 
 function statusLine(): string {
@@ -209,6 +215,14 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
       if (i >= 0) showStep(i);
       break;
     }
+    case 'viewOptions': {
+      const opts = { ...DEFAULT_VIEW_OPTIONS, ...msg.opts };
+      if ((Object.keys(DEFAULT_VIEW_OPTIONS) as (keyof ViewOptions)[]).every((k) => opts[k] === state.opts[k])) break;
+      state.opts = opts;
+      showOptions();
+      render();
+      break;
+    }
     case 'focusFrame':
       state.focusFrameId = msg.frameId;
       for (const f of framesEl.querySelectorAll<HTMLElement>('.frame')) {
@@ -244,17 +258,17 @@ document.addEventListener('keydown', (e) => {
 
 showFunctions.addEventListener('change', () => {
   state.opts = { ...state.opts, showFunctions: showFunctions.checked };
-  saveState();
+  saveOptions();
   render();
 });
 showIds.addEventListener('change', () => {
   state.opts = { ...state.opts, showIds: showIds.checked };
-  saveState();
+  saveOptions();
   render();
 });
 showClasses.addEventListener('change', () => {
   state.opts = { ...state.opts, showClasses: showClasses.checked };
-  saveState();
+  saveOptions();
   render();
 });
 

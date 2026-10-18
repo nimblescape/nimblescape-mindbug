@@ -139,6 +139,21 @@
           "default": true,
           "description": "Open the Mindbug view when a debug session pauses for the first time."
         },
+        "nimblescape.mindbug.showClasses": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the classes, with their static variables, at the top of the heap in the Mindbug view. The switch **Show classes** of the view changes this setting."
+        },
+        "nimblescape.mindbug.showFunctions": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Show functions, and the variables that hold functions or classes, in the Mindbug view. The switch **Show functions** of the view changes this setting."
+        },
+        "nimblescape.mindbug.showIds": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the number of each object in the Mindbug view, which stays the same from step to step. The switch **Show ids** of the view changes this setting."
+        },
         "nimblescape.mindbug.maxHistorySteps": {
           "type": "number",
           "default": 500,
