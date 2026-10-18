@@ -4,7 +4,17 @@
 
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { classifyScope, frameLabel, frameName, isCommonJsModule, isUserFrame, parseWalkerResult, unquote } from '../../src/snapshot.ts';
+import {
+  classifyScope,
+  collectSnapshot,
+  frameLabel,
+  frameName,
+  isCommonJsModule,
+  isUserFrame,
+  localPath,
+  parseWalkerResult,
+  unquote,
+} from '../../src/snapshot.ts';
 import type { HeapObject, Value } from '../../src/model.ts';
 
 test('scope names of VS Code’s JavaScript debugger', () => {
@@ -42,6 +52,55 @@ test('user frames: own files only', () => {
   assert.ok(!f('runtime/90_deno_ns.js', undefined, 179477628));
   assert.ok(!f('core/01_core.js'));
   assert.ok(!f('https://jsr.io/@std/assert/1.0.0/mod.ts'));
+});
+
+test('file paths of the URIs of a remote window', () => {
+  // VS Code in the browser, and Dev Container windows, give the files of the remote computer as URIs
+  assert.equal(localPath('vscode-remote://localhost:8123/tmp/ws/bill.ts'), '/tmp/ws/bill.ts');
+  assert.equal(localPath('vscode-remote://dev-container+7b22/workspaces/app/sort.ts'), '/workspaces/app/sort.ts');
+  assert.equal(localPath('vscode-remote://ssh-remote+pc/home/s/my%20code/sort.ts'), '/home/s/my code/sort.ts');
+  assert.equal(localPath('VSCODE-REMOTE://wsl+Ubuntu/home/s/sort.ts'), '/home/s/sort.ts');
+  assert.equal(localPath('vscode-remote://ssh-remote+win/c%3A/Users/s/sort.ts'), 'c:\\Users\\s\\sort.ts');
+  assert.equal(localPath('file:///home/s/sort.ts'), '/home/s/sort.ts');
+  // A file URI with a server (a UNC path) stays as it is
+  assert.equal(localPath('file://server/share/sort.ts'), 'file://server/share/sort.ts');
+  // Everything else stays as it is
+  assert.equal(localPath('/home/s/sort.ts'), '/home/s/sort.ts');
+  assert.equal(localPath('C:\\Users\\s\\sort.ts'), 'C:\\Users\\s\\sort.ts');
+  assert.equal(localPath('runtime_main/js/99_main.js'), 'runtime_main/js/99_main.js');
+  assert.equal(localPath('ext:deno_console/01_console.js'), 'ext:deno_console/01_console.js');
+  assert.equal(localPath('https://jsr.io/@std/assert/1.0.0/mod.ts'), 'https://jsr.io/@std/assert/1.0.0/mod.ts');
+  assert.equal(localPath('vscode-remote://localhost:8123/tmp/%E0%A4%A.ts'), 'vscode-remote://localhost:8123/tmp/%E0%A4%A.ts');
+});
+
+test('a remote window: the frames of the own files are read, with their file paths', async () => {
+  // The stack frames as customRequest('stackTrace') returns them in VS Code in the browser
+  const requests: string[] = [];
+  const dap = {
+    async request(command: string): Promise<any> {
+      requests.push(command);
+      if (command === 'stackTrace') {
+        return {
+          stackFrames: [
+            {
+              id: 7,
+              name: '<anonymous>',
+              line: 13,
+              column: 1,
+              source: { name: 'bill.ts', path: 'vscode-remote://localhost:8123/tmp/ws/bill.ts', sourceReference: 0 },
+            },
+          ],
+        };
+      }
+      if (command === 'scopes') return { scopes: [] };
+      throw new Error('not in this test');
+    },
+  };
+  const snapshot = await collectSnapshot(dap, 1, 1);
+  assert.equal(snapshot.location, 'bill.ts:13');
+  assert.equal(snapshot.frames.length, 1);
+  assert.equal(snapshot.frames[0].file, '/tmp/ws/bill.ts');
+  assert.ok(requests.includes('scopes'), 'the frame is read');
 });
 
 test('readable names for the functions that V8 makes for class fields', () => {
