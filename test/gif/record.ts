@@ -4,16 +4,16 @@
 
 // Records the animation of the README from a real VS Code: VS Code runs examples/return-object.ts with the Mindbug
 // package, and the driver (driver.ts) steps through it, goes back through the step history, and takes a screenshot of
-// the screen after each action. Each screenshot gets the captions of the GIF of nimblescape-plantuml: a blue band
-// above the window with the scene, and for a short time a label with the key that the user pressed.
+// the screen after each action. Each screenshot gets the captions of the GIFs of all nimblescape extensions: a blue
+// band above the window with the scene, and for a short time a label with the key that the user pressed.
 //
-//   xvfb-run -a -s "-screen 0 1440x900x24" npm run gif
+//   xvfb-run -a -s "-screen 0 1440x816x24" npm run gif
 //
-// Linux only: it needs Xvfb (or another X display), ffmpeg with x11grab and drawtext, the font Inter (fc-match finds
-// it; Debian and Ubuntu: fonts-inter), and Deno or Node.js 22.7 or newer on the PATH. It builds the package (npm run
-// package), packs the driver as a second extension, downloads VS Code to .vscode-test/, installs both extensions into
-// a new profile in test/gif/output/, and writes test/gif/output/return-object.gif. Copy it to docs/images/ after a
-// check.
+// Linux only: it needs Xvfb (or another X display), ffmpeg with x11grab and drawtext, xdotool, the font Inter
+// (fc-match finds it; Debian and Ubuntu: fonts-inter), and Deno or Node.js 22.7 or newer on the PATH. It builds the
+// package (npm run package), packs the driver as a second extension, downloads VS Code to .vscode-test/, installs both
+// extensions into a new profile in test/gif/output/, and writes test/gif/output/return-object.gif. Copy it to
+// docs/images/ after a check.
 
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -34,7 +34,7 @@ const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 /**
  * Seconds that the GIF shows each screenshot: the editor before the start, each step with the label of its key, each
  * step after the label goes away, and the last step after its label. They follow the GIF of the README of
- * nimblescape-markdown-comment-links, which shows its first state for about 2 s, each next state for about 1.6 s, and
+ * nimblescape-commentlinks, which shows its first state for about 2 s, each next state for about 1.6 s, and
  * its last state for about 3 s, and the GIF of nimblescape-plantuml, which shows each key label for about 1.6 s and
  * then removes it. Each value is a multiple of 0.04 s, the time step of ffmpeg for images: 1.5 s would give 1.52 s and
  * 1.48 s in turn.
@@ -45,11 +45,14 @@ const AFTER_LABEL_SECONDS = 0.8;
 const LAST_SECONDS = 3;
 
 /**
- * VS Code in the dark theme, with nothing that is not about the program: no activity bar (it gives its width to the
- * view), no minimap, no chat, no hints.
+ * VS Code in the dark theme at a zoom of 120 %, with nothing that is not about the program: no activity bar (it gives
+ * its width to the view), no minimap, no sticky scroll, no folding marks, no chat, no hints. The window of 1440 x 816
+ * pixels at 120 % has the layout of a window of 1200 x 680 pixels, as in the GIFs of nimblescape PlantUML and
+ * nimblescape Comment Links.
  */
 const SETTINGS = {
   'workbench.colorTheme': 'Default Dark Modern',
+  'window.zoomLevel': 1,
   'workbench.activityBar.location': 'hidden',
   'workbench.startupEditor': 'none',
   'workbench.tips.enabled': false,
@@ -57,6 +60,8 @@ const SETTINGS = {
   'window.newWindowDimensions': 'maximized',
   'chat.disableAIFeatures': true,
   'editor.minimap.enabled': false,
+  'editor.stickyScroll.enabled': false,
+  'editor.folding': false,
   'editor.cursorBlinking': 'solid',
   'editor.lightbulb.enabled': 'off',
   'editor.occurrencesHighlight': 'off',
@@ -130,14 +135,13 @@ function startVSCode(executable: string): Promise<void> {
 }
 
 /**
- * The captions, the same as in the GIF of the README of nimblescape-plantuml (docs/images/demo.gif): a band in the
- * blue of VS Code above the window, with the number and the caption of the scene in white Inter SemiBold in the middle,
- * and after a key press a label with the key and its command in white Inter on a dark box, in the middle of the GIF
- * near its bottom. That GIF is 1200 pixels wide and this one 1440, so the sizes in pixels are 1.2 times its sizes: in a
- * README of the same width, the captions of both GIFs have the same size and the same position.
+ * The captions, the same in the GIFs of all nimblescape extensions (1440 pixels wide): a band of 53 pixels in the blue
+ * of VS Code above the window, with the number and the caption of the scene in white Inter SemiBold 23, centered, and
+ * after a key press a label with the key and its command in white Inter 25 on a black box (85 %), padding 12 | 16, its
+ * bottom 71 pixels above the bottom of the GIF, centered.
  */
-const BAND = { height: 53, baseline: 32, fontSize: 23, color: '0x0078d4' };
-const LABEL = { fontSize: 25, paddingY: 11, paddingX: 16, bottom: 74 };
+const BAND = { height: 53, fontSize: 23, color: '0x0078d4' };
+const LABEL = { fontSize: 25, paddingY: 12, paddingX: 16, bottom: 71 };
 
 /** The file of the font Inter in a style, from the font configuration of the system. */
 function inter(style: string): string {
@@ -156,7 +160,7 @@ function caption(shot: string, captioned: string, fonts: { band: string; label: 
   const filters = [
     `pad=iw:ih+${BAND.height}:0:${BAND.height}:color=${BAND.color}`,
     `drawtext=fontfile='${fonts.band}':textfile='${base}.band.txt':expansion=none:fontsize=${BAND.fontSize}:fontcolor=white` +
-      `:x=(w-text_w)/2:y_align=baseline:y=${BAND.baseline}`,
+      `:x=(w-text_w)/2:y=(${BAND.height}-text_h)/2`,
   ];
   if (label) {
     filters.push(

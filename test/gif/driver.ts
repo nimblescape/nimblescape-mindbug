@@ -31,11 +31,17 @@ const SCENES = [
   'The step history shows the memory as it was at each earlier step',
 ];
 const KEYS = {
-  start: 'F5   Start Debugging',
-  stepInto: 'F11   Step Into',
-  stepOver: 'F10   Step Over',
-  earlier: 'Left arrow   Show the earlier step',
+  start: 'F5     Start Debugging',
+  stepInto: 'F11     Step Into',
+  stepOver: 'F10     Step Over',
+  earlier: 'Left arrow     Show the earlier step',
 };
+
+/**
+ * The place of the check box "Show classes" on the screen. The check boxes are at the right end of the toolbar of the
+ * view, so the place depends on the width of the window, not on the split between the code and the view.
+ */
+const SHOW_CLASSES = { x: 1008, y: 101 };
 
 /** The line of the first pause. */
 const START = { line: 34, scene: 1 };
@@ -94,8 +100,16 @@ async function record(frames: string): Promise<void> {
   const first = api.nextSnapshot(TIMEOUT);
   await vscode.commands.executeCommand('workbench.action.debug.start');
   await pausesAt(first, START.line);
-  // The view opens beside the editor. It gets more of the width than the code.
-  await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: 0.4 }, { size: 0.6 }] });
+  // The view opens beside the editor. It gets more of the width than the code, and the code keeps room for its longest
+  // line. With more width for the code, the toolbar of the view needs two lines.
+  await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: 0.47 }, { size: 0.53 }] });
+  // At 120 % in the window of 1440 x 816 pixels, the heap has no room for the classes and the objects. A click on the
+  // check box "Show classes" of the view (xdotool) turns the classes off, so that the heap shows the objects. Then the
+  // pointer goes below the last line of the code, where it shows no hover, and the code gets the focus again.
+  await sleep(1500);
+  const { x, y } = SHOW_CLASSES;
+  execFileSync('xdotool', ['mousemove', String(x), String(y), 'click', '1', 'mousemove', '300', '700']);
+  await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
   let frame = 1;
   const name = (action: string) => `${String(frame++).padStart(2, '0')}-${action}`;
   await screenshot(frames, name('start'), START.scene, KEYS.start);
