@@ -204,6 +204,15 @@ export function frameLabel(
   return frameName(base);
 }
 
+/**
+ * True for the frame of a constructor ("Person.constructor") and of the set-up of the fields or the static variables
+ * of a class ("Person (set up fields)", see frameLabel). Such a frame gives no value back to the program:
+ * `new Person()` gives the new object, and V8 makes the set-up functions itself.
+ */
+export function isClassSetup(label: string): boolean {
+  return /\.constructor$|\(set up (fields|static variables)\)$/.test(label);
+}
+
 /** Removes the quotes that a debugger may put around a string result. */
 export function unquote(text: string): string {
   const t = text.trim();
@@ -252,6 +261,16 @@ interface ScopeVars {
   vars: DapVariable[];
 }
 
+interface ReadFrame {
+  frame: Frame;
+  /**
+   * The names in the local scope that are not variables of the program: at a return, VS Code's JavaScript debugger
+   * adds the return value of the function, with a name in the display language of VS Code ("Return value",
+   * "Rückgabewert" in German).
+   */
+  notVariables: Set<string>;
+}
+
 /**
  * Reads the stack and the heap of a paused thread.
  * `step` is the number of this pause in the debug session (used for change highlighting).
@@ -294,23 +313,26 @@ export async function collectSnapshot(
   snapshot.fallback = !walkerReady;
 
   const missing = new Set<number>();
-  const frames: Frame[] = [];
+  const reads: ReadFrame[] = [];
 
   for (let index = 0; index < userFrames.length; index++) {
     const f = userFrames[index];
     const isLast = index === userFrames.length - 1;
-    const frame = await readFrame(dap, f, isLast, walkerReady, limits, snapshot.objects, missing);
-    frames.push(frame);
+    reads.push(await readFrame(dap, f, isLast, walkerReady, limits, snapshot.objects, missing));
   }
 
   // Oldest frame first, like Python Tutor.
-  snapshot.frames = frames.reverse();
+  reads.reverse();
+  snapshot.frames = reads.map((r) => r.frame);
   // The names of constructors and methods need the classes on the heap, which all frames together have read.
   const names = userFrames.map((f) => f.name).reverse();
   snapshot.frames.forEach((frame, i) => {
     if (frame.isGlobal) return;
     const self = frame.vars.find((v) => v.name === 'this')?.value;
     frame.name = frameLabel(names[i], self, snapshot.objects, snapshot.frames[i - 1]?.name);
+    // At the end of a constructor, the debugger shows a return value (undefined, or the new object in a subclass),
+    // which the program never gets: `new` gives the new object. So the view shows no return value there.
+    if (isClassSetup(frame.name)) frame.vars = frame.vars.filter((v) => !reads[i].notVariables.has(v.name));
   });
   snapshot.missing = [...missing].filter((id) => !(id in snapshot.objects));
   return snapshot;
@@ -330,7 +352,7 @@ async function readFrame(
   limits: WalkerLimits,
   objects: Record<number, HeapObject>,
   missing: Set<number>,
-): Promise<Frame> {
+): Promise<ReadFrame> {
   const scopes = await readScopes(dap, f.id);
   const hasLocal = scopes.some((s) => s.cls === 'local');
   const hasModule = scopes.some((s) => s.cls === 'module');
@@ -418,6 +440,15 @@ async function readFrame(
     for (const id of walked.missing) missing.add(id);
   }
 
+  // The program cannot read a name that the debugger added: it is not an identifier, or the helper found no variable
+  // of that name.
+  const notVariables = new Set(
+    display
+      .filter((o) => o.scope === 'local' && o.name !== 'this')
+      .filter((o) => !isIdentifier(o.name) || walkedVars.get(o.name)?.k === 'unavail')
+      .map((o) => o.name),
+  );
+
   for (const o of display) {
     let value: Value | undefined = walkedVars.get(o.name);
     if (!value) {
@@ -437,7 +468,7 @@ async function readFrame(
     const variable: Variable = { name: o.name, value, scope: o.scope };
     frame.vars.push(variable);
   }
-  return frame;
+  return { frame, notVariables };
 }
 
 async function evaluateFrame(

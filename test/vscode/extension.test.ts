@@ -317,6 +317,57 @@ async function callStack(api: MindbugApi, start: Start): Promise<void> {
   await stop();
 }
 
+/** Steps over one line and returns the snapshot of the next pause. */
+async function stepOver(api: MindbugApi): Promise<MemorySnapshot> {
+  const next = api.nextSnapshot(TIMEOUT);
+  await vscode.commands.executeCommand('workbench.action.debug.stepOver');
+  return next;
+}
+
+async function returnValues(api: MindbugApi, start: Start): Promise<void> {
+  const file = path.join(examples(), 'return-object.ts');
+  await debug(api, start, file, [24]);
+  // At the end of the constructor of Book, the debugger shows a return value (undefined), which the program never
+  // gets: `new` gives the new object. The view shows no return value there.
+  let s = await runToLine(api, file, 24);
+  for (const line of [25, 26]) {
+    s = await stepOver(api);
+    assert.equal(top(s)?.line, line);
+  }
+  assert.equal(top(s).name, 'Book.constructor');
+  // Node.js runs the file as a CommonJS module, so there the class Book is also a closure variable of the constructor.
+  assert.deepEqual(
+    top(s).vars.filter((v) => v.scope === 'local').map((v) => v.name).sort(),
+    ['pages', 'this', 'title'],
+  );
+  // At the return of createBook, the view shows the return value of the function.
+  s = await stepOver(api);
+  assert.equal(top(s).name, 'createBook');
+  assert.equal(top(s).line, 31);
+  assert.ok(top(s).vars.some((v) => v.name === 'Return value'), 'createBook has a return value');
+  await stop();
+}
+
+async function restart(api: MindbugApi, start: Start): Promise<void> {
+  const file = path.join(examples(), 'return-object.ts');
+  const entry = await debug(api, start, file, []);
+  assert.equal(entry.step, 1);
+  await stepOver(api);
+  await stepOver(api);
+  assert.deepEqual(api.historySteps(), [1, 2, 3]);
+  // A restart runs the program again: the steps of the earlier run go away, and the steps count from 1 again.
+  const first = api.nextSnapshot(TIMEOUT);
+  await vscode.commands.executeCommand('workbench.action.debug.restart');
+  const again = await first;
+  assert.equal(again.step, 1, 'the first pause after the restart is step 1');
+  assert.deepEqual(api.historySteps(), [1], 'the history has only the step of the new run');
+  // The end of the earlier run, which VS Code can report late, does not stop the new run.
+  const next = await stepOver(api);
+  assert.equal(next.step, 2);
+  assert.deepEqual(api.historySteps(), [1, 2]);
+  await stop();
+}
+
 describe('the Mindbug view in VS Code', () => {
   let api: MindbugApi;
 
@@ -383,6 +434,8 @@ describe('the Mindbug view in VS Code', () => {
       it('shows the scopes, the arrays and the aliasing of insertion sort', () => insertionSort(api, start));
       it('shows classes, static variables and the scopes of constructors and methods', () => people(api, start));
       it('shows a call stack of several functions that share the objects on the heap', () => callStack(api, start));
+      it('shows no return value in a constructor, and the return value of a function', () => returnValues(api, start));
+      it('starts a new step history when the debug session restarts', () => restart(api, start));
     });
   }
 });

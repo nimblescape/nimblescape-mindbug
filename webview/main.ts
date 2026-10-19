@@ -203,6 +203,8 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => {
     case 'history':
       history.replace(msg.snapshots, msg.sessionId);
       state.programState = msg.snapshots.length > 0 ? 'paused' : 'idle';
+      // A text of the earlier run, for example an error, does not describe the new history.
+      state.statusText = '';
       render();
       break;
     case 'status':

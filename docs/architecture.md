@@ -95,11 +95,11 @@ A launch configuration of type `node` or the JavaScript Debug Terminal starts th
 2. At the first pause of a session, the controller opens the view (setting `nimblescape.mindbug.openAutomatically`).
 3. 40 ms after the newest pause, the controller calls `collectSnapshot`. A newer pause or a step in the meantime makes the older read worthless, so a sequence number drops its result.
 4. `collectSnapshot` reads the stack trace and keeps the frames of files on disk, up to the first frame of an async boundary (`presentationHint: label`) and at most 30 frames. The frames of the runtime's own code have a `sourceReference` and no path on disk, so they are left out.
-5. It installs the helper in the top frame, and for each frame reads the scopes and the names of the variables (`scopes`, `variables`), then the values and the objects through the helper (`evaluate`). The module function of a CommonJS file of Node.js becomes the Global scope, as the Module scope of Deno.
+5. It installs the helper in the top frame, and for each frame reads the scopes and the names of the variables (`scopes`, `variables`), then the values and the objects through the helper (`evaluate`). The module function of a CommonJS file of Node.js becomes the Global scope, as the Module scope of Deno. In the frame of a constructor and of the set-up of fields or static variables (`isClassSetup`), the snapshot leaves out the return value that the debugger adds at a return: a name in the local scope that the program cannot read, such as "Return value" (in German "Rückgabewert").
 6. When the helper cannot run, the snapshot uses the values of the DAP request `variables` as text, without ids, and is marked as `fallback`.
 7. The controller adds the snapshot to its history and posts it to the view, which computes the changes against the step before it and draws the step.
 
-A DAP request `continue`, `next`, `stepIn` or `stepOut`, or the event `continued`, marks the program as running; after 300 ms without a new pause, the view says "The program is running…". The end of the session marks it as ended.
+A DAP request `continue`, `next`, `stepIn` or `stepOut`, or the event `continued`, marks the program as running; after 300 ms without a new pause, the view says "The program is running…". The end of the session that paused, or of one of its parent sessions, marks it as ended.
 
 ### Step history
 
@@ -107,7 +107,7 @@ A DAP request `continue`, `next`, `stepIn` or `stepOut`, or the event `continued
 2. The controller opens that file when it is not visible, shows the line, and marks it with a green arrow and a green line, as the debugger marks a selected stack frame, and with the text "Mindbug: step 8 of 14" at its end (`stepMarkText` in `src/model.ts`). The yellow line of the debugger stays the current position.
 3. **Show current step** (or End) selects the newest step again, and the controller removes the mark.
 
-A view that opens later receives the whole history of the newest session (message `history`). A new session starts a new history.
+A view that opens later receives the whole history of the newest session (message `history`). A new session starts a new history, and so does a restart of the session: the controller sees the DAP request `restart` (or `disconnect` or `terminate` with `restart: true`), removes the steps of the earlier run at once and sends the view a `history` without steps. The steps count the pauses of the session that pauses, which is the child session of the JavaScript debugger; after a restart, the new child session counts from 1.
 
 ## The snapshot
 
@@ -132,7 +132,7 @@ The view draws the stack and the heap bottom up, as a stack of memory grows:
 
 | Data | Where | How long |
 | --- | --- | --- |
-| The step history | The memory of the extension host (controller) and of the webview | Until the next debug session starts, or VS Code closes |
+| The step history | The memory of the extension host (controller) and of the webview | Until the next debug session starts, the debug session restarts, or VS Code closes |
 | The switches of the toolbar | The settings `nimblescape.mindbug.showClasses`, `showFunctions` and `showIds`: the page of the view gets them in the attribute `data-view-options`, a click on a switch sends `viewOption` with the name and the value of that switch, and the controller saves it in the user settings with `WorkspaceConfiguration.update`. A click on a switch that the settings of the workspace set stays in the memory of the controller (`viewOverrides`) until the view closes or the setting changes. The controller sends `viewOptions` when the settings change, and when the page of the view loads again | Until you change them |
 | The numbers of the objects | A `WeakMap` of the helper in the program | While the program runs |
 | The global `__mindbug` | The program | While the program runs |

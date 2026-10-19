@@ -144,6 +144,75 @@ test('frame names of constructors and methods name the class that declares them'
   assert.equal(frameLabel('global.insertionSort', undefined, objects), 'insertionSort');
 });
 
+test('a constructor shows no return value, a function shows its return value', async () => {
+  // The frames at a return, newest first, as VS Code's JavaScript debugger gives them: the set-up of the fields of
+  // new Book(...), the constructor of Book, the function createBook, and the module. At a return, the debugger adds
+  // the return value to the local scope, with a name in the display language of VS Code.
+  const stack = (returnValue: string) => [
+    { name: '<instance_members_initializer>', locals: [['this', 'Book'], [returnValue, 'undefined']] },
+    { name: 'Book', locals: [['this', 'Book'], ['pages', '250'], [returnValue, 'undefined'], ['title', "'TypeScript'"]] },
+    { name: 'createBook', locals: [['book', 'Book'], ['pages', '250'], [returnValue, 'Book'], ['title', "'TypeScript'"]] },
+    { name: '<anonymous>', module: [['Book', 'class Book'], ['createBook', 'ƒ createBook(title, pages)']] },
+  ];
+  const objects: HeapObject[] = [
+    { id: 1, kind: 'class', type: 'Book', methods: [], attrs: ['title', 'pages'] },
+    { id: 2, kind: 'object', type: 'Book', cls: 1, fields: [] },
+    { id: 3, kind: 'function', type: 'createBook' },
+  ];
+  const readable: Record<string, Value> = {
+    this: { k: 'ref', id: 2 },
+    book: { k: 'ref', id: 2 },
+    pages: { k: 'num', v: '250' },
+    title: { k: 'str', v: 'TypeScript' },
+    Book: { k: 'ref', id: 1 },
+    createBook: { k: 'ref', id: 3 },
+  };
+  const snapshotAt = (returnValue: string) => {
+    const frames = stack(returnValue);
+    const dap = {
+      async request(command: string, args: any): Promise<any> {
+        if (command === 'stackTrace') {
+          return {
+            stackFrames: frames.map((f, id) => ({ id, name: f.name, line: 26, column: 1, source: { name: 'book.ts', path: '/s/book.ts' } })),
+          };
+        }
+        if (command === 'scopes') {
+          const f = frames[args.frameId];
+          return { scopes: [{ name: f.module ? 'Module' : `Local: ${f.name}`, variablesReference: 100 + args.frameId }] };
+        }
+        if (command === 'variables') {
+          const f = frames[args.variablesReference - 100];
+          return { variables: (f.locals ?? f.module ?? []).map(([name, value]) => ({ name, value, variablesReference: 0 })) };
+        }
+        if (command === 'evaluate') {
+          if (!args.expression.includes('.begin(')) return { result: 'true' }; // the install of the helper
+          // The helper reads each name in the frame; a name that is not a variable is not defined.
+          const names = [...args.expression.matchAll(/\.v\("([^"]+)"/g)].map((m: RegExpMatchArray) => m[1]);
+          const self = frames[args.frameId].locals?.some(([name]) => name === 'this');
+          const value = (name: string): Value =>
+            name === 'this' && !self ? { k: 'undef' } : (readable[name] ?? { k: 'unavail', v: `${name} is not defined` });
+          const vars = names.map((name) => ({ name, value: value(name) }));
+          return { result: JSON.stringify({ v: 1, vars, objects, missing: [] }) };
+        }
+        throw new Error('not in this test');
+      },
+    };
+    return collectSnapshot(dap, 1, 1);
+  };
+
+  for (const returnValue of ['Return value', 'Rückgabewert']) {
+    const s = await snapshotAt(returnValue);
+    const names = (frame: string) => s.frames.find((f) => f.name === frame)?.vars.map((v) => v.name);
+    assert.deepEqual(
+      s.frames.map((f) => f.name),
+      ['Global scope', 'createBook', 'Book.constructor', 'Book (set up fields)'],
+    );
+    assert.deepEqual(names('Book.constructor'), ['this', 'pages', 'title'], `no ${returnValue} in the constructor`);
+    assert.deepEqual(names('Book (set up fields)'), ['this'], `no ${returnValue} in the set-up of the fields`);
+    assert.deepEqual(names('createBook'), ['book', 'pages', returnValue, 'title'], `the ${returnValue} of a function`);
+  }
+});
+
 test('Node.js runs a file without import or export in a function: its frame is the Global scope', () => {
   const params = ['exports', 'require', 'module', '__filename', '__dirname'];
   assert.ok(isCommonJsModule('<anonymous>', true, ['this', ...params, 'arr1']));
