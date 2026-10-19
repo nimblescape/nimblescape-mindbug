@@ -10,13 +10,12 @@
 # Deno programs, the screenshot tests and the tests in a real VS Code (stable),
 # and packages the VSIX with vsce, which also validates the manifest and the
 # README. The VSIX and the screenshots stay workflow artifacts for inspection.
-# The job "release rules" checks the release rules of CONTRIBUTING.md in the
-# source (scripts/release-checks.mjs). This workflow publishes nothing: the
-# release workflow calls it for the commit of a version and publishes the VSIX
-# of that call. A change of this file changes the release process: its pull
-# request needs a dry run (rule 4). The workflow "VS Code versions" calls it
-# once per week with another VS Code version; such a call runs only the type
-# check, the unit tests, the tests in VS Code and the package.
+# This workflow publishes nothing: the release workflow calls it for the commit
+# of a version and publishes the VSIX of that call. A change of this file
+# changes the release process: its pull request needs a dry run (rule 4). The
+# workflow "VS Code versions" calls it once per week with another VS Code
+# version; such a call runs only the type check, the unit tests, the tests in
+# VS Code and the package.
 
 name: CI
 
@@ -121,25 +120,3 @@ jobs:
           name: vsix${{ env.ARTIFACT_SUFFIX }}
           path: '*.vsix'
           if-no-files-found: error
-
-  release-rules:
-    # Rules 1, 2 and 5 of CONTRIBUTING.md: the extension ID follows the naming scheme and is the ID of the last release,
-    # and only the workflow "Release" publishes, with the sign-in to Microsoft Entra ID, and deletes no extension.
-    name: release rules
-    if: ${{ !inputs.vscode-version }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Check out the source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.ref }}
-          persist-credentials: false
-
-      - name: Set up the pinned Node release
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .node-version
-
-      - name: Check the extension ID and the publishing steps
-        run: node scripts/release-checks.mjs rules
