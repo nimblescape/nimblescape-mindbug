@@ -170,6 +170,7 @@ The folder [examples](../examples) has five small programs:
 - **`await`**: after an `await`, the function calls before it are no longer on the stack, so the view shows only the scopes up to the first `await`.
 - **Large programs**: the view reads at most `nimblescape.mindbug.maxObjects` objects per scope; an object after that shows "… not loaded". It shows at most `nimblescape.mindbug.maxArrayItems` items of an array, a set or a map, and at most `nimblescape.mindbug.maxStringLength` characters of a string.
 - **Other languages**: the view follows only the JavaScript debugger for Node.js and Deno. It shows nothing for a program in a browser, or for other debuggers such as Python.
+- **Node.js 22 and the set-up of fields**: when the program pauses in the scope "(set up fields)" of a class that also has a static variable, Node.js 22 stops with a fatal error of V8 as soon as the debugger runs code there. Mindbug runs no code in that scope, but the debugger of VS Code can, for example for a watch expression or when you move the mouse over a variable in the editor. Node.js 24 and Deno do not have this fault.
 - **Node.js and breakpoints**: with Node.js, the program can miss the pause at its first line and pause first at a breakpoint. This happens when the line number of a breakpoint equals the line of the first statement in the code that Node.js generates from the TypeScript file, because of a fault of the JavaScript debugger of VS Code. Move the breakpoint to another line, or set it after the program has paused at its first line.
 
 ## Troubleshooting

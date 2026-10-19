@@ -144,7 +144,7 @@ test('frame names of constructors and methods name the class that declares them'
   assert.equal(frameLabel('global.insertionSort', undefined, objects), 'insertionSort');
 });
 
-test('a constructor shows no return value, a function shows its return value', async () => {
+test('a constructor shows no return value, a function shows its return value; no helper in the set-up of fields', async () => {
   // The frames at a return, newest first, as VS Code's JavaScript debugger gives them: the set-up of the fields of
   // new Book(...), the constructor of Book, the function createBook, and the module. At a return, the debugger adds
   // the return value to the local scope, with a name in the display language of VS Code.
@@ -167,6 +167,8 @@ test('a constructor shows no return value, a function shows its return value', a
     Book: { k: 'ref', id: 1 },
     createBook: { k: 'ref', id: 3 },
   };
+  /** The frames in which an expression was evaluated. */
+  const evaluatedIn = new Set<number>();
   const snapshotAt = (returnValue: string) => {
     const frames = stack(returnValue);
     const dap = {
@@ -185,6 +187,7 @@ test('a constructor shows no return value, a function shows its return value', a
           return { variables: (f.locals ?? f.module ?? []).map(([name, value]) => ({ name, value, variablesReference: 0 })) };
         }
         if (command === 'evaluate') {
+          evaluatedIn.add(args.frameId);
           if (!args.expression.includes('.begin(')) return { result: 'true' }; // the install of the helper
           // The helper reads each name in the frame; a name that is not a variable is not defined.
           const names = [...args.expression.matchAll(/\.v\("([^"]+)"/g)].map((m: RegExpMatchArray) => m[1]);
@@ -210,6 +213,10 @@ test('a constructor shows no return value, a function shows its return value', a
     assert.deepEqual(names('Book.constructor'), ['this', 'pages', 'title'], `no ${returnValue} in the constructor`);
     assert.deepEqual(names('Book (set up fields)'), ['this'], `no ${returnValue} in the set-up of the fields`);
     assert.deepEqual(names('createBook'), ['book', 'pages', returnValue, 'title'], `the ${returnValue} of a function`);
+    // Node.js 22 stops with a fatal error when code is evaluated in the frame of <instance_members_initializer>. Its
+    // `this` is the object of the constructor.
+    assert.ok(!evaluatedIn.has(0), 'no evaluate in the set-up of the fields');
+    assert.deepEqual(s.frames[3].vars, [{ name: 'this', value: { k: 'ref', id: 2 }, scope: 'local' }]);
   }
 });
 

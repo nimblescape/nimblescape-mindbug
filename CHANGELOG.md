@@ -18,6 +18,14 @@ the new run counted on from the last step. Also, when VS Code reported the
 end of the earlier run late, the view showed "The program has ended." while
 the new run was paused, and left out that step.
 
+**Step Into a constructor with Node.js 22.** Step Into on `new Person(...)`
+first pauses where JavaScript sets up the fields of the new object, shown as
+the scope "Person (set up fields)". When the class also has a static
+variable, Node.js 22 stopped there with "Fatal error ... Check failed:
+IsStringSet(*block_list)" as soon as Mindbug read the memory, and the program
+ended. This is a fault of V8 in Node.js 22. Mindbug now runs no code in that
+scope and shows its `this`, the new object, from the constructor.
+
 ## 0.1.2
 
 **Step history.** When the view shows an earlier step, the editor writes the

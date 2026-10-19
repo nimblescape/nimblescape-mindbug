@@ -213,6 +213,16 @@ export function isClassSetup(label: string): boolean {
   return /\.constructor$|\(set up (fields|static variables)\)$/.test(label);
 }
 
+/**
+ * True for the frame of the function that V8 makes to set up the fields of a new object
+ * (`<instance_members_initializer>`). Node.js 22 stops with a fatal error of V8 ("Check failed:
+ * IsStringSet(*block_list)") when the debugger evaluates any code in this frame of a class that also has static
+ * variables, so the helper never runs in it.
+ */
+export function isFieldSetupFrame(debuggerName: string): boolean {
+  return debuggerName.includes('<instance_members_initializer>');
+}
+
 /** Removes the quotes that a debugger may put around a string result. */
 export function unquote(text: string): string {
   const t = text.trim();
@@ -303,10 +313,12 @@ export async function collectSnapshot(
   const top = userFrames[0];
   snapshot.location = top.source?.path ? `${baseName(top.source.path)}:${top.line}` : undefined;
 
-  // Install the heap walker (once per program run; later calls only check the version).
-  let walkerReady = true;
+  // Install the heap walker (once per program run; later calls only check the version), in the newest frame where the
+  // helper can run.
+  const helperFrame = userFrames.find((f) => !isFieldSetupFrame(f.name));
+  let walkerReady = helperFrame !== undefined;
   try {
-    await dap.request('evaluate', { expression: installExpression(), frameId: top.id, context: 'clipboard' });
+    if (helperFrame) await dap.request('evaluate', { expression: installExpression(), frameId: helperFrame.id, context: 'clipboard' });
   } catch {
     walkerReady = false;
   }
@@ -318,7 +330,8 @@ export async function collectSnapshot(
   for (let index = 0; index < userFrames.length; index++) {
     const f = userFrames[index];
     const isLast = index === userFrames.length - 1;
-    reads.push(await readFrame(dap, f, isLast, walkerReady, limits, snapshot.objects, missing));
+    const helperRuns = walkerReady && !isFieldSetupFrame(f.name);
+    reads.push(await readFrame(dap, f, isLast, helperRuns, limits, snapshot.objects, missing));
   }
 
   // Oldest frame first, like Python Tutor.
@@ -328,6 +341,11 @@ export async function collectSnapshot(
   const names = userFrames.map((f) => f.name).reverse();
   snapshot.frames.forEach((frame, i) => {
     if (frame.isGlobal) return;
+    if (isFieldSetupFrame(names[i])) {
+      // The helper does not run in this frame. Its only variable is `this`, the new object of the constructor below it.
+      const callerThis = snapshot.frames[i - 1]?.vars.find((v) => v.name === 'this');
+      frame.vars = callerThis ? [{ ...callerThis }] : [];
+    }
     const self = frame.vars.find((v) => v.name === 'this')?.value;
     frame.name = frameLabel(names[i], self, snapshot.objects, snapshot.frames[i - 1]?.name);
     // At the end of a constructor, the debugger shows a return value (undefined, or the new object in a subclass),
