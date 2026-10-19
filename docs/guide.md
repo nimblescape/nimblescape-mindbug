@@ -43,6 +43,7 @@ The view has two areas: the **STACK** on the left and the **HEAP** on the right.
 - The top scope is the function that runs now. A **triangle** at its left points to it: yellow at the current step, and green at an earlier step of the [step history](#step-history), as the arrow of the debugger in the editor.
 - The variables of a scope also build bottom up: the first variable of the function, its first parameter, is at the bottom, and each later variable is above it. The variables of an outer function that a closure uses are below the own variables.
 - Each variable is a box. A number, a string, a boolean, `null` or `undefined` is written in the box. A `let` or `const` whose line has not run yet shows "uninitialized".
+- When you step to the end of a function, its scope shows **Return value**, the value that the function gives back. A constructor shows no return value: `new` gives the new object, not a value of the constructor.
 - A variable that holds an object or an array stores only *where* the object is on the heap. The view draws this as an arrow from the variable to the object.
 
 ### Heap
@@ -81,7 +82,7 @@ The editor shows the line where the program was at that step, also when that lin
 
 ![An earlier step in the dark theme: step 8 is selected in the step list](https://raw.githubusercontent.com/nimblescape/nimblescape-mindbug/main/docs/images/history-dark.png)
 
-The view keeps the steps of the newest debug session, at most `nimblescape.mindbug.maxHistorySteps` steps; then the oldest steps go away. A new debug session starts a new history.
+The view keeps the steps of the newest debug session, at most `nimblescape.mindbug.maxHistorySteps` steps; then the oldest steps go away. A new debug session starts a new history, and so does **Restart** (Ctrl+Shift+F5) of the debugger: the steps of the earlier run go away, and the steps of the new run count from 1.
 
 ## Commands
 

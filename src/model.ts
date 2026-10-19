@@ -95,7 +95,7 @@ export interface Frame {
 }
 
 export interface MemorySnapshot {
-  /** Counts up with every pause of the same debug session. */
+  /** Counts up with every pause of the same run of the program; a restart counts from 1 again. */
   step: number;
   /** Frames from the oldest (global) to the newest (running) call. */
   frames: Frame[];
@@ -139,9 +139,15 @@ export type ProgramState = 'paused' | 'running' | 'ended' | 'idle' | 'error';
 
 /** Messages from the extension to the webview. */
 export type ToWebview =
-  /** A new pause. `sessionId` changes when a new debug session starts (the history is reset). */
+  /**
+   * A new pause. `sessionId` is the debug session of the run of the program; it changes when a new debug session
+   * starts or the session restarts (the history is reset).
+   */
   | { type: 'snapshot'; snapshot: MemorySnapshot; sessionId: string }
-  /** All steps of the session so far. Sent when the panel opens while a session has steps. */
+  /**
+   * All steps of the run so far. Sent when the panel opens while a run has steps, and without steps when the debug
+   * session restarts.
+   */
   | { type: 'history'; snapshots: MemorySnapshot[]; sessionId: string }
   | { type: 'status'; state: Exclude<ProgramState, 'paused'>; text: string }
   /** The frame selected in the VS Code Call Stack view. */

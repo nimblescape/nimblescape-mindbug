@@ -3,6 +3,21 @@
 Each section lists the changes of one released version. The release workflow
 takes the section of a version as the notes of its GitHub release.
 
+## 0.1.3
+
+**No return value in a constructor.** When you step to the end of a
+constructor, the scope of the constructor shows no return value. Before, it
+showed "Return value" with `undefined`, or with the new object in a subclass,
+although `new` gives the new object and not a value of the constructor. A
+function still shows its return value.
+
+**A restart starts a new step history.** **Restart** (Ctrl+Shift+F5) of the
+debugger removes the steps of the earlier run, and the steps of the new run
+count from 1. Before, the step history kept the steps of the earlier run, and
+the new run counted on from the last step. Also, when VS Code reported the
+end of the earlier run late, the view showed "The program has ended." while
+the new run was paused, and left out that step.
+
 ## 0.1.2
 
 **Step history.** When the view shows an earlier step, the editor writes the

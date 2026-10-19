@@ -23,6 +23,15 @@ import { MemoryPanel } from './panel.ts';
 const RUN_COMMANDS = new Set(['continue', 'next', 'stepIn', 'stepOut', 'stepBack', 'reverseContinue', 'goto', 'restartFrame']);
 
 /**
+ * True for a request that restarts the debug session: the request `restart`, or, for a debug adapter without it, the
+ * requests `disconnect` and `terminate` with `restart: true`, after which VS Code starts the session again.
+ */
+function isRestart(m: any): boolean {
+  if (m?.command === 'restart') return true;
+  return (m?.command === 'disconnect' || m?.command === 'terminate') && m.arguments?.restart === true;
+}
+
+/**
  * The debug types of VS Code's JavaScript debugger for Node.js and Deno, whose sessions the view follows: "pwa-node"
  * (also the session of a configuration of type "mindbug", and the child session that runs the program), "node" and
  * "node-terminal" (the JavaScript Debug Terminal). The helper of src/heapWalker.ts is JavaScript, so the sessions of
@@ -37,7 +46,6 @@ interface PauseState {
 
 export class MemoryController implements vscode.Disposable {
   private panel: MemoryPanel | undefined;
-  private readonly steps = new Map<string, number>();
   private readonly autoOpened = new Set<string>();
   private paused: PauseState | undefined;
   private refreshSeq = 0;
@@ -45,8 +53,12 @@ export class MemoryController implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   /** The newest snapshot, for tests. */
   lastSnapshot: MemorySnapshot | undefined;
-  private lastSessionId = '';
-  /** All steps of the newest session, so that a panel that opens later has the whole history. */
+  /**
+   * The debug session that ran the program of the history: the session that paused, which is the child session of
+   * VS Code's JavaScript debugger. Undefined after a restart, until the new run pauses.
+   */
+  private lastSession: vscode.DebugSession | undefined;
+  /** All steps of the newest run of the program, so that a panel that opens later has the whole history. */
   private history: MemorySnapshot[] = [];
   /** The last status message (running, ended, error), sent again to a panel that opens later. */
   private lastStatus: ToWebview | undefined;
@@ -95,7 +107,9 @@ export class MemoryController implements vscode.Disposable {
       createDebugAdapterTracker: (session) => ({
         onDidSendMessage: (m: any) => this.onAdapterMessage(session, m),
         onWillReceiveMessage: (m: any) => {
-          if (m?.type === 'request' && RUN_COMMANDS.has(m.command)) this.onRunning(session);
+          if (m?.type !== 'request') return;
+          if (RUN_COMMANDS.has(m.command)) this.onRunning(session);
+          if (isRestart(m)) this.onRestart(session);
         },
       }),
     };
@@ -141,7 +155,7 @@ export class MemoryController implements vscode.Disposable {
         this.shownOptions,
       );
       if (this.history.length > 0) {
-        this.post({ type: 'history', snapshots: this.history, sessionId: this.lastSessionId });
+        this.post({ type: 'history', snapshots: this.history, sessionId: this.lastSession?.id ?? '' });
       }
       if (this.lastStatus) this.post(this.lastStatus);
     }
@@ -152,6 +166,11 @@ export class MemoryController implements vscode.Disposable {
         this.scheduleRefresh();
       }
     }
+  }
+
+  /** The step numbers of the history (for tests). */
+  historySteps(): number[] {
+    return this.history.map((s) => s.step);
   }
 
   /** Waits for the next snapshot (for tests). */
@@ -345,12 +364,33 @@ export class MemoryController implements vscode.Disposable {
     }
   }
 
+  /**
+   * The end of the session of the program, or of one of its parent sessions, ends the program. After a restart, VS Code
+   * can report the end of the session of the earlier run late, while the new run is already paused: that end does not
+   * count.
+   */
   private onTerminated(session: vscode.DebugSession): void {
-    if (this.paused?.session.id === session.id || this.lastSessionId === rootId(session)) {
-      this.paused = undefined;
-      this.refreshSeq++;
-      this.post({ type: 'status', state: 'ended', text: 'The program has ended.' });
-    }
+    const current = this.paused?.session ?? this.lastSession;
+    if (!current || !isSessionOrParent(session, current)) return;
+    this.paused = undefined;
+    this.refreshSeq++;
+    this.post({ type: 'status', state: 'ended', text: 'The program has ended.' });
+  }
+
+  /**
+   * A restart runs the program again from its start, so the steps of the earlier run go away at once, and the steps of
+   * the new run count from 1. VS Code sends the restart to the top-level session; VS Code's JavaScript debugger then
+   * ends the child session of the earlier run and starts a new child session.
+   */
+  private onRestart(session: vscode.DebugSession): void {
+    const current = this.paused?.session ?? this.lastSession;
+    if (!current || rootId(current) !== rootId(session)) return;
+    this.paused = undefined;
+    this.refreshSeq++;
+    this.lastSession = undefined;
+    this.history = [];
+    this.onViewStep(undefined);
+    this.post({ type: 'history', snapshots: [], sessionId: '' });
   }
 
   private scheduleRefresh(): void {
@@ -372,8 +412,9 @@ export class MemoryController implements vscode.Disposable {
     const pause = this.paused;
     if (!pause) return;
     const seq = ++this.refreshSeq;
-    const sessionKey = rootId(pause.session);
-    const step = (this.steps.get(sessionKey) ?? 0) + 1;
+    // The steps count the pauses of one run of the program, which is one session of the JavaScript debugger.
+    const sameRun = this.lastSession?.id === pause.session.id;
+    const step = sameRun ? (this.history[this.history.length - 1]?.step ?? 0) + 1 : 1;
     try {
       const snapshot = await collectSnapshot(
         { request: (command, args) => Promise.resolve(pause.session.customRequest(command, args)) },
@@ -382,18 +423,17 @@ export class MemoryController implements vscode.Disposable {
         { limits: this.limits() },
       );
       if (seq !== this.refreshSeq) return; // the program moved on; this result is old
-      this.steps.set(sessionKey, step);
       this.lastSnapshot = snapshot;
-      if (this.lastSessionId !== sessionKey) {
-        // A new session starts a new history, and the view shows its newest step.
+      if (!sameRun) {
+        // A new run starts a new history, and the view shows its newest step.
         this.history = [];
         this.viewedStep = undefined;
       }
-      this.lastSessionId = sessionKey;
+      this.lastSession = pause.session;
       this.history.push(snapshot);
       const max = this.maxSteps();
       if (this.history.length > max) this.history.splice(0, this.history.length - max);
-      this.post({ type: 'snapshot', snapshot, sessionId: sessionKey });
+      this.post({ type: 'snapshot', snapshot, sessionId: pause.session.id });
       // The view stays at an earlier step; the text at its line names the new newest step.
       this.markViewedStep();
       this.postFocusFrame();
@@ -418,13 +458,21 @@ export class MemoryController implements vscode.Disposable {
 }
 
 /**
- * VS Code's JavaScript debugger starts a parent session and a child session for the program.
- * Steps are counted per top-level session, so a restart starts a new history.
+ * VS Code's JavaScript debugger starts a parent session and a child session for the program. The view opens by itself
+ * once for each top-level session, and VS Code sends a restart to the top-level session.
  */
 function rootId(session: vscode.DebugSession): string {
   let s: vscode.DebugSession = session;
   while (s.parentSession) s = s.parentSession;
   return s.id;
+}
+
+/** True when `ancestor` is `session` or one of its parent sessions. */
+function isSessionOrParent(ancestor: vscode.DebugSession, session: vscode.DebugSession): boolean {
+  for (let s: vscode.DebugSession | undefined = session; s; s = s.parentSession) {
+    if (s.id === ancestor.id) return true;
+  }
+  return false;
 }
 
 function sameFile(uri: vscode.Uri, file: string): boolean {
