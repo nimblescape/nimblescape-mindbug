@@ -317,10 +317,10 @@ async function callStack(api: MindbugApi, start: Start): Promise<void> {
   await stop();
 }
 
-/** Steps over one line and returns the snapshot of the next pause. */
-async function stepOver(api: MindbugApi): Promise<MemorySnapshot> {
+/** Runs Step Over or Step Into and returns the snapshot of the next pause. */
+async function step(api: MindbugApi, command: 'stepOver' | 'stepInto'): Promise<MemorySnapshot> {
   const next = api.nextSnapshot(TIMEOUT);
-  await vscode.commands.executeCommand('workbench.action.debug.stepOver');
+  await vscode.commands.executeCommand(`workbench.action.debug.${command}`);
   return next;
 }
 
@@ -331,7 +331,7 @@ async function returnValues(api: MindbugApi, start: Start): Promise<void> {
   // gets: `new` gives the new object. The view shows no return value there.
   let s = await runToLine(api, file, 24);
   for (const line of [25, 26]) {
-    s = await stepOver(api);
+    s = await step(api, 'stepOver');
     assert.equal(top(s)?.line, line);
   }
   assert.equal(top(s).name, 'Book.constructor');
@@ -341,10 +341,31 @@ async function returnValues(api: MindbugApi, start: Start): Promise<void> {
     ['pages', 'this', 'title'],
   );
   // At the return of createBook, the view shows the return value of the function.
-  s = await stepOver(api);
+  s = await step(api, 'stepOver');
   assert.equal(top(s).name, 'createBook');
   assert.equal(top(s).line, 31);
   assert.ok(top(s).vars.some((v) => v.name === 'Return value'), 'createBook has a return value');
+  await stop();
+}
+
+async function fieldSetup(api: MindbugApi, start: Start): Promise<void> {
+  const file = path.join(examples(), 'people.ts');
+  await debug(api, start, file, [47]);
+  await runToLine(api, file, 47);
+  // Step Into new Person(...) pauses in the function of V8 that sets up the field bestFriend. Node.js 22 stopped with
+  // a fatal error of V8 when Mindbug evaluated code in that frame; its `this` comes from the constructor.
+  const s = await step(api, 'stepInto');
+  assert.deepEqual(
+    s.frames.map((f) => f.name),
+    ['Global scope', 'Person.constructor', 'Person (set up fields)'],
+  );
+  assert.equal(top(s).line, 23);
+  const self = idOf(variable(s, 'Person (set up fields)', 'this'));
+  assert.equal(idOf(variable(s, 'Person.constructor', 'this')), self);
+  assert.equal(s.objects[self].type, 'Person');
+  // The program still runs.
+  const next = await step(api, 'stepInto');
+  assert.ok(['Person (set up fields)', 'Person.constructor'].includes(top(next).name), top(next).name);
   await stop();
 }
 
@@ -352,8 +373,8 @@ async function restart(api: MindbugApi, start: Start): Promise<void> {
   const file = path.join(examples(), 'return-object.ts');
   const entry = await debug(api, start, file, []);
   assert.equal(entry.step, 1);
-  await stepOver(api);
-  await stepOver(api);
+  await step(api, 'stepOver');
+  await step(api, 'stepOver');
   assert.deepEqual(api.historySteps(), [1, 2, 3]);
   // A restart runs the program again: the steps of the earlier run go away, and the steps count from 1 again.
   const first = api.nextSnapshot(TIMEOUT);
@@ -362,7 +383,7 @@ async function restart(api: MindbugApi, start: Start): Promise<void> {
   assert.equal(again.step, 1, 'the first pause after the restart is step 1');
   assert.deepEqual(api.historySteps(), [1], 'the history has only the step of the new run');
   // The end of the earlier run, which VS Code can report late, does not stop the new run.
-  const next = await stepOver(api);
+  const next = await step(api, 'stepOver');
   assert.equal(next.step, 2);
   assert.deepEqual(api.historySteps(), [1, 2]);
   await stop();
@@ -435,6 +456,7 @@ describe('the Mindbug view in VS Code', () => {
       it('shows classes, static variables and the scopes of constructors and methods', () => people(api, start));
       it('shows a call stack of several functions that share the objects on the heap', () => callStack(api, start));
       it('shows no return value in a constructor, and the return value of a function', () => returnValues(api, start));
+      it('steps into the set-up of the fields of a new object', () => fieldSetup(api, start));
       it('starts a new step history when the debug session restarts', () => restart(api, start));
     });
   }
