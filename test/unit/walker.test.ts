@@ -7,10 +7,26 @@
 
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { DEFAULT_LIMITS, frameExpression, installExpression, isIdentifier, type WalkerResult } from '../../src/heapWalker.ts';
+import {
+  DEFAULT_LIMITS,
+  frameExpression,
+  GLOBAL_NAME,
+  installExpression,
+  isIdentifier,
+  NOT_INSTALLED,
+  type WalkerResult,
+} from '../../src/heapWalker.ts';
 import type { HeapObject } from '../../src/model.ts';
+import { parseFrameResult } from '../../src/snapshot.ts';
 
 (0, eval)(installExpression());
+
+/** The result of a frame expression ("<length>:<JSON text>"). */
+function parsed(text: string): WalkerResult {
+  const read = parseFrameResult(text);
+  assert.ok(read?.result, 'a complete result');
+  return read.result;
+}
 
 function byId(r: WalkerResult): Record<number, HeapObject> {
   return Object.fromEntries(r.objects.map((o) => [o.id, o]));
@@ -26,11 +42,54 @@ test('install is done once per version', () => {
   assert.equal((0, eval)(installExpression()), 'ready');
 });
 
+test('without the walker, the frame expression says so, and reads no variable', () => {
+  const g = globalThis as Record<string, unknown>;
+  const api = g[GLOBAL_NAME];
+  // A global variable whose read can be counted.
+  let reads = 0;
+  Object.defineProperty(g, 'mindbugProbe', {
+    get: () => ++reads,
+    configurable: true,
+  });
+  try {
+    delete g[GLOBAL_NAME];
+    assert.equal(eval(frameExpression(['mindbugProbe'], DEFAULT_LIMITS)), NOT_INSTALLED);
+    // A walker of another version is not used either.
+    g[GLOBAL_NAME] = { version: 1 };
+    assert.equal(eval(frameExpression(['mindbugProbe'], DEFAULT_LIMITS)), NOT_INSTALLED);
+    assert.equal(reads, 0);
+    Object.defineProperty(g, GLOBAL_NAME, { value: api, configurable: true, writable: true, enumerable: false });
+    assert.deepEqual(parsed(eval(frameExpression(['mindbugProbe'], DEFAULT_LIMITS))).vars, [
+      { name: 'mindbugProbe', value: { k: 'num', v: '1' } },
+    ]);
+  } finally {
+    Object.defineProperty(g, GLOBAL_NAME, { value: api, configurable: true, writable: true, enumerable: false });
+    delete g.mindbugProbe;
+  }
+});
+
+test('the result has its length in front, and its parts give the whole text, also across a surrogate pair', () => {
+  const words = ['😀😀😀', 'ä'.repeat(7)];
+  const text: string = eval(frameExpression(['words'], DEFAULT_LIMITS, 4));
+  const read = parseFrameResult(text);
+  assert.ok(read?.result);
+  assert.equal(`${read.length}:`.length + read.length, text.length);
+  // The debugger keeps the start of a long text, and the end: the length shows that the middle is missing.
+  const json = text.slice(text.indexOf(':') + 1);
+  assert.deepEqual(parseFrameResult(`${read.length}:${json.slice(0, 20)}${json.slice(-20)}`), { length: read.length, result: undefined });
+  const api = (globalThis as any)[GLOBAL_NAME];
+  for (const size of [1, 7, 100]) {
+    let whole = '';
+    for (let i = 0; i * size < read.length; i++) whole += JSON.parse(api.chunk(4, i, size));
+    assert.equal(whole, json, `parts of ${size} characters`);
+  }
+});
+
 test('two variables that point to the same array get the same id, also in the next step', () => {
   const arr = [3, 1, 2];
   const alias = arr;
   const other = [3, 1, 2];
-  const read = (): WalkerResult => JSON.parse(eval(frameExpression(['arr', 'alias', 'other'], DEFAULT_LIMITS)));
+  const read = (): WalkerResult => parsed(eval(frameExpression(['arr', 'alias', 'other'], DEFAULT_LIMITS)));
   const first = read();
   const a = varOf(first, 'arr');
   assert.equal(a.k, 'ref');
@@ -51,9 +110,7 @@ test('values: numbers, strings, holes, map, set, cut strings', () => {
   const sparse = [1, , 3];
   const scores = new Map([['ann', 3]]);
   const tags = new Set(['a']);
-  const r: WalkerResult = JSON.parse(
-    eval(frameExpression(['values', 'sparse', 'scores', 'tags'], { ...DEFAULT_LIMITS, str: 10 })),
-  );
+  const r = parsed(eval(frameExpression(['values', 'sparse', 'scores', 'tags'], { ...DEFAULT_LIMITS, str: 10 })));
   const objs = byId(r);
   const v = objs[(varOf(r, 'values') as { id: number }).id];
   const field = (n: string) => v.fields!.find((f) => f.name === n)!.value;
@@ -77,14 +134,14 @@ test('getters are not called', () => {
       return 1;
     },
   };
-  const r: WalkerResult = JSON.parse(eval(frameExpression(['obj'], DEFAULT_LIMITS)));
+  const r: WalkerResult = parsed(eval(frameExpression(['obj'], DEFAULT_LIMITS)));
   assert.equal(calls, 0);
   const o = byId(r)[(varOf(r, 'obj') as { id: number }).id];
   assert.deepEqual(o.fields![0].value, { k: 'accessor', get: true, set: false });
 });
 
 test('a let before its declaration is uninitialized', () => {
-  const read = () => JSON.parse(eval(frameExpression(['later'], DEFAULT_LIMITS))) as WalkerResult;
+  const read = () => parsed(eval(frameExpression(['later'], DEFAULT_LIMITS))) as WalkerResult;
   const r = read();
   let later = 5;
   assert.deepEqual(varOf(r, 'later'), { k: 'uninit' });
@@ -118,7 +175,7 @@ test('classes: static variables, attributes, methods, superclass, and the class 
   }
   const ann = new Person('Ann');
   const bob = new Student('Bob');
-  const r: WalkerResult = JSON.parse(eval(frameExpression(['ann', 'bob'], DEFAULT_LIMITS)));
+  const r: WalkerResult = parsed(eval(frameExpression(['ann', 'bob'], DEFAULT_LIMITS)));
   const objs = byId(r);
   const annObj = objs[(varOf(r, 'ann') as { id: number }).id];
   const bobObj = objs[(varOf(r, 'bob') as { id: number }).id];
@@ -149,7 +206,7 @@ test('classes: static variables, attributes, methods, superclass, and the class 
 test('a class without declared fields lists the attributes that the code assigns', () => {
   const Point = (0, eval)('(class Point { constructor(x, y) { this.x = x; this.y = y; } move() { this.x += 1; } })');
   const p = new Point(1, 2);
-  const r: WalkerResult = JSON.parse(eval(frameExpression(['p'], DEFAULT_LIMITS)));
+  const r: WalkerResult = parsed(eval(frameExpression(['p'], DEFAULT_LIMITS)));
   const objs = byId(r);
   const cls = objs[objs[(varOf(r, 'p') as { id: number }).id].cls!];
   assert.deepEqual(cls.attrs, ['x', 'y']);
@@ -166,7 +223,7 @@ test('field declarations with strings, arrow functions and comments are read cor
     method() { const e = 1; return e; }
   })`);
   const o = new Odd();
-  const r: WalkerResult = JSON.parse(eval(frameExpression(['o'], DEFAULT_LIMITS)));
+  const r: WalkerResult = parsed(eval(frameExpression(['o'], DEFAULT_LIMITS)));
   const objs = byId(r);
   const cls = objs[objs[(varOf(r, 'o') as { id: number }).id].cls!];
   assert.deepEqual(cls.attrs, ['a', 'handler', 'quoted', 'd']);
@@ -175,7 +232,7 @@ test('field declarations with strings, arrow functions and comments are read cor
 test('plain objects and arrays have no class', () => {
   const plain = { a: 1 };
   const list = [1];
-  const r: WalkerResult = JSON.parse(eval(frameExpression(['plain', 'list'], DEFAULT_LIMITS)));
+  const r: WalkerResult = parsed(eval(frameExpression(['plain', 'list'], DEFAULT_LIMITS)));
   for (const o of r.objects) assert.equal(o.cls, undefined);
 });
 

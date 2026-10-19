@@ -4,7 +4,8 @@
 
 // A small stand-in for VS Code's JavaScript debugger (js-debug): it answers the four
 // Debug Adapter Protocol requests that the collector uses, from a paused V8 inspector.
-// Scope names follow js-debug ("Local: fn", "Block", "Closure (fn)", "Module", "Global").
+// Scope names follow js-debug ("Local: fn", "Block", "Closure (fn)", "Module", "Global"), and the results of
+// `evaluate` follow js-debug 1.140 (see `evaluate` below).
 
 import { fileURLToPath } from 'node:url';
 import type { DapClient } from '../../src/snapshot.ts';
@@ -35,6 +36,68 @@ function frameLabel(cf: PausedEvent['callFrames'][number]): string {
   if (fn === cls) return `${fn}.constructor`;
   if (fn.includes('.')) return fn;
   return `${cls}.${fn}`;
+}
+
+/**
+ * The text of a string result as js-debug gives it without a context: at most 100,000 characters, with "…" in the
+ * middle of a longer string, in the quotes that the string does not hold.
+ */
+function jsDebugString(value: string): string {
+  const budget = 1e5 - 2;
+  let s = value;
+  if (s.length > budget) {
+    let head = budget >> 1;
+    let tail = budget - head - 1;
+    const atTail = s.codePointAt(s.length - tail - 1);
+    if (atTail && atTail >= 0x10000) {
+      tail--;
+      head++;
+    }
+    const atHead = s.codePointAt(head - 1);
+    if (head > 0 && atHead && atHead >= 0x10000) head--;
+    s = s.slice(0, head) + '…' + s.slice(s.length - tail);
+  }
+  const q = s.includes("'") ? (s.includes('"') ? (s.includes('`') ? "'" : '`') : '"') : "'";
+  return q + s.replace(new RegExp(`[${q}\\\\]`, 'g'), '\\$&') + q;
+}
+
+/**
+ * The expression that js-debug evaluates for the context "clipboard": it puts the text into a function of its own,
+ * whose variables t, e, r, n, i and o hide the variables of the program, and turns the value into text.
+ */
+function clipboardExpression(expression: string): string {
+  return (
+    `(()=>{let t=${expression};let e=2;let r=" ".repeat(e),n="\\n";function i(s){return undefined}` +
+    'function o(s){return typeof s==="string"?JSON.stringify(s):String(s)}try{return o(t)}catch{return""+t}})();'
+  );
+}
+
+/**
+ * Answers the requests of the collector in rounds, as a remote window does: the requests that the collector sends
+ * before it waits for an answer form one round, and their answers come back together. `rounds` counts the rounds.
+ */
+export class RoundCounter implements DapClient {
+  rounds = 0;
+  private queue: { command: string; args?: object; resolve: (v: any) => void; reject: (e: unknown) => void }[] = [];
+  private readonly dap: DapClient;
+
+  constructor(dap: DapClient) {
+    this.dap = dap;
+  }
+
+  request(command: string, args?: object): Promise<any> {
+    return new Promise((resolve, reject) => {
+      if (this.queue.length === 0) setTimeout(() => void this.answer(), 0);
+      this.queue.push({ command, args, resolve, reject });
+    });
+  }
+
+  private async answer(): Promise<void> {
+    const round = this.queue.splice(0);
+    this.rounds++;
+    const results = await Promise.allSettled(round.map((r) => this.dap.request(r.command, r.args)));
+    results.forEach((res, i) => (res.status === 'fulfilled' ? round[i].resolve(res.value) : round[i].reject(res.reason)));
+  }
 }
 
 export class FakeDap implements DapClient {
@@ -96,17 +159,18 @@ export class FakeDap implements DapClient {
       }
       case 'evaluate': {
         const cf = this.paused.callFrames[args.frameId];
+        const clipboard = args.context === 'clipboard';
         const res = await this.inspector.send('Debugger.evaluateOnCallFrame', {
           callFrameId: cf.callFrameId,
-          expression: args.expression,
+          expression: clipboard ? clipboardExpression(args.expression) : args.expression,
         });
         if (res.exceptionDetails) {
           throw new Error(res.exceptionDetails.exception?.description ?? res.exceptionDetails.text);
         }
         const r = res.result;
         if (r.type === 'string') {
-          // js-debug returns strings without quotes for the "clipboard" context.
-          return { result: args.context === 'clipboard' ? r.value : JSON.stringify(r.value) };
+          // For the context "clipboard", the text of the value comes as it is, without a limit.
+          return { result: clipboard ? r.value : jsDebugString(r.value) };
         }
         return { result: r.description ?? String(r.value) };
       }

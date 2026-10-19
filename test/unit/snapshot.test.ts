@@ -195,7 +195,8 @@ test('a constructor shows no return value, a function shows its return value; no
           const value = (name: string): Value =>
             name === 'this' && !self ? { k: 'undef' } : (readable[name] ?? { k: 'unavail', v: `${name} is not defined` });
           const vars = names.map((name) => ({ name, value: value(name) }));
-          return { result: JSON.stringify({ v: 1, vars, objects, missing: [] }) };
+          const json = JSON.stringify({ v: 1, vars, objects, missing: [] });
+          return { result: `${json.length}:${json}` };
         }
         throw new Error('not in this test');
       },

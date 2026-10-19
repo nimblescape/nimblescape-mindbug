@@ -15,7 +15,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectSnapshot } from '../../src/snapshot.ts';
 import type { MemorySnapshot, Value } from '../../src/model.ts';
-import { FakeDap } from './fakeDap.ts';
+import { DEFAULT_LIMITS } from '../../src/heapWalker.ts';
+import { FakeDap, RoundCounter } from './fakeDap.ts';
 import { DenoInspector } from './inspector.ts';
 
 const deno = process.env.DENO_PATH ?? 'deno';
@@ -23,19 +24,33 @@ const hasDeno = spawnSync(deno, ['--version']).status === 0;
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 let port = 9400;
 
-/** Runs a fixture and returns a snapshot at each `debugger;` statement. */
-async function pauses(name: string, count: number): Promise<MemorySnapshot[]> {
+/**
+ * Runs a fixture and returns a snapshot at each `debugger;` statement, with the number of rounds of requests that it
+ * needed. `steps` gives the number of the step of each pause (1, 2, 3, … by default).
+ */
+async function pausesWithRounds(
+  name: string,
+  count: number,
+  options: { steps?: number[]; limits?: typeof DEFAULT_LIMITS } = {},
+): Promise<{ snapshot: MemorySnapshot; rounds: number }[]> {
   const insp = await DenoInspector.start(deno, join(fixtures, name), port++);
-  const out: MemorySnapshot[] = [];
+  const out: { snapshot: MemorySnapshot; rounds: number }[] = [];
   try {
     for (let i = 0; i < count; i++) {
       const ev = await insp.resumeToNextPause();
-      out.push(await collectSnapshot(new FakeDap(insp, ev), 1, i + 1));
+      const dap = new RoundCounter(new FakeDap(insp, ev));
+      const snapshot = await collectSnapshot(dap, 1, options.steps?.[i] ?? i + 1, { limits: options.limits });
+      out.push({ snapshot, rounds: dap.rounds });
     }
   } finally {
     await insp.close();
   }
   return out;
+}
+
+/** Runs a fixture and returns a snapshot at each `debugger;` statement. */
+async function pauses(name: string, count: number): Promise<MemorySnapshot[]> {
+  return (await pausesWithRounds(name, count)).map((p) => p.snapshot);
 }
 
 function variable(s: MemorySnapshot, frame: string, name: string): Value {
@@ -111,4 +126,48 @@ test.skipIf(!hasDeno)('classes: class boxes with static variables, attributes, m
     ['this'],
     "the class's own name binding is not shown as a variable of the method",
   );
+});
+
+test.skipIf(!hasDeno)('names: the variables t, e, r, n, i and o, in four rounds of requests for three scopes', async () => {
+  const [inLoop, atEnd] = await pausesWithRounds('names.ts', 2);
+  assert.deepEqual(
+    inLoop.snapshot.frames.map((f) => f.name),
+    ['Global scope', 'outer', 'inner'],
+  );
+  assert.deepEqual(variable(inLoop.snapshot, 'outer', 't'), { k: 'str', v: 'tea' });
+  assert.deepEqual(variable(inLoop.snapshot, 'outer', 'e'), { k: 'str', v: 'tea!' });
+  assert.deepEqual(variable(inLoop.snapshot, 'inner', 'o'), { k: 'str', v: 'tea!' });
+  assert.deepEqual(variable(inLoop.snapshot, 'inner', 'i'), { k: 'num', v: '1' });
+  assert.deepEqual(variable(inLoop.snapshot, 'inner', 'r'), { k: 'num', v: '10' });
+  const n = inLoop.snapshot.objects[idOf(variable(inLoop.snapshot, 'inner', 'n'))];
+  assert.deepEqual(
+    n.fields?.map((f) => [f.name, f.value]),
+    [
+      ['o', { k: 'str', v: 'tea!' }],
+      ['r', { k: 'num', v: '10' }],
+    ],
+  );
+  // The stack trace, the scopes of the three frames (the first step also installs the heap walker), their variables,
+  // and the heap walker in the three frames.
+  assert.equal(inLoop.rounds, 4);
+  assert.equal(atEnd.rounds, 4);
+  assert.equal(inLoop.snapshot.fallback, false);
+});
+
+test.skipIf(!hasDeno)('a new program in the same session: the heap walker is installed when it is missing', async () => {
+  // A step after the first one, as after a restart of the program in the same debug session.
+  const [first] = await pausesWithRounds('names.ts', 1, { steps: [5] });
+  assert.deepEqual(variable(first.snapshot, 'inner', 'i'), { k: 'num', v: '1' });
+  assert.equal(first.snapshot.fallback, false);
+  // Four rounds, then the install, then the heap walker again.
+  assert.equal(first.rounds, 6);
+});
+
+test.skipIf(!hasDeno)('a result longer than the debugger gives back is read in parts', async () => {
+  const [s] = await pausesWithRounds('long.ts', 1, { limits: { ...DEFAULT_LIMITS, str: 2000 } });
+  const words = s.snapshot.objects[idOf(variable(s.snapshot, 'Global scope', 'words'))];
+  assert.equal(words.items?.length, 100);
+  words.items!.forEach((item, i) => assert.deepEqual(item, { k: 'str', v: `${i}:` + 'ä😀'.repeat(400) }));
+  // Four rounds, then all parts of the text at the same time.
+  assert.equal(s.rounds, 5);
 });
