@@ -8,6 +8,7 @@
 // checks run for each way to start a program (STARTS): the view must not depend on the runtime.
 
 import * as assert from 'node:assert/strict';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import type { MindbugApi } from '../../src/extension.ts';
@@ -389,6 +390,57 @@ async function restart(api: MindbugApi, start: Start): Promise<void> {
   await stop();
 }
 
+/**
+ * A program with variables named t, e, r, n, i and o. VS Code's JavaScript debugger has variables with these names in
+ * the function that it builds for an evaluate with the context "clipboard", which hid the variables of the program.
+ * The test writes it into the folder of the examples: the JavaScript debugger uses the source maps of the TypeScript
+ * files only in the workspace folder, so a breakpoint in a file elsewhere does not stop Deno or Node.js.
+ */
+const NAMES_PROGRAM = `// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
+function inner(o: string): string {
+  for (let i = 0; i < 2; i++) {
+    const r = i * 10;
+    const n = { o, r };
+    console.log(n);
+  }
+  return o;
+}
+
+function outer(t: string): string {
+  const e = t + '!';
+  return inner(e);
+}
+
+outer('tea');
+`;
+
+async function names(api: MindbugApi, start: Start): Promise<void> {
+  const file = path.join(examples(), 'names-test.ts');
+  fs.writeFileSync(file, NAMES_PROGRAM);
+  try {
+    await debug(api, start, file, [9]);
+    const s = await runToLine(api, file, 9);
+    assert.deepEqual(
+      s.frames.map((f) => f.name),
+      ['Global scope', 'outer', 'inner'],
+    );
+    assert.deepEqual(variable(s, 'outer', 't'), { k: 'str', v: 'tea' });
+    assert.deepEqual(variable(s, 'outer', 'e'), { k: 'str', v: 'tea!' });
+    assert.deepEqual(variable(s, 'inner', 'o'), { k: 'str', v: 'tea!' });
+    assert.deepEqual(variable(s, 'inner', 'i'), { k: 'num', v: '0' });
+    assert.deepEqual(variable(s, 'inner', 'r'), { k: 'num', v: '0' });
+    const n = s.objects[idOf(variable(s, 'inner', 'n'))];
+    assert.deepEqual(n.fields?.map((f) => f.name), ['o', 'r']);
+    await stop();
+  } finally {
+    await closeTextEditors();
+    fs.rmSync(file, { force: true });
+  }
+}
+
 describe('the Mindbug view in VS Code', () => {
   let api: MindbugApi;
 
@@ -458,6 +510,7 @@ describe('the Mindbug view in VS Code', () => {
       it('shows no return value in a constructor, and the return value of a function', () => returnValues(api, start));
       it('steps into the set-up of the fields of a new object', () => fieldSetup(api, start));
       it('starts a new step history when the debug session restarts', () => restart(api, start));
+      it('reads the variables named t, e, r, n, i and o', () => names(api, start));
     });
   }
 });

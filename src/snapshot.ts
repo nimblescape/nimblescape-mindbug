@@ -13,6 +13,7 @@ import {
   GLOBAL_NAME,
   installExpression,
   isIdentifier,
+  NOT_INSTALLED,
   type WalkerLimits,
   type WalkerResult,
 } from './heapWalker.ts';
@@ -246,7 +247,7 @@ export function unquote(text: string): string {
   });
 }
 
-/** Parses the heap walker result. Accepts raw JSON text or a quoted string that holds it. */
+/** Parses the JSON text of a heap walker result. Accepts raw JSON text or a quoted string that holds it. */
 export function parseWalkerResult(text: string): WalkerResult | undefined {
   for (const candidate of [text, unquote(text)]) {
     try {
@@ -261,6 +262,19 @@ export function parseWalkerResult(text: string): WalkerResult | undefined {
   return undefined;
 }
 
+/**
+ * Parses the result of a frame expression, "<length>:<JSON text>" (see `end` in src/heapWalker.ts), raw or in the
+ * quotes of the debugger. `result` is missing when the JSON text is shorter than `length`: the debugger shortened it.
+ */
+export function parseFrameResult(text: string): { length: number; result?: WalkerResult } | undefined {
+  const t = unquote(text);
+  const m = /^(\d+):/.exec(t);
+  if (!m) return undefined;
+  const length = Number(m[1]);
+  const json = t.slice(m[0].length);
+  return { length, result: json.length === length ? parseWalkerResult(json) : undefined };
+}
+
 function baseName(path: string): string {
   const parts = path.split(/[\\/]/);
   return parts[parts.length - 1] || path;
@@ -270,6 +284,24 @@ interface ScopeVars {
   kind: ScopeKind;
   vars: DapVariable[];
 }
+
+/** A variable of a frame in the order of the view, with the name and the value that the debugger gives it. */
+interface DisplayVar {
+  name: string;
+  scope: ScopeKind;
+  dap: DapVariable;
+}
+
+/** A frame with the names of its variables, before the heap walker reads their values. */
+interface FrameNames {
+  frame: Frame;
+  display: DisplayVar[];
+  /** The names that an expression can read. */
+  readable: string[];
+}
+
+/** What the heap walker read in a frame: its result, an error, or nothing because it is not installed. */
+type FrameRead = { result: WalkerResult } | { error: string } | { notInstalled: true } | undefined;
 
 interface ReadFrame {
   frame: Frame;
@@ -284,6 +316,14 @@ interface ReadFrame {
 /**
  * Reads the stack and the heap of a paused thread.
  * `step` is the number of this pause in the debug session (used for change highlighting).
+ *
+ * The requests go out in rounds: all requests of a round at the same time, and the next round when their answers are
+ * back. In a remote window, each request goes from the extension host to the window and back to the debugger, and
+ * its answer takes the same way back, so the number of rounds, not the number of requests, sets the time of a step.
+ * A step needs four rounds, whatever the number of frames: the stack trace, the scopes of all frames, the variables of
+ * all scopes, and the heap walker in all frames. The first step of a session installs the walker in the round of the
+ * scopes; when the walker is missing at a later step (a new program in the same session), two more rounds install it
+ * and read the frames again.
  */
 export async function collectSnapshot(
   dap: DapClient,
@@ -313,30 +353,44 @@ export async function collectSnapshot(
   const top = userFrames[0];
   snapshot.location = top.source?.path ? `${baseName(top.source.path)}:${top.line}` : undefined;
 
-  // Install the heap walker (once per program run; later calls only check the version), in the newest frame where the
-  // helper can run.
+  // The newest frame where the helper can run.
   const helperFrame = userFrames.find((f) => !isFieldSetupFrame(f.name));
-  let walkerReady = helperFrame !== undefined;
-  try {
-    if (helperFrame) await dap.request('evaluate', { expression: installExpression(), frameId: helperFrame.id, context: 'clipboard' });
-  } catch {
-    walkerReady = false;
+  const install = async (): Promise<boolean> => {
+    if (!helperFrame) return false;
+    try {
+      await dap.request('evaluate', { expression: installExpression(), frameId: helperFrame.id });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  // The walker stays in the program until the program ends, so the first step of a session installs it.
+  const [scopes] = await Promise.all([
+    Promise.all(userFrames.map((f) => readScopes(dap, f.id))),
+    step === 1 ? install() : undefined,
+  ]);
+  const named = await Promise.all(userFrames.map((f, i) => readNames(dap, f, i === userFrames.length - 1, scopes[i])));
+  // The helper never runs in the frame that sets up the fields of a new object.
+  const walk = (i: number) => (isFieldSetupFrame(userFrames[i].name) ? undefined : walkFrame(dap, named[i], limits, i));
+  let reads = await Promise.all(named.map((_, i) => walk(i)));
+
+  const notInstalled = (r: FrameRead) => r !== undefined && 'notInstalled' in r;
+  if (reads.some(notInstalled) && (await install())) {
+    reads = await Promise.all(named.map((_, i) => (notInstalled(reads[i]) ? walk(i) : reads[i])));
   }
-  snapshot.fallback = !walkerReady;
+  snapshot.fallback = !helperFrame || reads.some(notInstalled);
 
   const missing = new Set<number>();
-  const reads: ReadFrame[] = [];
-
-  for (let index = 0; index < userFrames.length; index++) {
-    const f = userFrames[index];
-    const isLast = index === userFrames.length - 1;
-    const helperRuns = walkerReady && !isFieldSetupFrame(f.name);
-    reads.push(await readFrame(dap, f, isLast, helperRuns, limits, snapshot.objects, missing));
+  for (const r of reads) {
+    if (!r || !('result' in r)) continue;
+    for (const o of r.result.objects) snapshot.objects[o.id] = o;
+    for (const id of r.result.missing) missing.add(id);
   }
+  const frames = named.map((n, i) => withValues(n, reads[i], snapshot.objects));
 
   // Oldest frame first, like Python Tutor.
-  reads.reverse();
-  snapshot.frames = reads.map((r) => r.frame);
+  frames.reverse();
+  snapshot.frames = frames.map((r) => r.frame);
   // The names of constructors and methods need the classes on the heap, which all frames together have read.
   const names = userFrames.map((f) => f.name).reverse();
   snapshot.frames.forEach((frame, i) => {
@@ -350,7 +404,7 @@ export async function collectSnapshot(
     frame.name = frameLabel(names[i], self, snapshot.objects, snapshot.frames[i - 1]?.name);
     // At the end of a constructor, the debugger shows a return value (undefined, or the new object in a subclass),
     // which the program never gets: `new` gives the new object. So the view shows no return value there.
-    if (isClassSetup(frame.name)) frame.vars = frame.vars.filter((v) => !reads[i].notVariables.has(v.name));
+    if (isClassSetup(frame.name)) frame.vars = frame.vars.filter((v) => !frames[i].notVariables.has(v.name));
   });
   snapshot.missing = [...missing].filter((id) => !(id in snapshot.objects));
   return snapshot;
@@ -362,16 +416,13 @@ async function readScopes(dap: DapClient, frameId: number): Promise<{ cls: Scope
   return scopes.map((scope) => ({ cls: classifyScope(scope), scope }));
 }
 
-async function readFrame(
+/** Reads the variables of the scopes of a frame that the diagram shows, all scopes at the same time. */
+async function readNames(
   dap: DapClient,
   f: DapStackFrame,
   isLast: boolean,
-  walkerReady: boolean,
-  limits: WalkerLimits,
-  objects: Record<number, HeapObject>,
-  missing: Set<number>,
-): Promise<ReadFrame> {
-  const scopes = await readScopes(dap, f.id);
+  scopes: { cls: ScopeClass; scope: DapScope }[],
+): Promise<FrameNames> {
   const hasLocal = scopes.some((s) => s.cls === 'local');
   const hasModule = scopes.some((s) => s.cls === 'module');
   let isGlobal = !hasLocal && (hasModule || (isLast && ANONYMOUS.test(f.name.trim())));
@@ -393,22 +444,25 @@ async function readFrame(
     return true; // local, block, other
   };
 
-  const scopeVars: ScopeVars[] = [];
-  for (const { cls, scope } of scopes) {
-    const kind: ScopeClass = cls === 'other' ? 'block' : cls;
-    if (!wanted(kind) || scope.variablesReference <= 0) continue;
-    try {
-      const res = await dap.request('variables', { variablesReference: scope.variablesReference });
-      scopeVars.push({ kind, vars: res?.variables ?? [] });
-    } catch {
-      frame.note = 'Some variables could not be read.';
-    }
-  }
+  const read = await Promise.all(
+    scopes.map(async ({ cls, scope }): Promise<ScopeVars | undefined> => {
+      const kind: ScopeClass = cls === 'other' ? 'block' : cls;
+      if (!wanted(kind) || scope.variablesReference <= 0) return undefined;
+      try {
+        const res = await dap.request('variables', { variablesReference: scope.variablesReference });
+        return { kind, vars: res?.variables ?? [] };
+      } catch {
+        frame.note = 'Some variables could not be read.';
+        return undefined;
+      }
+    }),
+  );
+  const scopeVars = read.filter((sv) => sv !== undefined);
 
   // DAP lists scopes from the innermost to the outermost. The innermost name wins
   // (this is also what an expression in this frame sees).
   const seen = new Set<string>();
-  let ordered: { name: string; scope: ScopeKind; dap: DapVariable }[] = [];
+  let ordered: DisplayVar[] = [];
   for (const sv of scopeVars) {
     for (const v of sv.vars) {
       if (seen.has(v.name)) continue;
@@ -442,20 +496,28 @@ async function readFrame(
   if (thisIndex > 0) display.unshift(...display.splice(thisIndex, 1));
 
   const readable = display.filter((o) => isIdentifier(o.name)).map((o) => o.name);
-  let walked: WalkerResult | undefined;
-  if (walkerReady && readable.length > 0) {
-    try {
-      walked = await evaluateFrame(dap, f.id, readable, limits);
-    } catch (e) {
-      frame.note = `The heap could not be read in this scope: ${e instanceof Error ? e.message : String(e)}`;
-    }
+  return { frame, display, readable };
+}
+
+/** Runs the heap walker in a frame. `key` is the number of the frame, for the parts of a long result. */
+async function walkFrame(dap: DapClient, named: FrameNames, limits: WalkerLimits, key: number): Promise<FrameRead> {
+  if (named.readable.length === 0) return undefined;
+  try {
+    const result = await evaluateFrame(dap, named.frame.frameId, named.readable, limits, key);
+    return result === NOT_INSTALLED ? { notInstalled: true } : { result };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/** The frame with the values of its variables. `objects` holds the heap objects that all frames together have read. */
+function withValues(named: FrameNames, read: FrameRead, objects: Record<number, HeapObject>): ReadFrame {
+  const { frame, display } = named;
+  if (read && 'error' in read) frame.note = `The heap could not be read in this scope: ${read.error}`;
 
   const walkedVars = new Map<string, Value>();
-  if (walked) {
-    for (const v of walked.vars) walkedVars.set(v.name, v.value);
-    for (const o of walked.objects) objects[o.id] = o;
-    for (const id of walked.missing) missing.add(id);
+  if (read && 'result' in read) {
+    for (const v of read.result.vars) walkedVars.set(v.name, v.value);
   }
 
   // The program cannot read a name that the debugger added: it is not an identifier, or the helper found no variable
@@ -489,42 +551,44 @@ async function readFrame(
   return { frame, notVariables };
 }
 
+/** The number of characters of the result text in one request of `evaluateFrame` when the debugger shortened it. */
+const CHUNK_SIZE = 20000;
+
+/**
+ * Evaluates the frame expression of the heap walker. No `context`: VS Code's JavaScript debugger then evaluates the
+ * text as it is, in the scope of the frame. For the context "clipboard", it puts the text into its own function,
+ * whose variables (`t`, `e`, `i`, `o` and others) hide the variables of the program with the same names. Without a
+ * context, it gives back a string of up to 100,000 characters in quotes, and shortens a longer string in the middle;
+ * the length in front of the result shows that, and the result is then read in parts.
+ */
 async function evaluateFrame(
   dap: DapClient,
   frameId: number,
   names: string[],
   limits: WalkerLimits,
-): Promise<WalkerResult> {
-  const res = await dap.request('evaluate', {
-    expression: frameExpression(names, limits),
-    frameId,
-    context: 'clipboard',
-  });
-  const text: string = res?.result ?? '';
-  const parsed = parseWalkerResult(text);
-  if (parsed) return parsed;
+  key: number,
+): Promise<WalkerResult | typeof NOT_INSTALLED> {
+  const evaluate = async (expression: string): Promise<string> =>
+    String((await dap.request('evaluate', { expression, frameId }))?.result ?? '');
+  const text = await evaluate(frameExpression(names, limits, key));
+  if (unquote(text) === NOT_INSTALLED) return NOT_INSTALLED;
+  const read = parseFrameResult(text);
+  if (read?.result) return read.result;
+  if (!read || read.length === 0) throw new Error('unexpected result from the heap walker');
 
-  // The debugger shortened the text. Read it again in small pieces.
-  const sizeRes = await dap.request('evaluate', {
-    expression: `globalThis.${GLOBAL_NAME}.size()`,
-    frameId,
-    context: 'clipboard',
-  });
-  const size = Number(unquote(String(sizeRes?.result ?? '0')));
-  if (!Number.isFinite(size) || size <= 0) {
-    throw new Error('unexpected result from the heap walker');
-  }
-  const chunkSize = 150;
-  let full = '';
-  for (let i = 0; i * chunkSize < size; i++) {
-    const part = await dap.request('evaluate', {
-      expression: `globalThis.${GLOBAL_NAME}.chunk(${i}, ${chunkSize})`,
-      frameId,
-      context: 'clipboard',
-    });
-    full += decodeURIComponent(unquote(String(part?.result ?? '')));
-  }
-  const again = parseWalkerResult(full);
+  // The debugger shortened the text. Read it again in parts, all parts at the same time.
+  const count = Math.ceil(read.length / CHUNK_SIZE);
+  const parts = await Promise.all(
+    Array.from({ length: count }, (_, i) => evaluate(`globalThis.${GLOBAL_NAME}.chunk(${key}, ${i}, ${CHUNK_SIZE})`)),
+  );
+  const full = parts
+    .map((part) => {
+      const value: unknown = JSON.parse(unquote(part));
+      if (typeof value !== 'string') throw new Error('unexpected part of the heap walker result');
+      return value;
+    })
+    .join('');
+  const again = full.length === read.length ? parseWalkerResult(full) : undefined;
   if (!again) throw new Error('the heap walker result could not be parsed');
   return again;
 }

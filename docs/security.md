@@ -53,7 +53,7 @@ What it does:
 
 - It defines one global property, `__mindbug`, which is not enumerable, so `Object.keys(globalThis)` and `for … in` do not show it; `Object.getOwnPropertyNames(globalThis)` does.
 - It gives each object a number in a `WeakMap`, so that it keeps no object alive: the garbage collection of the program works as without Mindbug.
-- It keeps the JSON text of its last result in `__mindbug.last`, until the next pause.
+- It keeps the JSON text of its last result for each scope in `__mindbug.texts`, until a later pause replaces it or the program ends.
 
 What it does not do:
 

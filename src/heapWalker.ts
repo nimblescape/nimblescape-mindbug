@@ -13,7 +13,7 @@
 
 import type { Value } from './model.ts';
 
-export const WALKER_VERSION = 2;
+export const WALKER_VERSION = 3;
 export const GLOBAL_NAME = '__mindbug';
 
 export interface WalkerLimits {
@@ -31,7 +31,7 @@ export const DEFAULT_LIMITS: WalkerLimits = { objects: 300, items: 100, fields: 
 
 /**
  * Installs `globalThis.__mindbug` in the program. Returns "installed" or "ready" (already there).
- * The api: begin(limits), v(name, value), err(name, error), end() -> JSON text, chunk(i, size).
+ * The api: begin(limits), v(name, value), err(name, error), end(key) -> "<length>:<JSON text>", chunk(key, i, size).
  */
 export function installHeapWalker(version: number, globalName: string): string {
   const g: any = globalThis;
@@ -465,7 +465,8 @@ export function installHeapWalker(version: number, globalName: string): string {
 
   const api = {
     version,
-    last: '',
+    /** The JSON text of the last result for each key (the number of the frame), for `chunk`. */
+    texts: [] as string[],
     begin(newLimits?: Partial<typeof limits>): void {
       if (newLimits) {
         limits = {
@@ -488,7 +489,7 @@ export function installHeapWalker(version: number, globalName: string): string {
       const uninit = e instanceof RefError && /^Cannot access\b|before initiali[sz]ation|not initiali[sz]ed/i.test(msg);
       cur.vars.push({ name, value: uninit ? { k: 'uninit' } : { k: 'unavail', v: msg } });
     },
-    end(): string {
+    end(key: number): string {
       const c = cur;
       if (!c) return '{}';
       const objects: any[] = [];
@@ -499,21 +500,22 @@ export function installHeapWalker(version: number, globalName: string): string {
       const missing: number[] = [];
       for (; i < c.queue.length; i++) missing.push(idOf(c.queue[i]));
       cur = null;
-      api.last = stringify({ v: version, vars: c.vars, objects, missing });
-      return api.last;
+      const text = stringify({ v: version, vars: c.vars, objects, missing });
+      api.texts[key] = text;
+      // The length in front: a debugger that shortens the text keeps its start, so the extension sees that the text
+      // is not complete, also when the shortened text is valid JSON.
+      return text.length + ':' + text;
     },
-    size(): number {
-      return api.last.length;
-    },
-    chunk(index: number, size: number): string {
-      return encodeURIComponent(api.last.slice(index * size, (index + 1) * size));
+    /** A part of the text as JSON text: a part can end in the middle of a surrogate pair, which JSON escapes. */
+    chunk(key: number, index: number, size: number): string {
+      return stringify((api.texts[key] ?? '').slice(index * size, (index + 1) * size));
     },
   };
   O.defineProperty(g, globalName, { value: api, configurable: true, writable: true, enumerable: false });
   return 'installed';
 }
 
-/** Source text that installs the walker. Evaluate it once per pause, in any frame. */
+/** Source text that installs the walker. Evaluate it once per program run, in any frame. */
 export function installExpression(): string {
   return `(${installHeapWalker.toString()})(${WALKER_VERSION}, ${JSON.stringify(GLOBAL_NAME)})`;
 }
@@ -525,19 +527,26 @@ export function isIdentifier(name: string): boolean {
   return name === 'this' || IDENTIFIER.test(name);
 }
 
+/** The result of `frameExpression` when the walker is not installed in the program, or has another version. */
+export const NOT_INSTALLED = 'mindbug: not installed';
+
 /**
- * Source text that reads the given variables in one frame and returns the snapshot JSON text.
- * Each variable is read in its own try/catch, so an uninitialized `let` does not stop the others.
+ * Source text that reads the given variables in one frame and returns "<length>:<JSON text>" of the snapshot. `key`
+ * names the frame, for `chunk` when the debugger shortens the text. Each variable is read in its own try/catch, so an
+ * uninitialized `let` does not stop the others. The text is statements, not one expression: the debugger must
+ * evaluate it as it is, in the scope of the frame (see `evaluateFrame` in src/snapshot.ts). Without the walker, it
+ * returns NOT_INSTALLED.
  */
-export function frameExpression(names: string[], limits: WalkerLimits): string {
+export function frameExpression(names: string[], limits: WalkerLimits, key = 0): string {
   const api = `globalThis.${GLOBAL_NAME}`;
-  const lines = [`${api}.begin(${JSON.stringify(limits)});`];
+  const lines = [`if (${api}?.version !== ${WALKER_VERSION}) {`, `  ${JSON.stringify(NOT_INSTALLED)};`, '} else {'];
+  lines.push(`  ${api}.begin(${JSON.stringify(limits)});`);
   for (const name of names) {
     if (!isIdentifier(name)) continue;
     const lit = JSON.stringify(name);
-    lines.push(`try { ${api}.v(${lit}, ${name}); } catch (e) { ${api}.err(${lit}, e); }`);
+    lines.push(`  try { ${api}.v(${lit}, ${name}); } catch (e) { ${api}.err(${lit}, e); }`);
   }
-  lines.push(`${api}.end();`);
+  lines.push(`  ${api}.end(${key});`, '}');
   return lines.join('\n');
 }
 

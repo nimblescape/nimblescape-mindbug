@@ -26,6 +26,20 @@ IsStringSet(*block_list)" as soon as Mindbug read the memory, and the program
 ended. This is a fault of V8 in Node.js 22. Mindbug now runs no code in that
 scope and shows its `this`, the new object, from the constructor.
 
+**Faster steps.** Mindbug reads the memory of a step with fewer requests to
+the debugger, and sends the requests that do not wait for each other at the
+same time. This matters most in a remote window, for example a GitHub
+Codespace, where each request goes over the network. In a test with a
+network round trip of 50 ms, a step with one scope took 0.5 s instead of
+1.1 s, and a step with four scopes 0.6 s instead of 5.5 s. Before, Mindbug
+read the result of each scope in parts of 150 characters, one request after
+the other.
+
+**Variables named `i`, `t`, `e`, `o`, `r` or `n`.** The view shows the values
+of variables with these names. Before, it showed a wrong value for them, for
+example a function for the loop variable `i`, or "uninitialized", because the
+debugger used these names itself in the code that read the variables.
+
 ## 0.1.2
 
 **Step history.** When the view shows an earlier step, the editor writes the
