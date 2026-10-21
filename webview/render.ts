@@ -5,7 +5,7 @@
 // Builds the HTML of the frames column and the heap column.
 // Arrows are drawn afterwards by arrows.ts, from the `.ptr` dots to the `.obj` boxes.
 
-import type { BlockKind, ChangeSet, Frame, HeapObject, MemorySnapshot, Value } from '../src/model.ts';
+import { BLOCK_COLORS, type BlockKind, type ChangeSet, type Frame, type HeapObject, type MemorySnapshot, type Value } from '../src/model.ts';
 import { slotKey, varKey } from '../src/changes.ts';
 import { isHiddenRef, layoutHeap, varsBottomUp, type HeapTree, type ViewOptions } from './layout.ts';
 
@@ -118,9 +118,13 @@ const BLOCK_TEXTS: Record<BlockKind, string> = {
   finally: 'The variables of the finally block.',
 };
 
-/** The part of a block scope: its label, such as "for scope", with a tooltip. */
-function blockPart(kind: BlockKind): HTMLElement {
+/**
+ * The part of a block scope: its label, such as "for scope", with a tooltip. `level` is its nesting in the frame, from
+ * 1; the part has the color of its level, which the mark of the block in the editor has too.
+ */
+function blockPart(kind: BlockKind, level: number): HTMLElement {
   const part = el('div', 'block');
+  part.dataset.color = String(((level - 1) % BLOCK_COLORS) + 1);
   const label = el('div', 'block-label', `${kind} scope`);
   label.title = `${BLOCK_TEXTS[kind] ?? BLOCK_TEXTS.block} The scope is inside the scope around it, and exists only while the program runs in it.`;
   part.append(label);
@@ -150,7 +154,7 @@ function renderFrame(frame: Frame, index: number, input: RenderInput, isTop: boo
 
   // The variables build bottom up, like the stack: the first variable of the function is at the bottom.
   const vars = varsBottomUp(frame, snap, opts).reverse();
-  if (vars.length === 0) {
+  if (vars.length === 0 && !frame.blocks?.length) {
     box.append(el('div', 'frame-empty', 'no variables'));
   }
   const grid = el('div', 'vars');
@@ -160,12 +164,14 @@ function renderFrame(frame: Frame, index: number, input: RenderInput, isTop: boo
   const partOf = (block: number | undefined): HTMLElement => {
     if (!block) return grid;
     while (blocks.length < block) {
-      const part = blockPart(frame.blocks?.[blocks.length] ?? 'block');
+      const part = blockPart(frame.blocks?.[blocks.length] ?? 'block', blocks.length + 1);
       (blocks[blocks.length - 1] ?? grid).append(part);
       blocks.push(part);
     }
     return blocks[block - 1];
   };
+  // Every block scope has its part, also one whose variables are hidden (uninitialized), as its mark in the editor.
+  if (frame.blocks?.length) partOf(frame.blocks.length);
   let lastScope: string | undefined;
   for (const v of vars) {
     if (v.scope === 'closure' && lastScope !== 'closure') {

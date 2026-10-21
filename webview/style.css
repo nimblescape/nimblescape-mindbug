@@ -17,6 +17,12 @@
   --mb-mono: var(--vscode-editor-font-family, 'Cascadia Code', 'Menlo', 'Consolas', monospace);
   --mb-ui: var(--vscode-font-family, system-ui, -apple-system, 'Segoe UI', sans-serif);
 
+  /* The block scopes by their nesting, as in the editor (the colors nimblescape.mindbug.blockScope1 to 4) */
+  --mb-block-1: var(--vscode-nimblescape-mindbug-blockScope1, #0b7a68);
+  --mb-block-2: var(--vscode-nimblescape-mindbug-blockScope2, #0a64b0);
+  --mb-block-3: var(--vscode-nimblescape-mindbug-blockScope3, #8e36a8);
+  --mb-block-4: var(--vscode-nimblescape-mindbug-blockScope4, #a4560b);
+
   /* The two memory areas */
   --mb-stack-bg: #eaf1fa;
   --mb-stack-border: #c9d7ea;
@@ -82,6 +88,10 @@
 
 body.vscode-dark {
   --mb-dim: #9da5b0;
+  --mb-block-1: var(--vscode-nimblescape-mindbug-blockScope1, #3dc9b0);
+  --mb-block-2: var(--vscode-nimblescape-mindbug-blockScope2, #4fc1ff);
+  --mb-block-3: var(--vscode-nimblescape-mindbug-blockScope3, #d18ce8);
+  --mb-block-4: var(--vscode-nimblescape-mindbug-blockScope4, #f29d52);
 
   --mb-stack-bg: #18222f;
   --mb-stack-border: #2b3d55;
@@ -138,6 +148,10 @@ body.vscode-dark {
 }
 
 body.vscode-high-contrast:not(.vscode-high-contrast-light) {
+  --mb-block-1: var(--vscode-nimblescape-mindbug-blockScope1, #3dc9b0);
+  --mb-block-2: var(--vscode-nimblescape-mindbug-blockScope2, #4fc1ff);
+  --mb-block-3: var(--vscode-nimblescape-mindbug-blockScope3, #e5a1ff);
+  --mb-block-4: var(--vscode-nimblescape-mindbug-blockScope4, #f29d52);
   --mb-str: var(--vscode-debugTokenExpression-string, #ce9178);
   --mb-num: var(--vscode-debugTokenExpression-number, #b5cea8);
   --mb-kw: var(--vscode-debugTokenExpression-boolean, #569cd6);
@@ -621,7 +635,8 @@ body.vscode-high-contrast-light .frame.active {
   border: 1px solid var(--mb-slot-border);
 }
 
-/* The part of a block inside its scope: the variables of a block { … }, on top of the variables around it. */
+/* The part of a block inside its scope: the variables of a block { … }, on top of the variables around it. It has the
+   color of its nesting, as the mark of the block in the editor. */
 .block {
   grid-column: 1 / -1;
   display: grid;
@@ -629,14 +644,31 @@ body.vscode-high-contrast-light .frame.active {
   align-items: center;
   gap: 6px 10px;
   padding: 2px 6px 6px;
-  border: 1px dashed var(--mb-frame-edge);
+  border: 2px solid var(--mb-block, var(--mb-frame-edge));
   border-radius: 4px;
+}
+
+.block[data-color='1'] {
+  --mb-block: var(--mb-block-1);
+}
+
+.block[data-color='2'] {
+  --mb-block: var(--mb-block-2);
+}
+
+.block[data-color='3'] {
+  --mb-block: var(--mb-block-3);
+}
+
+.block[data-color='4'] {
+  --mb-block: var(--mb-block-4);
 }
 
 .block-label {
   grid-column: 1 / -1;
   font-size: 11px;
-  color: var(--mb-dim);
+  font-weight: 600;
+  color: var(--mb-block, var(--mb-dim));
 }
 
 .scope-sep {

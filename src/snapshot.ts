@@ -482,6 +482,7 @@ function frameOf(
     name: isGlobal ? 'Global scope' : frameName(f.name),
     isGlobal,
     line: f.line,
+    column: f.column,
     file: f.source?.path,
     vars: [],
   };
