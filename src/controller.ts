@@ -218,7 +218,11 @@ export class MemoryController implements vscode.Disposable {
   /** Waits for the next snapshot (for tests). */
   nextSnapshot(timeoutMs = 30000): Promise<MemorySnapshot> {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('no snapshot')), timeoutMs);
+      // The message names the state of the program and the last status of the view, to find the cause in a test log.
+      const timer = setTimeout(() => {
+        const status = this.lastStatus?.type === 'status' ? `, status "${this.lastStatus.text}"` : '';
+        reject(new Error(`no snapshot (program ${this.paused ? 'paused' : 'not paused'}${status})`));
+      }, timeoutMs);
       this.snapshotWaiters.push((s) => {
         clearTimeout(timer);
         resolve(s);
@@ -382,6 +386,15 @@ export class MemoryController implements vscode.Disposable {
    * view: a bar at the indent of a block, and a frame around the header of a for loop or around a short block.
    */
   private markBlocks(): void {
+    try {
+      this.showBlockMarks();
+    } catch {
+      // The marks only help to read the view: an error in them must not stop a step, which waits for this call.
+      this.shownBlockMarks.clear();
+    }
+  }
+
+  private showBlockMarks(): void {
     const frame = this.shownFrame();
     this.shownBlockMarks.clear();
     for (const editor of vscode.window.visibleTextEditors) {
