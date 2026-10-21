@@ -142,7 +142,7 @@ The view draws the stack and the heap bottom up, as a stack of memory grows:
 | Data | Where | How long |
 | --- | --- | --- |
 | The step history | The memory of the extension host (controller) and of the webview | Until the next debug session starts, the debug session restarts, or VS Code closes |
-| The switches of the toolbar | The settings `nimblescape.mindbug.showClasses`, `showFunctions` and `showIds`: the page of the view gets them in the attribute `data-view-options`, a click on a switch sends `viewOption` with the name and the value of that switch, and the controller saves it in the user settings with `WorkspaceConfiguration.update`. A click on a switch that the settings of the workspace set stays in the memory of the controller (`viewOverrides`) until the view closes or the setting changes. The controller sends `viewOptions` when the settings change, and when the page of the view loads again | Until you change them |
+| The switches of the toolbar | The settings `nimblescape.mindbug.showClasses`, `showFunctions`, `showIds` and `showUninitialized`: the page of the view gets them in the attribute `data-view-options`, a click on a switch sends `viewOption` with the name and the value of that switch, and the controller saves it in the user settings with `WorkspaceConfiguration.update`. A click on a switch that the settings of the workspace set stays in the memory of the controller (`viewOverrides`) until the view closes or the setting changes. The controller sends `viewOptions` when the settings change, and when the page of the view loads again | Until you change them |
 | The numbers of the objects | A `WeakMap` of the helper in the program | While the program runs |
 | The global `__mindbug` | The program | While the program runs |
 

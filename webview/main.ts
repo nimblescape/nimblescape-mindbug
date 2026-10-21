@@ -59,11 +59,13 @@ const liveBtn = $<HTMLButtonElement>('live');
 const showFunctions = $<HTMLInputElement>('showFunctions');
 const showIds = $<HTMLInputElement>('showIds');
 const showClasses = $<HTMLInputElement>('showClasses');
+const showUninitialized = $<HTMLInputElement>('showUninitialized');
 
 function showOptions(): void {
   showFunctions.checked = state.opts.showFunctions;
   showIds.checked = state.opts.showIds;
   showClasses.checked = state.opts.showClasses;
+  showUninitialized.checked = state.opts.showUninitialized;
 }
 showOptions();
 
@@ -271,6 +273,11 @@ showIds.addEventListener('change', () => {
 showClasses.addEventListener('change', () => {
   state.opts = { ...state.opts, showClasses: showClasses.checked };
   saveOption('showClasses');
+  render();
+});
+showUninitialized.addEventListener('change', () => {
+  state.opts = { ...state.opts, showUninitialized: showUninitialized.checked };
+  saveOption('showUninitialized');
   render();
 });
 

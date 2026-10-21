@@ -37,8 +37,14 @@ export function isHiddenRef(v: Value, snap: MemorySnapshot, opts: ViewOptions): 
   return v.k === 'ref' && isHiddenObject(snap.objects[v.id], opts);
 }
 
+/**
+ * The variables of a frame that the view draws: without the variables that hold functions or classes when "Show
+ * functions" is off, and without the variables whose line has not run yet when "Show uninitialized" is off.
+ */
 export function visibleVars(frame: Frame, snap: MemorySnapshot, opts: ViewOptions): Variable[] {
-  return frame.vars.filter((v) => !isHiddenRef(v.value, snap, opts));
+  return frame.vars.filter(
+    (v) => !isHiddenRef(v.value, snap, opts) && (opts.showUninitialized || v.value.k !== 'uninit'),
+  );
 }
 
 /**

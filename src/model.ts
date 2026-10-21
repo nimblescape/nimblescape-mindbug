@@ -110,21 +110,33 @@ export interface MemorySnapshot {
 }
 
 /**
- * The switches of the view. The settings `nimblescape.mindbug.showFunctions`, `showIds` and `showClasses` keep them,
- * so that the view has them again after it was closed and after a restart of VS Code.
+ * The switches of the view. The settings `nimblescape.mindbug.showFunctions`, `showIds`, `showClasses` and
+ * `showUninitialized` keep them, so that the view has them again after it was closed and after a restart of VS Code.
  */
 export interface ViewOptions {
   showFunctions: boolean;
   showIds: boolean;
   /** Show the classes (with their static variables) in their own part at the top of the heap. */
   showClasses: boolean;
+  /** Show the variables whose line has not run yet: a `let`, `const` or `class` before its line. */
+  showUninitialized: boolean;
 }
 
 /** The switches of the view when no setting changes them: the defaults of the three settings in package.json. */
-export const DEFAULT_VIEW_OPTIONS: ViewOptions = { showFunctions: false, showIds: true, showClasses: true };
+export const DEFAULT_VIEW_OPTIONS: ViewOptions = {
+  showFunctions: false,
+  showIds: true,
+  showClasses: true,
+  showUninitialized: false,
+};
 
 /** The names of the switches of the view; each one is the setting `nimblescape.mindbug.<name>`. */
-export const VIEW_OPTION_NAMES = ['showFunctions', 'showIds', 'showClasses'] as const satisfies readonly (keyof ViewOptions)[];
+export const VIEW_OPTION_NAMES = [
+  'showFunctions',
+  'showIds',
+  'showClasses',
+  'showUninitialized',
+] as const satisfies readonly (keyof ViewOptions)[];
 
 /**
  * The text at the end of the line of an earlier step in the editor, for example "Mindbug: step 8 of 14". It names the

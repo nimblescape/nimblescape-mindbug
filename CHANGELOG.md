@@ -16,12 +16,13 @@ from V8, the JavaScript engine of Deno and Node.js, which gives them in the
 order of the program. It connects to V8 through the connection that the
 JavaScript debugger gives to other extensions.
 
-**Variables before their lines.** A scope now shows all its variables from
-the start of the call, as JavaScript has them: a `let`, `const` or `class`
-whose line has not run yet is "uninitialized", and a `var` is `undefined`.
-Before, the view left out a `let`, `const` or `class` before its line. The
-new example `var-and-let.ts` shows that a `var` is a variable of its whole
-function, also when its line is inside a block.
+**Variables before their lines.** The new switch **Show uninitialized**
+(setting `nimblescape.mindbug.showUninitialized`, off by default) shows a
+`let`, `const` or `class` before its line, as "uninitialized": the variable
+exists from the start of its scope, but the program cannot read it yet. A
+`var` before its line shows `undefined`, as before. The new example
+`var-and-let.ts` shows that a `var` is a variable of its whole function,
+also when its line is inside a block.
 
 **Faster steps in a remote window.** Mindbug now sends one request per step
 through VS Code (the stack trace) instead of four rounds of requests. The
