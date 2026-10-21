@@ -17,6 +17,7 @@ import {
   type WalkerLimits,
   type WalkerResult,
 } from './heapWalker.ts';
+import { declarationOffsets, indexSource, offsetOf, type SourceIndex } from './sourceOrder.ts';
 
 /** The part of a debug session that the collector needs. */
 export interface DapClient {
@@ -45,6 +46,12 @@ export interface DapScope {
   variablesReference: number;
   expensive?: boolean;
   presentationHint?: string;
+  /** The place of the scope in its source file (VS Code's JavaScript debugger gives it), from 1. */
+  line?: number;
+  column?: number;
+  endLine?: number;
+  endColumn?: number;
+  source?: DapSource;
 }
 
 export interface DapVariable {
@@ -58,6 +65,11 @@ export interface CollectOptions {
   limits?: WalkerLimits;
   /** Maximum number of frames that are read. Older frames are left out. */
   maxFrames?: number;
+  /**
+   * Reads the text of a source file. With it, the variables of each scope are in the order of their declarations
+   * (see `inSourceOrder`); without it, in the order of the debugger.
+   */
+  readSource?: (path: string) => Promise<string | undefined>;
 }
 
 type ScopeClass = ScopeKind | 'global' | 'other';
@@ -289,6 +301,8 @@ interface ScopeVars {
 interface DisplayVar {
   name: string;
   scope: ScopeKind;
+  /** The number of the scope in the list of the debugger, from the innermost scope. */
+  group: number;
   dap: DapVariable;
 }
 
@@ -365,11 +379,16 @@ export async function collectSnapshot(
     }
   };
   // The walker stays in the program until the program ends, so the first step of a session installs it.
-  const [scopes] = await Promise.all([
+  const [scopes, sources] = await Promise.all([
     Promise.all(userFrames.map((f) => readScopes(dap, f.id))),
+    readSources(userFrames, options.readSource),
     step === 1 ? install() : undefined,
   ]);
-  const named = await Promise.all(userFrames.map((f, i) => readNames(dap, f, i === userFrames.length - 1, scopes[i])));
+  const named = await Promise.all(
+    userFrames.map((f, i) =>
+      readNames(dap, f, i === userFrames.length - 1, scopes[i], sources.get(f.source?.path ?? '')),
+    ),
+  );
   // The helper never runs in the frame that sets up the fields of a new object.
   const walk = (i: number) => (isFieldSetupFrame(userFrames[i].name) ? undefined : walkFrame(dap, named[i], limits, i));
   let reads = await Promise.all(named.map((_, i) => walk(i)));
@@ -410,6 +429,58 @@ export async function collectSnapshot(
   return snapshot;
 }
 
+/** The indexes of the source files of the frames, by path. A file that cannot be read is left out. */
+async function readSources(
+  frames: DapStackFrame[],
+  read: CollectOptions['readSource'],
+): Promise<Map<string, SourceIndex>> {
+  const sources = new Map<string, SourceIndex>();
+  if (!read) return sources;
+  const paths = new Set(frames.map((f) => f.source?.path).filter((p) => p !== undefined));
+  await Promise.all(
+    [...paths].map(async (path) => {
+      try {
+        const text = await read(path);
+        if (text !== undefined) sources.set(path, indexSource(text));
+      } catch {
+        // The variables of this file stay in the order of the debugger.
+      }
+    }),
+  );
+  return sources;
+}
+
+/**
+ * The variables of a scope in the order of their declarations in the source file of the frame. V8 gives the
+ * variables of a scope in the order of the program, but VS Code's JavaScript debugger sorts them by name. The debugger
+ * gives the place of each scope in the file; the Module scope is the whole file. A variable without a declaration in
+ * that place, for example the return value of a function, comes after the other ones, in the order of the debugger.
+ */
+export function inSourceOrder(
+  vars: DapVariable[],
+  scope: DapScope,
+  kind: ScopeKind,
+  file: string | undefined,
+  source: SourceIndex | undefined,
+): DapVariable[] {
+  if (!source || vars.length < 2) return vars;
+  let start = 0;
+  let end = source.length;
+  if (kind !== 'module') {
+    // Without a source, the line of the scope is a line of the JavaScript that the runtime made from a TypeScript file.
+    const path = scope.source?.path;
+    if (!scope.line || !path || localPath(path) !== file) return vars;
+    start = offsetOf(source, scope.line, scope.column ?? 1);
+    const last = scope.endLine ? offsetOf(source, scope.endLine, scope.endColumn ?? 1) : end;
+    if (last > start) end = last;
+  }
+  const offsets = declarationOffsets(source, vars.map((v) => v.name), start, end);
+  return vars
+    .map((v, i) => ({ v, at: offsets[i] }))
+    .sort((a, b) => (a.at === b.at ? 0 : a.at - b.at))
+    .map((x) => x.v);
+}
+
 async function readScopes(dap: DapClient, frameId: number): Promise<{ cls: ScopeClass; scope: DapScope }[]> {
   const res = await dap.request('scopes', { frameId });
   const scopes: DapScope[] = res?.scopes ?? [];
@@ -422,6 +493,7 @@ async function readNames(
   f: DapStackFrame,
   isLast: boolean,
   scopes: { cls: ScopeClass; scope: DapScope }[],
+  source: SourceIndex | undefined,
 ): Promise<FrameNames> {
   const hasLocal = scopes.some((s) => s.cls === 'local');
   const hasModule = scopes.some((s) => s.cls === 'module');
@@ -450,7 +522,7 @@ async function readNames(
       if (!wanted(kind) || scope.variablesReference <= 0) return undefined;
       try {
         const res = await dap.request('variables', { variablesReference: scope.variablesReference });
-        return { kind, vars: res?.variables ?? [] };
+        return { kind, vars: inSourceOrder(res?.variables ?? [], scope, kind, f.source?.path, source) };
       } catch {
         frame.note = 'Some variables could not be read.';
         return undefined;
@@ -463,13 +535,13 @@ async function readNames(
   // (this is also what an expression in this frame sees).
   const seen = new Set<string>();
   let ordered: DisplayVar[] = [];
-  for (const sv of scopeVars) {
+  scopeVars.forEach((sv, group) => {
     for (const v of sv.vars) {
       if (seen.has(v.name)) continue;
       seen.add(v.name);
-      ordered.push({ name: v.name, scope: sv.kind, dap: v });
+      ordered.push({ name: v.name, scope: sv.kind, group, dap: v });
     }
-  }
+  });
   const localNames = ordered.filter((o) => o.scope === 'local').map((o) => o.name);
   if (!isGlobal && isCommonJsModule(f.name, isLast, localNames)) {
     isGlobal = true;
@@ -479,16 +551,17 @@ async function readNames(
     ordered = ordered.filter((o) => !(o.scope === 'local' && hidden.has(o.name)));
   }
   if (!isGlobal && !seen.has('this')) {
-    ordered.push({ name: 'this', scope: 'local', dap: { name: 'this', value: '', variablesReference: 0 } });
+    ordered.push({ name: 'this', scope: 'local', group: 0, dap: { name: 'this', value: '', variablesReference: 0 } });
   }
 
   // Display order: local variables, then block variables from the outer to the inner block,
-  // then closure variables. In the Global scope: module variables, then blocks.
+  // then closure variables. In the Global scope: module variables, then blocks. Inside each scope, the variables keep
+  // their order (see inSourceOrder); the sort is stable.
   const rank = (s: ScopeKind): number => (s === 'local' || s === 'module' ? 0 : s === 'block' ? 1 : 2);
-  const blocksInnerFirst = ordered.filter((o) => o.scope === 'block');
+  const blocksOuterFirst = ordered.filter((o) => o.scope === 'block').sort((x, y) => y.group - x.group);
   const display = [
     ...ordered.filter((o) => rank(o.scope) === 0),
-    ...blocksInnerFirst.reverse(),
+    ...blocksOuterFirst,
     ...ordered.filter((o) => rank(o.scope) === 2),
   ];
   // `this` first, like a hidden first parameter.

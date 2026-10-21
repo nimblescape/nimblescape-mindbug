@@ -165,6 +165,70 @@ async function stop(): Promise<void> {
   await ended;
 }
 
+/**
+ * Variables in an order that is not the order of their names. VS Code's JavaScript debugger sorts the variables of a
+ * scope by name, so the view showed a, b, bmw, toyota, and the variables of a block in the reverse order.
+ */
+const ORDER_PROGRAM = `// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
+class Car {
+  brand: string;
+  constructor(brand: string) {
+    this.brand = brand;
+  }
+}
+
+let bmw: Car; // a variable on the stack
+bmw = new Car('BMW');
+let toyota: Car = new Car('Toyota');
+let a = 10;
+let b = 20;
+
+function swap(values: number[], second: number, first: number): void {
+  const kept = values[first];
+  values[first] = values[second];
+  values[second] = kept;
+  debugger;
+}
+
+{
+  let zeta = a + b;
+  let alpha = zeta;
+  swap([a, b], 1, 0);
+  console.log(alpha);
+}
+console.log(bmw, toyota);
+`;
+
+async function variableOrder(api: MindbugApi, start: Start): Promise<void> {
+  const file = path.join(examples(), 'order-test.ts');
+  fs.writeFileSync(file, ORDER_PROGRAM);
+  try {
+    await debug(api, start, file, []);
+    const s = await runToLine(api, file, 22);
+    assert.deepEqual(
+      s.frames.map((f) => f.name),
+      ['Global scope', 'swap'],
+    );
+    const names = (frame: number) => s.frames[frame].vars.map((v) => v.name).filter((n) => n !== 'this');
+    // The view draws the variables bottom up: bmw at the bottom of the Global scope, values at the bottom of swap.
+    // Node.js does not list the class and the function in the Global scope.
+    const global = ['Car', 'bmw', 'toyota', 'a', 'b', 'swap', 'zeta', 'alpha'];
+    assert.deepEqual(
+      names(0).filter((n) => global.includes(n)),
+      global.filter((n) => names(0).includes(n)),
+    );
+    assert.deepEqual(names(0).filter((n) => !['Car', 'swap'].includes(n)), ['bmw', 'toyota', 'a', 'b', 'zeta', 'alpha']);
+    assert.deepEqual(names(1), ['values', 'second', 'first', 'kept']);
+    await stop();
+  } finally {
+    await closeTextEditors();
+    fs.rmSync(file, { force: true });
+  }
+}
+
 async function insertionSort(api: MindbugApi, start: Start): Promise<void> {
   const file = path.join(examples(), 'insertion-sort.ts');
   // The breakpoint is not on line 19 (the line after the loop): before the source map of Node.js is loaded, the
@@ -569,6 +633,7 @@ describe('the Mindbug view in VS Code', () => {
       it('starts a new step history when the debug session restarts', () => restart(api, start));
       it('reads the variables named t, e, r, n, i and o', () => names(api, start));
       it('steps into the set-up of the static variable of an exported class', () => exportsBeforeDeclaration(api, start));
+      it('shows the variables of each scope in the order of the program', () => variableOrder(api, start));
     });
   }
 });
