@@ -6,13 +6,11 @@
 // snapshot at every pause and sends it to the panel.
 
 import * as vscode from 'vscode';
-import { blockMarks, blockRanges, bracketPairs, type BlockMark, type BracketPair } from './blockRanges.ts';
+import { blockMarkLines, blockMarks, blockRanges, bracketPairs, type BlockMark, type BracketPair } from './blockRanges.ts';
 import {
-  BLOCK_COLORS,
   DEFAULT_VIEW_OPTIONS,
   stepMarkText,
   VIEW_OPTION_NAMES,
-  type BlockKind,
   type Frame,
   type FromWebview,
   type MemorySnapshot,
@@ -76,8 +74,8 @@ export class MemoryController implements vscode.Disposable {
    * that the green line needs no knowledge of the colors of the debugger.
    */
   private readonly stepDecoration: vscode.TextEditorDecorationType;
-  /** The marks of the block scopes in the editor, one bar and one frame for each color (`nimblescape.mindbug.blockScope<n>`). */
-  private readonly blockDecorations: { bar: vscode.TextEditorDecorationType; frame: vscode.TextEditorDecorationType }[];
+  /** The rectangles around the block scopes in the editor. Each line of a rectangle has its own CSS (blockMarkLines). */
+  private readonly blockDecoration: vscode.TextEditorDecorationType;
   /** The block marks that each editor shows, by the URI of its document (for tests). */
   private readonly shownBlockMarks = new Map<string, BlockMark[]>();
   /** The brackets of the newest document that got block marks, for its version. */
@@ -116,18 +114,7 @@ export class MemoryController implements vscode.Disposable {
       overviewRulerColor: new vscode.ThemeColor('debugIcon.breakpointStackframeForeground'),
       overviewRulerLane: vscode.OverviewRulerLane.Full,
     });
-    this.blockDecorations = Array.from({ length: BLOCK_COLORS }, (_, i) => {
-      const borderColor = new vscode.ThemeColor(`nimblescape.mindbug.blockScope${i + 1}`);
-      return {
-        bar: vscode.window.createTextEditorDecorationType({ borderColor, borderStyle: 'solid', borderWidth: '0 0 0 3px' }),
-        frame: vscode.window.createTextEditorDecorationType({
-          borderColor,
-          borderStyle: 'solid',
-          borderWidth: '2px',
-          borderRadius: '3px',
-        }),
-      };
-    });
+    this.blockDecoration = vscode.window.createTextEditorDecorationType({});
     const tracker: vscode.DebugAdapterTrackerFactory = {
       createDebugAdapterTracker: (session) => ({
         onDidSendMessage: (m: any) => this.onAdapterMessage(session, m),
@@ -160,7 +147,7 @@ export class MemoryController implements vscode.Disposable {
         this.showViewOptions();
       }),
       this.stepDecoration,
-      ...this.blockDecorations.flatMap((d) => [d.bar, d.frame]),
+      this.blockDecoration,
     );
     // `onDidChangeActiveStackItem` exists since VS Code 1.90.
     const debugApi = vscode.debug as any;
@@ -382,8 +369,8 @@ export class MemoryController implements vscode.Disposable {
   }
 
   /**
-   * Marks the block scopes of the running function in the editor of its file, with the colors of their parts in the
-   * view: a bar at the indent of a block, and a frame around the header of a for loop or around a short block.
+   * Marks the block scopes of the running function in the editor of its file: a rectangle around the lines of each
+   * block scope, with the color of its part in the view.
    */
   private markBlocks(): void {
     try {
@@ -399,32 +386,20 @@ export class MemoryController implements vscode.Disposable {
     this.shownBlockMarks.clear();
     for (const editor of vscode.window.visibleTextEditors) {
       const doc = editor.document;
-      const marks = frame?.file && frame.blocks?.length && sameFile(doc.uri, frame.file) ? this.blockMarksIn(doc, frame) : [];
+      const marks = frame?.file && frame.blocks?.length && sameFile(doc.uri, frame.file) ? this.blockMarksIn(editor, frame) : [];
       if (marks.length > 0) this.shownBlockMarks.set(doc.uri.toString(), marks);
-      this.blockDecorations.forEach((d, i) => {
-        const mine = marks.filter((m) => (m.block - 1) % BLOCK_COLORS === i);
-        editor.setDecorations(
-          d.bar,
-          mine.flatMap((m) =>
-            (m.bar?.lines ?? []).map((l) => ({
-              range: new vscode.Range(l, m.bar!.column, l, m.bar!.column + 1),
-              hoverMessage: blockHover(m.kind),
-            })),
-          ),
-        );
-        editor.setDecorations(
-          d.frame,
-          mine.flatMap((m) =>
-            m.frame
-              ? [{ range: new vscode.Range(doc.positionAt(m.frame.start), doc.positionAt(m.frame.end)), hoverMessage: blockHover(m.kind) }]
-              : [],
-          ),
-        );
-      });
+      editor.setDecorations(
+        this.blockDecoration,
+        blockMarkLines(marks).map(({ line, css }) => ({
+          range: new vscode.Range(line, 0, line, 0),
+          renderOptions: { before: { contentText: '', textDecoration: css } },
+        })),
+      );
     }
   }
 
-  private blockMarksIn(doc: vscode.TextDocument, frame: Frame): BlockMark[] {
+  private blockMarksIn(editor: vscode.TextEditor, frame: Frame): BlockMark[] {
+    const doc = editor.document;
     const text = doc.getText();
     const uri = doc.uri.toString();
     if (this.brackets?.uri !== uri || this.brackets.version !== doc.version) {
@@ -433,7 +408,8 @@ export class MemoryController implements vscode.Disposable {
     const line = Math.min(Math.max(0, frame.line - 1), doc.lineCount - 1);
     const offset = doc.offsetAt(new vscode.Position(line, Math.max(0, (frame.column ?? 1) - 1)));
     const ranges = blockRanges(text, offset, frame.blocks ?? [], this.brackets.pairs);
-    return ranges ? blockMarks(text, ranges) : [];
+    const tabSize = typeof editor.options.tabSize === 'number' ? editor.options.tabSize : 4;
+    return ranges ? blockMarks(text, ranges, this.brackets.pairs, tabSize) : [];
   }
 
   private onAdapterMessage(session: vscode.DebugSession, m: any): void {
@@ -613,11 +589,6 @@ function isSessionOrParent(ancestor: vscode.DebugSession, session: vscode.DebugS
     if (s.id === ancestor.id) return true;
   }
   return false;
-}
-
-/** The tooltip of the mark of a block scope in the editor. */
-function blockHover(kind: BlockKind): string {
-  return `Mindbug: the ${kind} scope. Its variables are in the part "${kind} scope" of the Mindbug view.`;
 }
 
 function sameFile(uri: vscode.Uri, file: string): boolean {

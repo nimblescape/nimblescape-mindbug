@@ -28,11 +28,12 @@ object, "Return value" now points to the object on the heap with an arrow.
 Before, it showed the name of the class as text.
 
 **Block scopes in the editor.** While the program is paused, the editor
-marks the block scopes of the line where the program is: a colored bar at
-the indent of each block, and a frame around the header of a `for` loop.
-Each part in the view has the same color as its mark, so you see which
-code belongs to which part. The four colors are theme colors
-(`nimblescape.mindbug.blockScope1` to `4`).
+draws a colored rectangle around each block scope of the line where the
+program is: around the lines between the braces of a block, and around the
+whole `for` loop for the scope of its header. Each part in the view has the
+same color as its rectangle, so you see which code belongs to which part.
+The four colors are theme colors (`nimblescape.mindbug.blockScope1` to
+`4`).
 
 The new example `blocks.ts` shows block scopes, and a variable of a block
 that hides a variable of the same name.

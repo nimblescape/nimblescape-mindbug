@@ -11,7 +11,7 @@
 // This file does not import 'vscode'.
 
 import { skipSpaceBack, wordBefore } from './blockKind.ts';
-import type { BlockKind } from './model.ts';
+import { BLOCK_COLORS, type BlockKind } from './model.ts';
 
 /** A pair of brackets in the code: the offsets of the opening and of the closing bracket. */
 export interface BracketPair {
@@ -229,34 +229,120 @@ function ownerOf(text: string, p: BracketPair, parens: Map<number, number>): Own
   return 'other';
 }
 
-/** How the editor marks a block scope. Lines and columns count from 0. */
+/**
+ * How the editor marks a block scope: a rectangle around its lines. Lines and columns count from 0; a tab counts as
+ * many columns as it takes in the editor.
+ */
 export interface BlockMark {
   block: number;
   kind: BlockKind;
+  /** The first and the last line in the rectangle. */
+  first: number;
+  last: number;
+  /** The column of the left side: the smallest indent of the lines in the rectangle that are not empty. */
+  indent: number;
   /**
-   * A bar at `column`, the indent of the line where the block starts, on the lines inside a block of several lines.
-   * Only lines that reach the column get the bar, so an empty line has none.
+   * The column of the right side, the same for all marks of a frame: four columns after the longest line in a mark.
+   * The debugger's mark of the paused column takes about two columns in its line.
    */
-  bar?: { column: number; lines: number[] };
-  /** A frame around the text from offset `start` to offset `end`: a header `( )`, or a block on one or two lines. */
-  frame?: { start: number; end: number };
+  right: number;
 }
 
-/** The marks of the block scopes in the editor. */
-export function blockMarks(text: string, ranges: readonly BlockRange[]): BlockMark[] {
-  const lines = text.split('\n');
+/**
+ * The rectangles of the block scopes in the editor. The rectangle of a block holds the lines between its braces: in
+ * `if (d > c) {`, the condition runs in the scope around the block, so its line is outside. A block on one or two
+ * lines holds its lines. The rectangle of the header of a for loop or a catch clause holds the whole statement, the
+ * header and the body.
+ */
+export function blockMarks(
+  text: string,
+  ranges: readonly BlockRange[],
+  pairs: BracketPair[] = bracketPairs(text),
+  tabSize = 4,
+): BlockMark[] {
+  const lines = text.split('\n').map((l) => l.replace(/\r$/, ''));
   const lineOf = (offset: number) => {
     let line = 0;
     for (let at = 0; line < lines.length - 1 && at + lines[line].length < offset; line++) at += lines[line].length + 1;
     return line;
   };
-  return ranges.map((r) => {
-    const first = lineOf(r.open);
-    const last = lineOf(r.close);
-    if (r.header || last - first < 2) return { block: r.block, kind: r.kind, frame: { start: r.open, end: r.close + 1 } };
-    const column = lines[first].length - lines[first].trimStart().length;
-    const inside: number[] = [];
-    for (let l = first + 1; l < last; l++) if (lines[l].length > column) inside.push(l);
-    return { block: r.block, kind: r.kind, bar: { column, lines: inside } };
+  const columns = (s: string) => {
+    let c = 0;
+    for (const ch of s) c = ch === '\t' ? c + tabSize - (c % tabSize) : c + 1;
+    return c;
+  };
+  const indentOf = (line: number) => columns(/^[ \t]*/.exec(lines[line])![0]);
+  const braces = new Map(pairs.filter((p) => p.char === '{').map((p) => [p.open, p.close]));
+
+  const marks = ranges.map((r) => {
+    const open = lineOf(r.open);
+    if (r.header) {
+      const body = braces.get(skipSpace(text, r.close + 1));
+      return { block: r.block, kind: r.kind, first: open, last: lineOf(body ?? r.close), indent: indentOf(open) };
+    }
+    const close = lineOf(r.close);
+    if (close - open < 2) return { block: r.block, kind: r.kind, first: open, last: close, indent: indentOf(open) };
+    let indent = Infinity;
+    for (let l = open + 1; l < close; l++) if (lines[l].trim()) indent = Math.min(indent, indentOf(l));
+    return { block: r.block, kind: r.kind, first: open + 1, last: close - 1, indent: Number.isFinite(indent) ? indent : indentOf(open) };
   });
+  let right = 0;
+  for (const m of marks) for (let l = m.first; l <= m.last; l++) right = Math.max(right, columns(lines[l]) + 4);
+  return marks.map((m) => ({ ...m, right }));
+}
+
+/** One line of the rectangle of a block scope: the CSS of a decoration before its first character. */
+export interface BlockMarkLine {
+  line: number;
+  css: string;
+}
+
+/**
+ * The CSS that draws the rectangles of `marks` in VS Code, which has no API for a rectangle around lines. Each line of
+ * a rectangle gets an empty decoration before its first character, and the CSS of the decoration goes into its
+ * `textDecoration`, which VS Code writes into a CSS rule as it is. So the decoration is placed absolutely in the line,
+ * where 0 is the start of the text, and draws the left and the right side of the rectangle on its line, the top on
+ * the first line and the bottom on the last line. A rectangle keeps 3 pixels away from an enclosing rectangle that
+ * starts on the same line, ends on the same line, or has the same indent, and its right side keeps 5 pixels for each
+ * enclosing rectangle. The color is the color of the part of the block scope in the view.
+ */
+export function blockMarkLines(marks: readonly BlockMark[]): BlockMarkLine[] {
+  return marks.flatMap((m) => {
+    const enclosing = marks.filter((o) => o.block < m.block);
+    const same = (test: (o: BlockMark) => boolean) => enclosing.filter(test).length;
+    const top = 1 + 3 * same((o) => o.first === m.first);
+    const bottom = 1 + 3 * same((o) => o.last === m.last);
+    const color = `var(--vscode-nimblescape-mindbug-blockScope${((m.block - 1) % BLOCK_COLORS) + 1})`;
+    // 6 pixels before the indent, but not before the start of the line, where the editor hides it.
+    const left = `max(0px, calc(${m.indent}ch - 6px + ${3 * same((o) => o.indent === m.indent)}px))`;
+    const width = `calc(${m.right}ch - ${5 * (m.block - 1)}px - ${left})`;
+    const lines: BlockMarkLine[] = [];
+    for (let line = m.first; line <= m.last; line++) {
+      const first = line === m.first;
+      const last = line === m.last;
+      const css = [
+        'none',
+        'position: absolute',
+        'box-sizing: border-box',
+        'pointer-events: none',
+        `left: ${left}`,
+        `width: ${width}`,
+        `top: ${first ? top : 0}px`,
+        `bottom: ${last ? bottom : 0}px`,
+        `border: 0 solid ${color}`,
+        'border-left-width: 2px',
+        'border-right-width: 2px',
+        ...(first ? ['border-top-width: 2px', 'border-top-left-radius: 5px', 'border-top-right-radius: 5px'] : []),
+        ...(last ? ['border-bottom-width: 2px', 'border-bottom-left-radius: 5px', 'border-bottom-right-radius: 5px'] : []),
+      ];
+      lines.push({ line, css: css.join('; ') });
+    }
+    return lines;
+  });
+}
+
+/** The index of the first character at or after `index` that is not a space. */
+function skipSpace(text: string, index: number): number {
+  while (index < text.length && /\s/.test(text[index])) index++;
+  return index;
 }

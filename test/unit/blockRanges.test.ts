@@ -8,7 +8,7 @@ import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { blockMarks, blockRanges, bracketPairs } from '../../src/blockRanges.ts';
+import { blockMarkLines, blockMarks, blockRanges, bracketPairs } from '../../src/blockRanges.ts';
 import type { BlockKind } from '../../src/model.ts';
 
 const BLOCKS = readFileSync(join(import.meta.dirname, '../../examples/blocks.ts'), 'utf8');
@@ -89,21 +89,77 @@ test('other statements, and the body of the function ends the search', () => {
   assert.equal(ranges(text, 11, 11, ['if', 'while', 'catch', 'catch body', 'switch', 'block']), undefined);
 });
 
-test('the marks: a bar at the indent of the line of the block, or a frame', () => {
+test('the marks: a rectangle around the lines between the braces, or around the whole for loop', () => {
   const offset = offsetAt(BLOCKS, 30, 7);
   const marks = blockMarks(BLOCKS, blockRanges(BLOCKS, offset, ['block', 'for', 'for body', 'if'])!);
   const lineOf = (n: number) => n - 1;
+  // The right side is four columns after the longest line, `  for (let i = 0; i < 2; i++) {` (31 columns).
   assert.deepEqual(
-    marks.map((m) => [m.kind, m.bar?.column, m.bar?.lines[0], m.bar?.lines.at(-1), m.frame && BLOCKS.slice(m.frame.start, m.frame.end)]),
+    marks.map((m) => [m.kind, m.first, m.last, m.indent, m.right]),
     [
-      ['block', 0, lineOf(24), lineOf(38), undefined],
-      ['for', undefined, undefined, undefined, '(let i = 0; i < 2; i++)'],
-      ['for body', 2, lineOf(27), lineOf(31), undefined],
-      ['if', 4, lineOf(29), lineOf(30), undefined],
+      ['block', lineOf(24), lineOf(38), 2, 35],
+      ['for', lineOf(26), lineOf(32), 2, 35],
+      ['for body', lineOf(27), lineOf(31), 4, 35],
+      ['if', lineOf(29), lineOf(30), 6, 35],
     ],
   );
-  // A block on one line gets a frame.
+  // A block on one line holds its line.
   const one = 'let n = 1;\n{ let plain = 1; f(plain); }\n';
-  const [m] = blockMarks(one, blockRanges(one, offsetAt(one, 2, 18), ['block'])!);
-  assert.equal(one.slice(m.frame!.start, m.frame!.end), '{ let plain = 1; f(plain); }');
+  assert.deepEqual(
+    blockMarks(one, blockRanges(one, offsetAt(one, 2, 18), ['block'])!).map((m) => [m.first, m.last, m.indent, m.right]),
+    [[1, 1, 0, 32]],
+  );
+  // The indent is the smallest indent of the lines that are not empty, and a tab counts up to the next tab stop.
+  const tabs = 'if (x) {\n\tlet a = 1;\n\n  \t  f(a);\n}\n';
+  assert.deepEqual(
+    blockMarks(tabs, blockRanges(tabs, offsetAt(tabs, 2, 3), ['if'])!, bracketPairs(tabs), 4).map((m) => [m.first, m.last, m.indent]),
+    [[1, 3, 4]],
+  );
+  // The rectangle of a catch header holds the whole catch clause.
+  const caught = 'try {\n  f();\n} catch (err) {\n  g(err);\n}\n';
+  assert.deepEqual(
+    blockMarks(caught, blockRanges(caught, offsetAt(caught, 4, 3), ['catch'])!).map((m) => [m.kind, m.first, m.last, m.indent]),
+    [['catch', 2, 4, 0]],
+  );
+});
+
+test('the CSS of the rectangles: the sides on each line, the top on the first line, the bottom on the last line', () => {
+  const offset = offsetAt(BLOCKS, 30, 7);
+  const lines = blockMarkLines(blockMarks(BLOCKS, blockRanges(BLOCKS, offset, ['block', 'for', 'for body', 'if'])!));
+  const css = (line: number, index = 0) => lines.filter((l) => l.line === line - 1)[index].css.split('; ');
+  // 15 lines of the block, 7 of the for loop, 5 of its body, 2 of the if block.
+  assert.equal(lines.length, 15 + 7 + 5 + 2);
+  // The first line of the block: VS Code writes the CSS after `text-decoration:`, so it starts with its value.
+  const top = css(24);
+  assert.equal(top[0], 'none');
+  assert.ok(top.includes('position: absolute'));
+  assert.ok(top.includes('border: 0 solid var(--vscode-nimblescape-mindbug-blockScope1)'));
+  assert.ok(top.includes('left: max(0px, calc(2ch - 6px + 0px))'));
+  assert.ok(top.includes('width: calc(35ch - 0px - max(0px, calc(2ch - 6px + 0px)))'));
+  assert.ok(top.includes('top: 1px') && top.includes('bottom: 0px') && top.includes('border-top-width: 2px'));
+  assert.ok(!top.includes('border-bottom-width: 2px'));
+  // A line in the middle has only the left and the right side.
+  const middle = css(25);
+  assert.ok(middle.includes('top: 0px') && middle.includes('bottom: 0px') && middle.includes('border-left-width: 2px'));
+  assert.ok(!middle.some((p) => p.startsWith('border-top') || p.startsWith('border-bottom')));
+  // The for loop starts at the same indent as the block: its left side is 3 pixels further in, and its right side
+  // 5 pixels. It has the color of the second part.
+  const loop = css(26, 1);
+  assert.ok(loop.includes('border: 0 solid var(--vscode-nimblescape-mindbug-blockScope2)'));
+  assert.ok(loop.includes('left: max(0px, calc(2ch - 6px + 3px))'));
+  assert.ok(loop.includes('width: calc(35ch - 5px - max(0px, calc(2ch - 6px + 3px)))'));
+  // The for body ends on the line before the end of the for loop, so it keeps no extra distance there; the if block
+  // is the fourth part, inside three rectangles.
+  assert.ok(css(31, 2).includes('bottom: 1px'));
+  assert.ok(css(30, 3).includes('bottom: 1px'));
+  assert.ok(css(29, 3).includes('width: calc(35ch - 15px - max(0px, calc(6ch - 6px + 0px)))'));
+  // A fifth part has the color of the first one again.
+  const deep = blockMarkLines([1, 2, 3, 4, 5].map((block) => ({ block, kind: 'block', first: block, last: 10 - block, indent: block * 2, right: 20 })));
+  assert.ok(deep.at(-1)!.css.includes('var(--vscode-nimblescape-mindbug-blockScope1)'));
+  // Rectangles that start on the same line keep 3 pixels away from each other at the top.
+  const same = blockMarkLines([
+    { block: 1, kind: 'for', first: 0, last: 4, indent: 0, right: 10 },
+    { block: 2, kind: 'for body', first: 0, last: 3, indent: 0, right: 10 },
+  ]);
+  assert.ok(same.find((l) => l.line === 0 && l.css.includes('blockScope2'))!.css.includes('top: 4px'));
 });
