@@ -5,7 +5,6 @@
 // Connects the debugger with the memory panel: it watches the debug sessions, reads a new
 // snapshot at every pause and sends it to the panel.
 
-import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import {
   DEFAULT_VIEW_OPTIONS,
@@ -17,8 +16,9 @@ import {
   type ViewOptions,
 } from './model.ts';
 import { DEFAULT_LIMITS, type WalkerLimits } from './heapWalker.ts';
-import { collectSnapshot } from './snapshot.ts';
+import { collectSnapshot, type DapClient } from './snapshot.ts';
 import { MemoryPanel } from './panel.ts';
+import { V8Connection } from './v8Connection.ts';
 
 /** Requests that make the program run again. */
 const RUN_COMMANDS = new Set(['continue', 'next', 'stepIn', 'stepOut', 'stepBack', 'reverseContinue', 'goto', 'restartFrame']);
@@ -52,6 +52,8 @@ export class MemoryController implements vscode.Disposable {
   private refreshSeq = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly disposables: vscode.Disposable[] = [];
+  /** The connection to V8 of each debug session that paused, by the id of the session. */
+  private readonly connections = new Map<string, Promise<V8Connection | undefined>>();
   /** The newest snapshot, for tests. */
   lastSnapshot: MemorySnapshot | undefined;
   /**
@@ -116,7 +118,10 @@ export class MemoryController implements vscode.Disposable {
     };
     this.disposables.push(
       ...JS_DEBUG_TYPES.map((type) => vscode.debug.registerDebugAdapterTrackerFactory(type, tracker)),
-      vscode.debug.onDidTerminateDebugSession((s) => this.onTerminated(s)),
+      vscode.debug.onDidTerminateDebugSession((s) => {
+        this.disconnect(s.id);
+        this.onTerminated(s);
+      }),
       vscode.window.onDidChangeVisibleTextEditors(() => this.markViewedStep()),
       vscode.workspace.onDidChangeConfiguration((e) => {
         const changed = VIEW_OPTION_NAMES.filter((name) => e.affectsConfiguration(`nimblescape.mindbug.${name}`));
@@ -417,13 +422,11 @@ export class MemoryController implements vscode.Disposable {
     const sameRun = this.lastSession?.id === pause.session.id;
     const step = sameRun ? (this.history[this.history.length - 1]?.step ?? 0) + 1 : 1;
     try {
-      const snapshot = await collectSnapshot(
-        { request: (command, args) => Promise.resolve(pause.session.customRequest(command, args)) },
-        pause.threadId,
-        step,
-        // The file on disk is the text that the program runs, also when the editor has changes that are not saved.
-        { limits: this.limits(), readSource: (path) => readFile(path, 'utf8') },
-      );
+      const dap: DapClient = {
+        request: (command, args) => Promise.resolve(pause.session.customRequest(command, args)),
+      };
+      const v8 = await this.connect(pause.session, dap);
+      const snapshot = await collectSnapshot(dap, v8, pause.threadId, step, { limits: this.limits() });
       if (seq !== this.refreshSeq) return; // the program moved on; this result is old
       this.lastSnapshot = snapshot;
       if (!sameRun) {
@@ -447,6 +450,29 @@ export class MemoryController implements vscode.Disposable {
     }
   }
 
+  /**
+   * The connection to V8 of a debug session. The first step of a session opens it; later steps use it again. When it
+   * is closed or could not be opened, the next step opens a new one.
+   */
+  private async connect(session: vscode.DebugSession, dap: DapClient): Promise<V8Connection> {
+    const known = await this.connections.get(session.id);
+    if (known && !known.closed) return known;
+    const opening = V8Connection.open(dap);
+    this.connections.set(session.id, opening);
+    const connection = await opening;
+    if (!connection) {
+      if (this.connections.get(session.id) === opening) this.connections.delete(session.id);
+      throw new Error("no connection to V8 through VS Code's JavaScript debugger");
+    }
+    return connection;
+  }
+
+  private disconnect(sessionId: string): void {
+    const connection = this.connections.get(sessionId);
+    this.connections.delete(sessionId);
+    void connection?.then((c) => c?.dispose());
+  }
+
   private postFocusFrame(): void {
     const item = (vscode.debug as any).activeStackItem;
     const frameId = item && typeof item.frameId === 'number' ? item.frameId : undefined;
@@ -454,6 +480,7 @@ export class MemoryController implements vscode.Disposable {
   }
 
   dispose(): void {
+    for (const id of [...this.connections.keys()]) this.disconnect(id);
     while (this.disposables.length) this.disposables.pop()?.dispose();
     this.panel?.dispose();
   }

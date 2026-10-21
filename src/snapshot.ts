@@ -2,22 +2,23 @@
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
-// Builds one MemorySnapshot from a paused debug session, using only standard
-// Debug Adapter Protocol requests: stackTrace, scopes, variables, evaluate.
+// Builds one MemorySnapshot from a paused debug session. The frames come from the Debug Adapter Protocol (DAP) request
+// stackTrace of VS Code's JavaScript debugger, which gives their names, files and lines (the debugger reads the source
+// maps of TypeScript). The scopes, the variables and the heap come from V8 with the Chrome DevTools Protocol (CDP),
+// through the connection of src/v8Connection.ts: V8 gives the variables of each scope in the order of the program.
 // This file does not import 'vscode', so tests can run it with a fake debug session.
 
 import type { Frame, HeapObject, MemorySnapshot, ScopeKind, Value, Variable } from './model.ts';
 import {
   DEFAULT_LIMITS,
   frameExpression,
-  GLOBAL_NAME,
   installExpression,
   isIdentifier,
   NOT_INSTALLED,
   type WalkerLimits,
   type WalkerResult,
 } from './heapWalker.ts';
-import { declarationOffsets, indexSource, offsetOf, type SourceIndex } from './sourceOrder.ts';
+import type { CdpCallFrame, CdpClient, CdpRemoteObject } from './v8Connection.ts';
 
 /** The part of a debug session that the collector needs. */
 export interface DapClient {
@@ -41,49 +42,33 @@ export interface DapStackFrame {
   presentationHint?: string;
 }
 
-export interface DapScope {
-  name: string;
-  variablesReference: number;
-  expensive?: boolean;
-  presentationHint?: string;
-  /** The place of the scope in its source file (VS Code's JavaScript debugger gives it), from 1. */
-  line?: number;
-  column?: number;
-  endLine?: number;
-  endColumn?: number;
-  source?: DapSource;
-}
-
-export interface DapVariable {
-  name: string;
-  value: string;
-  type?: string;
-  variablesReference: number;
-}
-
 export interface CollectOptions {
   limits?: WalkerLimits;
   /** Maximum number of frames that are read. Older frames are left out. */
   maxFrames?: number;
-  /**
-   * Reads the text of a source file. With it, the variables of each scope are in the order of their declarations
-   * (see `inSourceOrder`); without it, in the order of the debugger.
-   */
-  readSource?: (path: string) => Promise<string | undefined>;
 }
 
 type ScopeClass = ScopeKind | 'global' | 'other';
 
-/** Classifies a scope by the name that VS Code's JavaScript debugger gives it. */
-export function classifyScope(scope: DapScope): ScopeClass {
-  const n = scope.name.trim().toLowerCase();
-  if (/^(local|lokal)\b/.test(n)) return 'local';
-  if (/^(block|catch|with)\b/.test(n)) return 'block';
-  if (/^closure\b/.test(n)) return 'closure';
-  if (/^(module|modul|script|skript)\b/.test(n)) return 'module';
-  if (/^global\b/.test(n) || scope.expensive) return 'global';
-  if (scope.presentationHint === 'locals') return 'local';
-  return 'other';
+/** The class of a scope of V8, by its type in the Chrome DevTools Protocol. */
+export function classifyScope(type: string): ScopeClass {
+  switch (type) {
+    case 'local':
+      return 'local';
+    case 'block':
+    case 'catch':
+    case 'with':
+      return 'block';
+    case 'closure':
+      return 'closure';
+    case 'module':
+    case 'script':
+      return 'module';
+    case 'global':
+      return 'global';
+    default:
+      return 'other';
+  }
 }
 
 /**
@@ -236,55 +221,15 @@ export function isFieldSetupFrame(debuggerName: string): boolean {
   return debuggerName.includes('<instance_members_initializer>');
 }
 
-/** Removes the quotes that a debugger may put around a string result. */
-export function unquote(text: string): string {
-  const t = text.trim();
-  if (t.length < 2) return t;
-  const q = t[0];
-  if ((q !== '"' && q !== "'" && q !== '`') || t[t.length - 1] !== q) return t;
-  if (q === '"') {
-    try {
-      const s = JSON.parse(t);
-      if (typeof s === 'string') return s;
-    } catch {
-      // fall through to the manual unescape below
-    }
-  }
-  return t.slice(1, -1).replace(/\\(u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|.)/gs, (_m, e: string) => {
-    if (e[0] === 'u' && e[1] === '{') return String.fromCodePoint(parseInt(e.slice(2, -1), 16));
-    if (e[0] === 'u' && e.length === 5) return String.fromCharCode(parseInt(e.slice(1), 16));
-    if (e[0] === 'x' && e.length === 3) return String.fromCharCode(parseInt(e.slice(1), 16));
-    const simple: Record<string, string> = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', v: '\v', '0': '\0' };
-    return simple[e] ?? e;
-  });
-}
-
-/** Parses the JSON text of a heap walker result. Accepts raw JSON text or a quoted string that holds it. */
+/** Parses the JSON text of a heap walker result. */
 export function parseWalkerResult(text: string): WalkerResult | undefined {
-  for (const candidate of [text, unquote(text)]) {
-    try {
-      const v = JSON.parse(candidate);
-      if (v && typeof v === 'object' && Array.isArray(v.vars) && Array.isArray(v.objects)) {
-        return v as WalkerResult;
-      }
-    } catch {
-      // try the next form
-    }
+  try {
+    const v = JSON.parse(text);
+    if (v && typeof v === 'object' && Array.isArray(v.vars) && Array.isArray(v.objects)) return v as WalkerResult;
+  } catch {
+    // not JSON
   }
   return undefined;
-}
-
-/**
- * Parses the result of a frame expression, "<length>:<JSON text>" (see `end` in src/heapWalker.ts), raw or in the
- * quotes of the debugger. `result` is missing when the JSON text is shorter than `length`: the debugger shortened it.
- */
-export function parseFrameResult(text: string): { length: number; result?: WalkerResult } | undefined {
-  const t = unquote(text);
-  const m = /^(\d+):/.exec(t);
-  if (!m) return undefined;
-  const length = Number(m[1]);
-  const json = t.slice(m[0].length);
-  return { length, result: json.length === length ? parseWalkerResult(json) : undefined };
 }
 
 function baseName(path: string): string {
@@ -292,18 +237,27 @@ function baseName(path: string): string {
   return parts[parts.length - 1] || path;
 }
 
-interface ScopeVars {
-  kind: ScopeKind;
-  vars: DapVariable[];
+/**
+ * A variable as V8 lists it in a scope, with its value. The heap walker reads the value again, with the ids of the
+ * objects; the value of V8 is for the names that the heap walker cannot read, for example the return value.
+ */
+interface ListedVar {
+  name: string;
+  value?: Value;
 }
 
-/** A variable of a frame in the order of the view, with the name and the value that the debugger gives it. */
+interface ScopeVars {
+  kind: ScopeKind;
+  vars: ListedVar[];
+}
+
+/** A variable of a frame in the order of the view. */
 interface DisplayVar {
   name: string;
   scope: ScopeKind;
-  /** The number of the scope in the list of the debugger, from the innermost scope. */
+  /** The number of the scope in the scope chain of V8, from the innermost scope. */
   group: number;
-  dap: DapVariable;
+  listed: ListedVar;
 }
 
 /** A frame with the names of its variables, before the heap walker reads their values. */
@@ -317,30 +271,24 @@ interface FrameNames {
 /** What the heap walker read in a frame: its result, an error, or nothing because it is not installed. */
 type FrameRead = { result: WalkerResult } | { error: string } | { notInstalled: true } | undefined;
 
-interface ReadFrame {
-  frame: Frame;
-  /**
-   * The names in the local scope that are not variables of the program: at a return, VS Code's JavaScript debugger
-   * adds the return value of the function, with a name in the display language of VS Code ("Return value",
-   * "Rückgabewert" in German).
-   */
-  notVariables: Set<string>;
-}
+/** The name of the return value of a function in the local scope of its frame, as VS Code's debugger shows it. */
+export const RETURN_VALUE = 'Return value';
 
 /**
- * Reads the stack and the heap of a paused thread.
+ * Reads the stack and the heap of a paused thread. `v8` is the connection to V8 of the same debug session.
  * `step` is the number of this pause in the debug session (used for change highlighting).
  *
  * The requests go out in rounds: all requests of a round at the same time, and the next round when their answers are
- * back. In a remote window, each request goes from the extension host to the window and back to the debugger, and
- * its answer takes the same way back, so the number of rounds, not the number of requests, sets the time of a step.
- * A step needs four rounds, whatever the number of frames: the stack trace, the scopes of all frames, the variables of
- * all scopes, and the heap walker in all frames. The first step of a session installs the walker in the round of the
- * scopes; when the walker is missing at a later step (a new program in the same session), two more rounds install it
- * and read the frames again.
+ * back. Only the request stackTrace goes through the window of a remote session (for example a Codespace), from the
+ * extension host to the window and back to the debugger. The requests to V8 go to the debugger directly (see
+ * src/v8Connection.ts). A step needs three rounds, whatever the number of frames: the stack trace together with the
+ * call frames of V8, the variables of all scopes, and the heap walker in all frames. The first step of a session
+ * installs the walker in the round of the variables; when the walker is missing at a later step (a new program in the
+ * same session), two more rounds install it and read the frames again.
  */
 export async function collectSnapshot(
   dap: DapClient,
+  v8: CdpClient,
   threadId: number,
   step: number,
   options: CollectOptions = {},
@@ -348,15 +296,23 @@ export async function collectSnapshot(
   const limits = options.limits ?? DEFAULT_LIMITS;
   const maxFrames = options.maxFrames ?? 30;
 
-  const trace = await dap.request('stackTrace', { threadId, startFrame: 0, levels: 200 });
+  const [trace, callFrames] = await Promise.all([
+    dap.request('stackTrace', { threadId, startFrame: 0, levels: 200 }),
+    v8.callFrames(),
+  ]);
   const allFrames: DapStackFrame[] = (trace?.stackFrames ?? []).map(withLocalPath);
 
   // Keep the frames of the student's code. Stop at the first async boundary: the frames
   // after it are not on the stack any more and cannot be read.
   const userFrames: DapStackFrame[] = [];
-  for (const f of allFrames) {
+  const stackIndexes: number[] = [];
+  for (let i = 0; i < allFrames.length; i++) {
+    const f = allFrames[i];
     if (f.presentationHint === 'label') break;
-    if (isUserFrame(f)) userFrames.push(f);
+    if (isUserFrame(f)) {
+      userFrames.push(f);
+      stackIndexes.push(i);
+    }
     if (userFrames.length >= maxFrames) break;
   }
 
@@ -367,37 +323,36 @@ export async function collectSnapshot(
   const top = userFrames[0];
   snapshot.location = top.source?.path ? `${baseName(top.source.path)}:${top.line}` : undefined;
 
+  const v8Frames = matchCallFrames(callFrames, allFrames, stackIndexes);
+  if (!v8Frames) throw new Error('the call frames of V8 do not match the call stack of the debugger');
+  const evaluate = (i: number, expression: string) => evaluateOnCallFrame(v8, v8Frames[i], expression);
+
   // The newest frame where the helper can run.
-  const helperFrame = userFrames.find((f) => !isFieldSetupFrame(f.name));
+  const helperIndex = userFrames.findIndex((f) => !isFieldSetupFrame(f.name));
   const install = async (): Promise<boolean> => {
-    if (!helperFrame) return false;
+    if (helperIndex < 0) return false;
     try {
-      await dap.request('evaluate', { expression: installExpression(), frameId: helperFrame.id });
+      await evaluate(helperIndex, installExpression());
       return true;
     } catch {
       return false;
     }
   };
   // The walker stays in the program until the program ends, so the first step of a session installs it.
-  const [scopes, sources] = await Promise.all([
-    Promise.all(userFrames.map((f) => readScopes(dap, f.id))),
-    readSources(userFrames, options.readSource),
+  const [named] = await Promise.all([
+    Promise.all(userFrames.map((f, i) => readNames(v8, f, v8Frames[i], i === userFrames.length - 1))),
     step === 1 ? install() : undefined,
   ]);
-  const named = await Promise.all(
-    userFrames.map((f, i) =>
-      readNames(dap, f, i === userFrames.length - 1, scopes[i], sources.get(f.source?.path ?? '')),
-    ),
-  );
   // The helper never runs in the frame that sets up the fields of a new object.
-  const walk = (i: number) => (isFieldSetupFrame(userFrames[i].name) ? undefined : walkFrame(dap, named[i], limits, i));
+  const walk = (i: number) =>
+    isFieldSetupFrame(userFrames[i].name) ? undefined : walkFrame((e) => evaluate(i, e), named[i], limits);
   let reads = await Promise.all(named.map((_, i) => walk(i)));
 
   const notInstalled = (r: FrameRead) => r !== undefined && 'notInstalled' in r;
   if (reads.some(notInstalled) && (await install())) {
     reads = await Promise.all(named.map((_, i) => (notInstalled(reads[i]) ? walk(i) : reads[i])));
   }
-  snapshot.fallback = !helperFrame || reads.some(notInstalled);
+  snapshot.fallback = helperIndex < 0 || reads.some(notInstalled);
 
   const missing = new Set<number>();
   for (const r of reads) {
@@ -408,8 +363,7 @@ export async function collectSnapshot(
   const frames = named.map((n, i) => withValues(n, reads[i], snapshot.objects));
 
   // Oldest frame first, like Python Tutor.
-  frames.reverse();
-  snapshot.frames = frames.map((r) => r.frame);
+  snapshot.frames = frames.reverse();
   // The names of constructors and methods need the classes on the heap, which all frames together have read.
   const names = userFrames.map((f) => f.name).reverse();
   snapshot.frames.forEach((frame, i) => {
@@ -421,84 +375,78 @@ export async function collectSnapshot(
     }
     const self = frame.vars.find((v) => v.name === 'this')?.value;
     frame.name = frameLabel(names[i], self, snapshot.objects, snapshot.frames[i - 1]?.name);
-    // At the end of a constructor, the debugger shows a return value (undefined, or the new object in a subclass),
-    // which the program never gets: `new` gives the new object. So the view shows no return value there.
-    if (isClassSetup(frame.name)) frame.vars = frame.vars.filter((v) => !frames[i].notVariables.has(v.name));
+    // At the end of a constructor, V8 gives a return value (undefined, or the new object in a subclass), which the
+    // program never gets: `new` gives the new object. So the view shows no return value there.
+    if (isClassSetup(frame.name)) frame.vars = frame.vars.filter((v) => v.name !== RETURN_VALUE);
   });
   snapshot.missing = [...missing].filter((id) => !(id in snapshot.objects));
   return snapshot;
 }
 
-/** The indexes of the source files of the frames, by path. A file that cannot be read is left out. */
-async function readSources(
-  frames: DapStackFrame[],
-  read: CollectOptions['readSource'],
-): Promise<Map<string, SourceIndex>> {
-  const sources = new Map<string, SourceIndex>();
-  if (!read) return sources;
-  const paths = new Set(frames.map((f) => f.source?.path).filter((p) => p !== undefined));
-  await Promise.all(
-    [...paths].map(async (path) => {
-      try {
-        const text = await read(path);
-        if (text !== undefined) sources.set(path, indexSource(text));
-      } catch {
-        // The variables of this file stay in the order of the debugger.
-      }
-    }),
-  );
-  return sources;
+/**
+ * The call frames of V8 for the frames of the student's code, or undefined when they do not match the stack trace of
+ * the debugger. VS Code's JavaScript debugger makes one stack frame of each call frame of V8, in the same order, up to
+ * the first label of an async boundary. `stackIndexes` are the indexes of the frames of the student's code in
+ * `allFrames`.
+ */
+export function matchCallFrames(
+  callFrames: CdpCallFrame[],
+  allFrames: DapStackFrame[],
+  stackIndexes: number[],
+): CdpCallFrame[] | undefined {
+  const label = allFrames.findIndex((f) => f.presentationHint === 'label');
+  const sync = label < 0 ? allFrames.length : label;
+  // The debugger gives at most the 200 frames that collectSnapshot asks for.
+  const complete = callFrames.length === sync || (label < 0 && sync >= 200 && callFrames.length > sync);
+  return complete ? stackIndexes.map((i) => callFrames[i]) : undefined;
 }
 
 /**
- * The variables of a scope in the order of their declarations in the source file of the frame. V8 gives the
- * variables of a scope in the order of the program, but VS Code's JavaScript debugger sorts them by name. The debugger
- * gives the place of each scope in the file; the Module scope is the whole file. A variable without a declaration in
- * that place, for example the return value of a function, comes after the other ones, in the order of the debugger.
+ * Evaluates source text in a call frame of V8 and gives the string that it returns. Silent: an exception in the text
+ * does not pause the program, also when the debugger pauses on caught exceptions. By value: V8 gives the whole string.
  */
-export function inSourceOrder(
-  vars: DapVariable[],
-  scope: DapScope,
-  kind: ScopeKind,
-  file: string | undefined,
-  source: SourceIndex | undefined,
-): DapVariable[] {
-  if (!source || vars.length < 2) return vars;
-  let start = 0;
-  let end = source.length;
-  if (kind !== 'module') {
-    // Without a source, the line of the scope is a line of the JavaScript that the runtime made from a TypeScript file.
-    const path = scope.source?.path;
-    if (!scope.line || !path || localPath(path) !== file) return vars;
-    start = offsetOf(source, scope.line, scope.column ?? 1);
-    const last = scope.endLine ? offsetOf(source, scope.endLine, scope.endColumn ?? 1) : end;
-    if (last > start) end = last;
+async function evaluateOnCallFrame(v8: CdpClient, callFrame: CdpCallFrame, expression: string): Promise<string> {
+  const res = await v8.send('Debugger.evaluateOnCallFrame', {
+    callFrameId: callFrame.callFrameId,
+    expression,
+    silent: true,
+    returnByValue: true,
+  });
+  if (res?.exceptionDetails) {
+    throw new Error(String(res.exceptionDetails.exception?.description ?? res.exceptionDetails.text));
   }
-  const offsets = declarationOffsets(source, vars.map((v) => v.name), start, end);
-  return vars
-    .map((v, i) => ({ v, at: offsets[i] }))
-    .sort((a, b) => (a.at === b.at ? 0 : a.at - b.at))
-    .map((x) => x.v);
+  if (res?.result?.type !== 'string') throw new Error('unexpected result from the heap walker');
+  return String(res.result.value);
 }
 
-async function readScopes(dap: DapClient, frameId: number): Promise<{ cls: ScopeClass; scope: DapScope }[]> {
-  const res = await dap.request('scopes', { frameId });
-  const scopes: DapScope[] = res?.scopes ?? [];
-  return scopes.map((scope) => ({ cls: classifyScope(scope), scope }));
+/** A value of V8 as a value of the view. An object is shown as text; a variable without a value is uninitialized. */
+export function remoteValue(o: CdpRemoteObject | undefined): Value {
+  if (!o) return { k: 'uninit' };
+  switch (o.type) {
+    case 'undefined':
+      return { k: 'undef' };
+    case 'number':
+      return { k: 'num', v: o.unserializableValue ?? String(o.value) };
+    case 'string':
+      return { k: 'str', v: String(o.value) };
+    case 'boolean':
+      return { k: 'bool', v: o.value === true };
+    case 'bigint':
+      return { k: 'big', v: o.unserializableValue ?? o.description ?? '' };
+    case 'symbol':
+      return { k: 'sym', v: o.description ?? 'Symbol()' };
+    default:
+      return o.subtype === 'null' ? { k: 'null' } : { k: 'text', v: o.description ?? o.className ?? 'Object' };
+  }
 }
 
-/** Reads the variables of the scopes of a frame that the diagram shows, all scopes at the same time. */
-async function readNames(
-  dap: DapClient,
+/** The frame of the view for a frame of the debugger, and which classes of its scopes the diagram shows. */
+function frameOf(
   f: DapStackFrame,
   isLast: boolean,
-  scopes: { cls: ScopeClass; scope: DapScope }[],
-  source: SourceIndex | undefined,
-): Promise<FrameNames> {
-  const hasLocal = scopes.some((s) => s.cls === 'local');
-  const hasModule = scopes.some((s) => s.cls === 'module');
-  let isGlobal = !hasLocal && (hasModule || (isLast && ANONYMOUS.test(f.name.trim())));
-
+  classes: ScopeClass[],
+): { frame: Frame; wanted: (cls: ScopeClass) => cls is ScopeKind } {
+  const isGlobal = !classes.includes('local') && (classes.includes('module') || (isLast && ANONYMOUS.test(f.name.trim())));
   const frame: Frame = {
     frameId: f.id,
     name: isGlobal ? 'Global scope' : frameName(f.name),
@@ -507,7 +455,6 @@ async function readNames(
     file: f.source?.path,
     vars: [],
   };
-
   // Which scopes belong to this frame in the diagram.
   const wanted = (cls: ScopeClass): cls is ScopeKind => {
     if (cls === 'global') return false;
@@ -515,23 +462,51 @@ async function readNames(
     if (cls === 'closure') return !isGlobal;
     return true; // local, block, other
   };
+  return { frame, wanted };
+}
 
+/**
+ * Reads the variables of the scopes of a call frame that the diagram shows, all scopes at the same time. V8 gives the
+ * variables of a scope in the order of the program, also the ones before their line has run: a `let` that is not
+ * initialized yet, and a `var` that is still undefined. At the return of a function, the local scope also lists its
+ * return value.
+ */
+async function readNames(v8: CdpClient, f: DapStackFrame, cf: CdpCallFrame, isLast: boolean): Promise<FrameNames> {
+  const scopes = cf.scopeChain.map((scope) => ({ cls: classifyScope(scope.type), scope }));
+  const { frame, wanted } = frameOf(
+    f,
+    isLast,
+    scopes.map((s) => s.cls),
+  );
   const read = await Promise.all(
     scopes.map(async ({ cls, scope }): Promise<ScopeVars | undefined> => {
       const kind: ScopeClass = cls === 'other' ? 'block' : cls;
-      if (!wanted(kind) || scope.variablesReference <= 0) return undefined;
+      if (!wanted(kind) || !scope.object.objectId) return undefined;
       try {
-        const res = await dap.request('variables', { variablesReference: scope.variablesReference });
-        return { kind, vars: inSourceOrder(res?.variables ?? [], scope, kind, f.source?.path, source) };
+        const res = await v8.send('Runtime.getProperties', { objectId: scope.object.objectId, ownProperties: true });
+        const vars: ListedVar[] = (res?.result ?? []).map((p: { name: string; value?: CdpRemoteObject }) => ({
+          name: String(p.name),
+          value: remoteValue(p.value),
+        }));
+        if (kind === 'local' && cf.returnValue) vars.push({ name: RETURN_VALUE, value: remoteValue(cf.returnValue) });
+        return { kind, vars };
       } catch {
         frame.note = 'Some variables could not be read.';
         return undefined;
       }
     }),
   );
-  const scopeVars = read.filter((sv) => sv !== undefined);
+  return displayOf(
+    f,
+    isLast,
+    frame,
+    read.filter((sv) => sv !== undefined),
+  );
+}
 
-  // DAP lists scopes from the innermost to the outermost. The innermost name wins
+/** The variables of a frame in the order of the view, and the names that the heap walker reads. */
+function displayOf(f: DapStackFrame, isLast: boolean, frame: Frame, scopeVars: ScopeVars[]): FrameNames {
+  // The scopes come from the innermost to the outermost. The innermost name wins
   // (this is also what an expression in this frame sees).
   const seen = new Set<string>();
   let ordered: DisplayVar[] = [];
@@ -539,24 +514,23 @@ async function readNames(
     for (const v of sv.vars) {
       if (seen.has(v.name)) continue;
       seen.add(v.name);
-      ordered.push({ name: v.name, scope: sv.kind, group, dap: v });
+      ordered.push({ name: v.name, scope: sv.kind, group, listed: v });
     }
   });
   const localNames = ordered.filter((o) => o.scope === 'local').map((o) => o.name);
-  if (!isGlobal && isCommonJsModule(f.name, isLast, localNames)) {
-    isGlobal = true;
+  if (!frame.isGlobal && isCommonJsModule(f.name, isLast, localNames)) {
     frame.isGlobal = true;
     frame.name = 'Global scope';
-    const hidden = new Set([...COMMONJS_PARAMETERS, 'this']);
-    ordered = ordered.filter((o) => !(o.scope === 'local' && hidden.has(o.name)));
+    ordered = ordered.filter((o) => !(o.scope === 'local' && COMMONJS_PARAMETERS.includes(o.name)));
   }
-  if (!isGlobal && !seen.has('this')) {
-    ordered.push({ name: 'this', scope: 'local', group: 0, dap: { name: 'this', value: '', variablesReference: 0 } });
+  // V8 gives `this` with the call frame, not in a scope. The heap walker reads it.
+  if (!frame.isGlobal && !seen.has('this')) {
+    ordered.push({ name: 'this', scope: 'local', group: 0, listed: { name: 'this' } });
   }
 
   // Display order: local variables, then block variables from the outer to the inner block,
   // then closure variables. In the Global scope: module variables, then blocks. Inside each scope, the variables keep
-  // their order (see inSourceOrder); the sort is stable.
+  // the order of V8; the sort is stable.
   const rank = (s: ScopeKind): number => (s === 'local' || s === 'module' ? 0 : s === 'block' ? 1 : 2);
   const blocksOuterFirst = ordered.filter((o) => o.scope === 'block').sort((x, y) => y.group - x.group);
   const display = [
@@ -572,19 +546,26 @@ async function readNames(
   return { frame, display, readable };
 }
 
-/** Runs the heap walker in a frame. `key` is the number of the frame, for the parts of a long result. */
-async function walkFrame(dap: DapClient, named: FrameNames, limits: WalkerLimits, key: number): Promise<FrameRead> {
+/** Runs the heap walker in a frame. `evaluate` evaluates source text in the frame. */
+async function walkFrame(
+  evaluate: (expression: string) => Promise<string>,
+  named: FrameNames,
+  limits: WalkerLimits,
+): Promise<FrameRead> {
   if (named.readable.length === 0) return undefined;
   try {
-    const result = await evaluateFrame(dap, named.frame.frameId, named.readable, limits, key);
-    return result === NOT_INSTALLED ? { notInstalled: true } : { result };
+    const text = await evaluate(frameExpression(named.readable, limits));
+    if (text === NOT_INSTALLED) return { notInstalled: true };
+    const result = parseWalkerResult(text);
+    if (!result) throw new Error('the heap walker result could not be parsed');
+    return { result };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
 }
 
 /** The frame with the values of its variables. `objects` holds the heap objects that all frames together have read. */
-function withValues(named: FrameNames, read: FrameRead, objects: Record<number, HeapObject>): ReadFrame {
+function withValues(named: FrameNames, read: FrameRead, objects: Record<number, HeapObject>): Frame {
   const { frame, display } = named;
   if (read && 'error' in read) frame.note = `The heap could not be read in this scope: ${read.error}`;
 
@@ -593,21 +574,10 @@ function withValues(named: FrameNames, read: FrameRead, objects: Record<number, 
     for (const v of read.result.vars) walkedVars.set(v.name, v.value);
   }
 
-  // The program cannot read a name that the debugger added: it is not an identifier, or the helper found no variable
-  // of that name.
-  const notVariables = new Set(
-    display
-      .filter((o) => o.scope === 'local' && o.name !== 'this')
-      .filter((o) => !isIdentifier(o.name) || walkedVars.get(o.name)?.k === 'unavail')
-      .map((o) => o.name),
-  );
-
   for (const o of display) {
-    let value: Value | undefined = walkedVars.get(o.name);
-    if (!value) {
-      if (o.name === 'this') continue;
-      value = { k: 'text', v: o.dap.value };
-    }
+    const value = walkedVars.get(o.name) ?? o.listed.value;
+    // Only `this` has no value of V8: without the heap walker, it is not shown.
+    if (!value) continue;
     if (o.name === 'this') {
       if (value.k === 'undef' || value.k === 'null') continue;
       if (value.k === 'ref' && objects[value.id]?.type === 'globalThis') continue;
@@ -621,47 +591,5 @@ function withValues(named: FrameNames, read: FrameRead, objects: Record<number, 
     const variable: Variable = { name: o.name, value, scope: o.scope };
     frame.vars.push(variable);
   }
-  return { frame, notVariables };
-}
-
-/** The number of characters of the result text in one request of `evaluateFrame` when the debugger shortened it. */
-const CHUNK_SIZE = 20000;
-
-/**
- * Evaluates the frame expression of the heap walker. No `context`: VS Code's JavaScript debugger then evaluates the
- * text as it is, in the scope of the frame. For the context "clipboard", it puts the text into its own function,
- * whose variables (`t`, `e`, `i`, `o` and others) hide the variables of the program with the same names. Without a
- * context, it gives back a string of up to 100,000 characters in quotes, and shortens a longer string in the middle;
- * the length in front of the result shows that, and the result is then read in parts.
- */
-async function evaluateFrame(
-  dap: DapClient,
-  frameId: number,
-  names: string[],
-  limits: WalkerLimits,
-  key: number,
-): Promise<WalkerResult | typeof NOT_INSTALLED> {
-  const evaluate = async (expression: string): Promise<string> =>
-    String((await dap.request('evaluate', { expression, frameId }))?.result ?? '');
-  const text = await evaluate(frameExpression(names, limits, key));
-  if (unquote(text) === NOT_INSTALLED) return NOT_INSTALLED;
-  const read = parseFrameResult(text);
-  if (read?.result) return read.result;
-  if (!read || read.length === 0) throw new Error('unexpected result from the heap walker');
-
-  // The debugger shortened the text. Read it again in parts, all parts at the same time.
-  const count = Math.ceil(read.length / CHUNK_SIZE);
-  const parts = await Promise.all(
-    Array.from({ length: count }, (_, i) => evaluate(`globalThis.${GLOBAL_NAME}.chunk(${key}, ${i}, ${CHUNK_SIZE})`)),
-  );
-  const full = parts
-    .map((part) => {
-      const value: unknown = JSON.parse(unquote(part));
-      if (typeof value !== 'string') throw new Error('unexpected part of the heap walker result');
-      return value;
-    })
-    .join('');
-  const again = full.length === read.length ? parseWalkerResult(full) : undefined;
-  if (!again) throw new Error('the heap walker result could not be parsed');
-  return again;
+  return frame;
 }

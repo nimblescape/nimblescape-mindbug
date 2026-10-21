@@ -229,6 +229,48 @@ async function variableOrder(api: MindbugApi, start: Start): Promise<void> {
   }
 }
 
+async function varAndLet(api: MindbugApi, start: Start): Promise<void> {
+  const file = path.join(examples(), 'var-and-let.ts');
+  // No breakpoint before the first pause: with Deno, a breakpoint can hide the pause at the first statement.
+  let s = await debug(api, start, file, []);
+  if (start.pausesAtFirstStatement) {
+    // At the first line, the Global scope already has all its variables.
+    assert.equal(top(s).line, 20);
+    assert.deepEqual(variable(s, 'Global scope', 'label'), { k: 'undef' });
+    assert.deepEqual(variable(s, 'Global scope', 'total'), { k: 'uninit' });
+    assert.equal(s.objects[idOf(variable(s, 'Global scope', 'shop'))]?.kind, 'function');
+  }
+  const locals = (snapshot: MemorySnapshot) =>
+    top(snapshot)
+      .vars.filter((v) => v.scope === 'local' && v.name !== 'this')
+      .map((v) => [v.name, v.value.k === 'ref' ? 'ref' : v.value]);
+  // Steps, not breakpoints: a breakpoint that is added while the program is paused can come too late for the next
+  // continue. In the call of shop, the var note is a variable of the function, although its line is inside a block.
+  s = await step(api, 'stepOver');
+  assert.equal(top(s).line, 21);
+  s = await step(api, 'stepInto');
+  assert.equal(top(s).name, 'shop');
+  assert.equal(top(s).line, 25);
+  assert.deepEqual(locals(s), [
+    ['prices', 'ref'],
+    ['sum', { k: 'uninit' }],
+    ['note', { k: 'undef' }],
+  ]);
+  // After the loop, note keeps its value, and the variables of the blocks of the loop are gone.
+  for (let i = 0; i < 40 && top(s).line !== 33; i++) s = await step(api, 'stepOver');
+  assert.equal(top(s).line, 33);
+  assert.deepEqual(locals(s), [
+    ['prices', 'ref'],
+    ['sum', { k: 'num', v: '21' }],
+    ['note', { k: 'str', v: 'expensive' }],
+  ]);
+  assert.deepEqual(
+    top(s).vars.filter((v) => v.scope === 'block'),
+    [],
+  );
+  await stop();
+}
+
 async function insertionSort(api: MindbugApi, start: Start): Promise<void> {
   const file = path.join(examples(), 'insertion-sort.ts');
   // The breakpoint is not on line 19 (the line after the loop): before the source map of Node.js is loaded, the
@@ -546,10 +588,10 @@ async function exportsBeforeDeclaration(api: MindbugApi, start: Start): Promise<
     );
     assert.equal(top(s).line, 8);
     assert.deepEqual(variable(s, 'Global scope', 'LIMIT'), { k: 'num', v: '3' });
-    // Deno 2.5 and newer (CI: 2.9.7) list Car in the Global scope here, and reading it stopped Deno. Deno 2.0 to 2.4
-    // and Node.js do not list it.
-    const cls = s.frames[0].vars.find((v) => v.name === 'Car');
-    if (cls) assert.deepEqual(cls.value, { k: 'uninit' });
+    // V8 lists Car in the Global scope here. Deno 2.5 and newer (CI: 2.9.7) give the internal empty value for it, and
+    // reading it stopped Deno. Deno 2.0 to 2.4 and Node.js read the class itself.
+    const cls = variable(s, 'Global scope', 'Car');
+    if (cls.k !== 'uninit') assert.equal(idOf(cls), idOf(variable(s, 'Car (set up static variables)', 'this')));
     // The program still runs, and the class has its static variable.
     s = await runToLine(api, file, 18);
     const car = s.objects[idOf(variable(s, 'Global scope', 'Car'))];
@@ -634,6 +676,7 @@ describe('the Mindbug view in VS Code', () => {
       it('reads the variables named t, e, r, n, i and o', () => names(api, start));
       it('steps into the set-up of the static variable of an exported class', () => exportsBeforeDeclaration(api, start));
       it('shows the variables of each scope in the order of the program', () => variableOrder(api, start));
+      it('shows a var and a let before their lines, and a var in a block', () => varAndLet(api, start));
     });
   }
 });

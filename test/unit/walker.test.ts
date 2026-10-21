@@ -17,15 +17,15 @@ import {
   type WalkerResult,
 } from '../../src/heapWalker.ts';
 import type { HeapObject } from '../../src/model.ts';
-import { parseFrameResult } from '../../src/snapshot.ts';
+import { parseWalkerResult } from '../../src/snapshot.ts';
 
 (0, eval)(installExpression());
 
-/** The result of a frame expression ("<length>:<JSON text>"). */
+/** The result of a frame expression (JSON text). */
 function parsed(text: string): WalkerResult {
-  const read = parseFrameResult(text);
-  assert.ok(read?.result, 'a complete result');
-  return read.result;
+  const result = parseWalkerResult(text);
+  assert.ok(result, 'a complete result');
+  return result;
 }
 
 function byId(r: WalkerResult): Record<number, HeapObject> {
@@ -68,21 +68,16 @@ test('without the walker, the frame expression says so, and reads no variable', 
   }
 });
 
-test('the result has its length in front, and its parts give the whole text, also across a surrogate pair', () => {
+test('the result is the JSON text of the snapshot, also with characters outside the BMP', () => {
   const words = ['😀😀😀', 'ä'.repeat(7)];
-  const text: string = eval(frameExpression(['words'], DEFAULT_LIMITS, 4));
-  const read = parseFrameResult(text);
-  assert.ok(read?.result);
-  assert.equal(`${read.length}:`.length + read.length, text.length);
-  // The debugger keeps the start of a long text, and the end: the length shows that the middle is missing.
-  const json = text.slice(text.indexOf(':') + 1);
-  assert.deepEqual(parseFrameResult(`${read.length}:${json.slice(0, 20)}${json.slice(-20)}`), { length: read.length, result: undefined });
-  const api = (globalThis as any)[GLOBAL_NAME];
-  for (const size of [1, 7, 100]) {
-    let whole = '';
-    for (let i = 0; i * size < read.length; i++) whole += JSON.parse(api.chunk(4, i, size));
-    assert.equal(whole, json, `parts of ${size} characters`);
-  }
+  const text: string = eval(frameExpression(['words'], DEFAULT_LIMITS));
+  const r = parsed(text);
+  assert.equal(text, JSON.stringify(r));
+  const items = byId(r)[(varOf(r, 'words') as { id: number }).id].items;
+  assert.deepEqual(items, [
+    { k: 'str', v: words[0] },
+    { k: 'str', v: words[1] },
+  ]);
 });
 
 test('two variables that point to the same array get the same id, also in the next step', () => {

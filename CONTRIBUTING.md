@@ -13,7 +13,7 @@ security model.
 | `src/extension.ts` | The entry point: the controller, the configuration provider of the debug type `mindbug`, and the commands. |
 | `src/launch.ts`, `src/runtime.ts` | The debug type `mindbug`, the command **Run with Mindbug**, and the choice of Deno or Node.js. |
 | `src/controller.ts` | Follows the debug sessions of the JavaScript debugger, reads a snapshot at each pause, and marks the line of an earlier step in the editor. |
-| `src/snapshot.ts`, `src/heapWalker.ts` | Build one snapshot with the requests of the Debug Adapter Protocol, and the helper that runs in the paused program. |
+| `src/snapshot.ts`, `src/v8Connection.ts`, `src/heapWalker.ts` | Build one snapshot with the stack trace of the Debug Adapter Protocol and the requests to V8 through the CDP proxy of the JavaScript debugger, and the helper that runs in the paused program. |
 | `src/changes.ts`, `src/model.ts` | The changes between two snapshots, and the types of a snapshot and of the messages of the view. |
 | `src/panel.ts`, `src/webviewHtml.ts` | The webview panel "Mindbug" and its HTML page with its content security policy. |
 | `webview/` | The view: the step history, the layout, the HTML of the boxes, the arrows and the styles. |

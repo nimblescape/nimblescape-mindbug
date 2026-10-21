@@ -8,9 +8,9 @@ The README and the Marketplace page list these behaviors at the top. Each item l
 
 - **When it works.** Mindbug activates when a debug session starts in VS Code (`onDebug`), or when you run one of its commands. Before that, it does nothing. It does not run in Restricted Mode (see [Workspace trust](#workspace-trust)).
 - **Runtimes.** **Run with Mindbug** and a launch configuration of type `mindbug` run `deno --version` or `node --version` to find a runtime: the programs of the settings `nimblescape.mindbug.denoPath` and `nimblescape.mindbug.nodePath`, `deno` and `node` on the `PATH` by default. Then the JavaScript debugger of VS Code starts your TypeScript file with `deno run --inspect-brk=127.0.0.1:<port> --allow-all` or `node --inspect-brk=127.0.0.1:<port> --experimental-transform-types`, in the workspace folder, and connects to `127.0.0.1:<port>`. **Run with Mindbug** saves the file before it starts it. See [The program that you run](#the-program-that-you-run).
-- **Code in your program.** At each pause of a debug session of the JavaScript debugger for Node.js and Deno (the debug types `pwa-node`, `node` and `node-terminal`), also of one that Mindbug did not start, Mindbug sends the debugger `evaluate` requests that run its helper in the paused program. The helper adds the hidden global `__mindbug`, reads the variables and the objects that they reach, calls no getter, and changes no variable and no object of the program. A `Proxy` runs its traps when the helper reads it. Mindbug sends no request to the sessions of other debuggers. See [The heap helper](#the-heap-helper).
+- **Code in your program.** At each pause of a debug session of the JavaScript debugger for Node.js and Deno (the debug types `pwa-node`, `node` and `node-terminal`), also of one that Mindbug did not start, Mindbug runs its helper in the paused program, with the request `Debugger.evaluateOnCallFrame` of the Chrome DevTools Protocol, which the debugger sends on to V8, the JavaScript engine of the runtime. The helper adds the hidden global `__mindbug`, reads the variables and the objects that they reach, calls no getter, and changes no variable and no object of the program. A `Proxy` runs its traps when the helper reads it. Mindbug sends no request to the sessions of other debuggers. See [The heap helper](#the-heap-helper).
 - **Files and data.** Mindbug changes no file of your workspace, except the save of **Run with Mindbug**. It keeps the steps of the step history in memory, until the next debug session starts or the debug session restarts. A click on a switch of the view changes the user setting of that switch, which VS Code saves in its user settings; Mindbug writes nothing else to the disk and does not change the settings of a workspace. See [Stored data](#stored-data).
-- **Network.** Mindbug connects to no address. The debugger connects to the runtime on `127.0.0.1`. Deno downloads the modules that your program imports from the web, as `deno run` always does. Mindbug collects no telemetry. See [The view](#the-view).
+- **Network.** Mindbug connects only to the JavaScript debugger of VS Code: to the WebSocket server on `127.0.0.1` whose port the debugger gives with its request `requestCDPProxy`, one connection for each debug session. The debugger connects to the runtime on `127.0.0.1`. Deno downloads the modules that your program imports from the web, as `deno run` always does. Mindbug collects no telemetry. See [The view](#the-view).
 
 ## The trust model
 
@@ -27,7 +27,7 @@ Run only programs that you trust: your own programs, and the examples of a cours
 
 | Part | Runs as | Trusts |
 | --- | --- | --- |
-| The extension (`dist/extension.js`) | Your user, in the extension host of VS Code | VS Code, the JavaScript debugger, and the snapshot data that the helper returns, which it only parses as JSON |
+| The extension (`dist/extension.js`) | Your user, in the extension host of VS Code | VS Code, the JavaScript debugger and the address of its WebSocket server, and the snapshot data that the helper returns, which it only parses as JSON |
 | The JavaScript debugger | Your user, in the extension host | The configuration that Mindbug or `launch.json` gives it |
 | Deno or Node.js with your program, and the helper | Your user, in its own process | Nothing: it is your program |
 | The view (`dist/webview.js`) | The webview of VS Code, without access to files or the network | The messages of the extension |
@@ -47,13 +47,12 @@ VS Code debugs a program only in a workspace that you trust, because a `launch.j
 
 ## The heap helper
 
-The helper is the function `installHeapWalker` of [src/heapWalker.ts](../src/heapWalker.ts). Its text runs in your program with the `evaluate` request of the JavaScript debugger, as an expression that you type in the Debug Console would.
+The helper is the function `installHeapWalker` of [src/heapWalker.ts](../src/heapWalker.ts). Its text runs in your program with the request `Debugger.evaluateOnCallFrame`, which the JavaScript debugger sends on to V8, as an expression that you type in the Debug Console would.
 
 What it does:
 
 - It defines one global property, `__mindbug`, which is not enumerable, so `Object.keys(globalThis)` and `for … in` do not show it; `Object.getOwnPropertyNames(globalThis)` does.
 - It gives each object a number in a `WeakMap`, so that it keeps no object alive: the garbage collection of the program works as without Mindbug.
-- It keeps the JSON text of its last result for each scope in `__mindbug.texts`, until a later pause replaces it or the program ends.
 
 What it does not do:
 
