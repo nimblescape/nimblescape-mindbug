@@ -189,6 +189,48 @@
         }
       }
     },
+    "colors": [
+      {
+        "id": "nimblescape.mindbug.blockScope1",
+        "description": "Mindbug: the color of a block scope at nesting level 1 (the outermost block of a function), for the mark in the editor and the border of its part in the Mindbug view.",
+        "defaults": {
+          "light": "#0b7a68",
+          "dark": "#3dc9b0",
+          "highContrast": "#3dc9b0",
+          "highContrastLight": "#0b6355"
+        }
+      },
+      {
+        "id": "nimblescape.mindbug.blockScope2",
+        "description": "Mindbug: the color of a block scope at nesting level 2, for the mark in the editor and the border of its part in the Mindbug view.",
+        "defaults": {
+          "light": "#0a64b0",
+          "dark": "#4fc1ff",
+          "highContrast": "#4fc1ff",
+          "highContrastLight": "#0a5296"
+        }
+      },
+      {
+        "id": "nimblescape.mindbug.blockScope3",
+        "description": "Mindbug: the color of a block scope at nesting level 3, for the mark in the editor and the border of its part in the Mindbug view.",
+        "defaults": {
+          "light": "#8e36a8",
+          "dark": "#d18ce8",
+          "highContrast": "#e5a1ff",
+          "highContrastLight": "#7a2b92"
+        }
+      },
+      {
+        "id": "nimblescape.mindbug.blockScope4",
+        "description": "Mindbug: the color of a block scope at nesting level 4, for the mark in the editor and the border of its part in the Mindbug view. Level 5 has the color of level 1 again, and so on.",
+        "defaults": {
+          "light": "#a4560b",
+          "dark": "#f29d52",
+          "highContrast": "#f29d52",
+          "highContrastLight": "#8a4709"
+        }
+      }
+    ],
     "debuggers": [
       {
         "type": "mindbug",

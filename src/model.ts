@@ -94,6 +94,8 @@ export interface Frame {
   name: string;
   isGlobal: boolean;
   line: number;
+  /** The column of the paused position in the line, from 1, as the debugger gives it. */
+  column?: number;
   file?: string;
   vars: Variable[];
   /**
@@ -123,6 +125,9 @@ export type BlockKind =
   | 'catch'
   | 'catch body'
   | 'finally';
+
+/** The number of colors of the block scopes (`nimblescape.mindbug.blockScope1` to `4` in package.json). */
+export const BLOCK_COLORS = 4;
 
 export interface MemorySnapshot {
   /** Counts up with every pause of the same run of the program; a restart counts from 1 again. */

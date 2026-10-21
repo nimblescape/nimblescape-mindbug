@@ -5,6 +5,7 @@
 // Entry point of the Mindbug extension.
 
 import * as vscode from 'vscode';
+import type { BlockMark } from './blockRanges.ts';
 import { MemoryController } from './controller.ts';
 import { DEBUG_TYPE, MindbugConfigurationProvider, runWithMindbug } from './launch.ts';
 import type { MemorySnapshot, ViewOptions } from './model.ts';
@@ -20,6 +21,8 @@ export interface MindbugApi {
   viewStep(step: number): void;
   /** Saves a switch of the view as a click on it in the panel does (used by the tests in VS Code, test/vscode). */
   saveViewOption(name: keyof ViewOptions, value: boolean): Promise<void>;
+  /** The marks of the block scopes in the editors of a file (used by the tests in VS Code, test/vscode). */
+  blockMarks(file: string): BlockMark[];
 }
 
 export function activate(context: vscode.ExtensionContext): MindbugApi {
@@ -45,6 +48,7 @@ export function activate(context: vscode.ExtensionContext): MindbugApi {
     historySteps: () => controller.historySteps(),
     viewStep: (step) => controller.viewStep(step),
     saveViewOption: (name, value) => controller.saveViewOption(name, value),
+    blockMarks: (file) => controller.blockMarks(file),
   };
 }
 

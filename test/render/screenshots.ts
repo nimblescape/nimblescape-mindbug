@@ -220,6 +220,9 @@ async function main(): Promise<void> {
       if (parts.join(',') !== 'c a,i,d,e') throw new Error(`block parts: ${parts.join(',')}`);
       const labels = await page.$$eval('.frame .block-label', (els) => els.map((e) => e.textContent));
       if (labels.join(',') !== 'block scope,for scope,for body scope,if scope') throw new Error(`labels: ${labels.join(',')}`);
+      // Each part has the color of its nesting, as the mark of its block in the editor.
+      const colors = await page.$$eval('.frame .block', (els) => els.map((e) => getComputedStyle(e).borderTopColor));
+      if (new Set(colors).size !== 4) throw new Error(`colors of the parts: ${colors.join(', ')}`);
       const innermost = await page.$$eval('.block .block .block .block .var-name', (els) => els.map((e) => e.textContent));
       if (innermost.join(',') !== 'e') throw new Error(`innermost block: ${innermost.join(',')}`);
       const values = await page.$$eval('.frame .var-name', (els) =>

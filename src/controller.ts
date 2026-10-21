@@ -6,10 +6,14 @@
 // snapshot at every pause and sends it to the panel.
 
 import * as vscode from 'vscode';
+import { blockMarks, blockRanges, bracketPairs, type BlockMark, type BracketPair } from './blockRanges.ts';
 import {
+  BLOCK_COLORS,
   DEFAULT_VIEW_OPTIONS,
   stepMarkText,
   VIEW_OPTION_NAMES,
+  type BlockKind,
+  type Frame,
   type FromWebview,
   type MemorySnapshot,
   type ToWebview,
@@ -72,6 +76,12 @@ export class MemoryController implements vscode.Disposable {
    * that the green line needs no knowledge of the colors of the debugger.
    */
   private readonly stepDecoration: vscode.TextEditorDecorationType;
+  /** The marks of the block scopes in the editor, one bar and one frame for each color (`nimblescape.mindbug.blockScope<n>`). */
+  private readonly blockDecorations: { bar: vscode.TextEditorDecorationType; frame: vscode.TextEditorDecorationType }[];
+  /** The block marks that each editor shows, by the URI of its document (for tests). */
+  private readonly shownBlockMarks = new Map<string, BlockMark[]>();
+  /** The brackets of the newest document that got block marks, for its version. */
+  private brackets: { uri: string; version: number; pairs: BracketPair[] } | undefined;
   private viewedStep: Extract<FromWebview, { type: 'viewStep' }> | undefined;
   /** The reveals of revealLine, one after the other: a reveal that waits for an editor to open must not undo a later one. */
   private revealing: Promise<void> = Promise.resolve();
@@ -106,6 +116,18 @@ export class MemoryController implements vscode.Disposable {
       overviewRulerColor: new vscode.ThemeColor('debugIcon.breakpointStackframeForeground'),
       overviewRulerLane: vscode.OverviewRulerLane.Full,
     });
+    this.blockDecorations = Array.from({ length: BLOCK_COLORS }, (_, i) => {
+      const borderColor = new vscode.ThemeColor(`nimblescape.mindbug.blockScope${i + 1}`);
+      return {
+        bar: vscode.window.createTextEditorDecorationType({ borderColor, borderStyle: 'solid', borderWidth: '0 0 0 3px' }),
+        frame: vscode.window.createTextEditorDecorationType({
+          borderColor,
+          borderStyle: 'solid',
+          borderWidth: '2px',
+          borderRadius: '3px',
+        }),
+      };
+    });
     const tracker: vscode.DebugAdapterTrackerFactory = {
       createDebugAdapterTracker: (session) => ({
         onDidSendMessage: (m: any) => this.onAdapterMessage(session, m),
@@ -122,7 +144,15 @@ export class MemoryController implements vscode.Disposable {
         this.disconnect(s.id);
         this.onTerminated(s);
       }),
-      vscode.window.onDidChangeVisibleTextEditors(() => this.markViewedStep()),
+      vscode.window.onDidChangeVisibleTextEditors(() => {
+        this.markViewedStep();
+        this.markBlocks();
+      }),
+      // The marks of the blocks follow an edit of the file.
+      vscode.workspace.onDidChangeTextDocument((e) => {
+        const frame = this.shownFrame();
+        if (frame?.file && sameFile(e.document.uri, frame.file)) this.markBlocks();
+      }),
       vscode.workspace.onDidChangeConfiguration((e) => {
         const changed = VIEW_OPTION_NAMES.filter((name) => e.affectsConfiguration(`nimblescape.mindbug.${name}`));
         if (changed.length === 0 || this.pendingSaves > 0) return;
@@ -130,6 +160,7 @@ export class MemoryController implements vscode.Disposable {
         this.showViewOptions();
       }),
       this.stepDecoration,
+      ...this.blockDecorations.flatMap((d) => [d.bar, d.frame]),
     );
     // `onDidChangeActiveStackItem` exists since VS Code 1.90.
     const debugApi = vscode.debug as any;
@@ -172,6 +203,11 @@ export class MemoryController implements vscode.Disposable {
         this.scheduleRefresh();
       }
     }
+  }
+
+  /** The block marks in the editors of a file (for tests). */
+  blockMarks(file: string): BlockMark[] {
+    return [...this.shownBlockMarks].find(([uri]) => sameFile(vscode.Uri.parse(uri), file))?.[1] ?? [];
   }
 
   /** The step numbers of the history (for tests). */
@@ -265,6 +301,7 @@ export class MemoryController implements vscode.Disposable {
   private onViewStep(m: Extract<FromWebview, { type: 'viewStep' }> | undefined): void {
     this.viewedStep = m && !m.live && m.file && m.line ? m : undefined;
     this.markViewedStep();
+    this.markBlocks();
     if (m?.file && m.line) this.revealLine(m.file, m.line, !m.live);
   }
 
@@ -329,6 +366,63 @@ export class MemoryController implements vscode.Disposable {
     }
   }
 
+  /**
+   * The running function of the step that the view shows: of the earlier step that the view shows, or of the newest
+   * step while the program is paused. None without the view.
+   */
+  private shownFrame(): Frame | undefined {
+    if (!this.panel) return undefined;
+    const m = this.viewedStep;
+    const snap = m ? this.history.find((s) => s.step === m.step) : this.paused ? this.history[this.history.length - 1] : undefined;
+    return snap?.frames[snap.frames.length - 1];
+  }
+
+  /**
+   * Marks the block scopes of the running function in the editor of its file, with the colors of their parts in the
+   * view: a bar at the indent of a block, and a frame around the header of a for loop or around a short block.
+   */
+  private markBlocks(): void {
+    const frame = this.shownFrame();
+    this.shownBlockMarks.clear();
+    for (const editor of vscode.window.visibleTextEditors) {
+      const doc = editor.document;
+      const marks = frame?.file && frame.blocks?.length && sameFile(doc.uri, frame.file) ? this.blockMarksIn(doc, frame) : [];
+      if (marks.length > 0) this.shownBlockMarks.set(doc.uri.toString(), marks);
+      this.blockDecorations.forEach((d, i) => {
+        const mine = marks.filter((m) => (m.block - 1) % BLOCK_COLORS === i);
+        editor.setDecorations(
+          d.bar,
+          mine.flatMap((m) =>
+            (m.bar?.lines ?? []).map((l) => ({
+              range: new vscode.Range(l, m.bar!.column, l, m.bar!.column + 1),
+              hoverMessage: blockHover(m.kind),
+            })),
+          ),
+        );
+        editor.setDecorations(
+          d.frame,
+          mine.flatMap((m) =>
+            m.frame
+              ? [{ range: new vscode.Range(doc.positionAt(m.frame.start), doc.positionAt(m.frame.end)), hoverMessage: blockHover(m.kind) }]
+              : [],
+          ),
+        );
+      });
+    }
+  }
+
+  private blockMarksIn(doc: vscode.TextDocument, frame: Frame): BlockMark[] {
+    const text = doc.getText();
+    const uri = doc.uri.toString();
+    if (this.brackets?.uri !== uri || this.brackets.version !== doc.version) {
+      this.brackets = { uri, version: doc.version, pairs: bracketPairs(text) };
+    }
+    const line = Math.min(Math.max(0, frame.line - 1), doc.lineCount - 1);
+    const offset = doc.offsetAt(new vscode.Position(line, Math.max(0, (frame.column ?? 1) - 1)));
+    const ranges = blockRanges(text, offset, frame.blocks ?? [], this.brackets.pairs);
+    return ranges ? blockMarks(text, ranges) : [];
+  }
+
   private onAdapterMessage(session: vscode.DebugSession, m: any): void {
     if (m?.type !== 'event') return;
     switch (m.event) {
@@ -365,7 +459,9 @@ export class MemoryController implements vscode.Disposable {
       // so the diagram does not flicker at every step.
       if (this.runningTimer) clearTimeout(this.runningTimer);
       this.runningTimer = setTimeout(() => {
-        if (!this.paused) this.post({ type: 'status', state: 'running', text: 'The program is running.' });
+        if (this.paused) return;
+        this.post({ type: 'status', state: 'running', text: 'The program is running.' });
+        this.markBlocks();
       }, 300);
     }
   }
@@ -381,6 +477,7 @@ export class MemoryController implements vscode.Disposable {
     this.paused = undefined;
     this.refreshSeq++;
     this.post({ type: 'status', state: 'ended', text: 'The program has ended.' });
+    this.markBlocks();
   }
 
   /**
@@ -441,6 +538,7 @@ export class MemoryController implements vscode.Disposable {
       this.post({ type: 'snapshot', snapshot, sessionId: pause.session.id });
       // The view stays at an earlier step; the text at its line names the new newest step.
       this.markViewedStep();
+      this.markBlocks();
       this.postFocusFrame();
       for (const w of this.snapshotWaiters.splice(0)) w(snapshot);
     } catch (e) {
@@ -502,6 +600,11 @@ function isSessionOrParent(ancestor: vscode.DebugSession, session: vscode.DebugS
     if (s.id === ancestor.id) return true;
   }
   return false;
+}
+
+/** The tooltip of the mark of a block scope in the editor. */
+function blockHover(kind: BlockKind): string {
+  return `Mindbug: the ${kind} scope. Its variables are in the part "${kind} scope" of the Mindbug view.`;
 }
 
 function sameFile(uri: vscode.Uri, file: string): boolean {

@@ -36,13 +36,13 @@ const isSpace = (c: string | undefined) => c !== undefined && /\s/.test(c);
 const isWordChar = (c: string | undefined) => c !== undefined && /[\w$]/.test(c);
 
 /** The end of the text before `index` without the spaces at its end. */
-function skipSpaceBack(text: string, index: number): number {
+export function skipSpaceBack(text: string, index: number): number {
   while (index > 0 && isSpace(text[index - 1])) index--;
   return index;
 }
 
 /** The word that ends before `index` (spaces between are skipped), and where it starts. */
-function wordBefore(text: string, index: number): { word: string; start: number } {
+export function wordBefore(text: string, index: number): { word: string; start: number } {
   const end = skipSpaceBack(text, index);
   let start = end;
   while (start > 0 && isWordChar(text[start - 1])) start--;
