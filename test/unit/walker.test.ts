@@ -148,6 +148,20 @@ test('a let before its declaration is uninitialized', () => {
   void later;
 });
 
+test('a variable whose array has no item is uninitialized, and undefined stays undefined', () => {
+  // The frame expression puts each value into an array. For an exported `let`, `const` or `class` before its
+  // declaration, V8 gives the debugger an internal empty value, which becomes an empty slot of that array. An
+  // array with an empty slot shows the same here, where V8 throws the ReferenceError of the program.
+  const api = (globalThis as Record<string, any>)[GLOBAL_NAME];
+  assert.match(frameExpression(['later'], DEFAULT_LIMITS), /\.v\("later", \[later\]\);/);
+  api.begin(DEFAULT_LIMITS);
+  api.v('empty', new Array(1));
+  api.v('nothing', [undefined]);
+  const r = parsed(api.end(0));
+  assert.deepEqual(varOf(r, 'empty'), { k: 'uninit' });
+  assert.deepEqual(varOf(r, 'nothing'), { k: 'undef' });
+});
+
 test('classes: static variables, attributes, methods, superclass, and the class of each object', () => {
   class Person {
     static count = 0;
