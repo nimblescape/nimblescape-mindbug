@@ -17,7 +17,10 @@ import {
   matchCallFrames,
   parseWalkerResult,
   remoteValue,
+  RETURN_VALUE,
+  callArgument,
 } from '../../src/snapshot.ts';
+import { installFunction, WALKER_VERSION, walkerFunction } from '../../src/heapWalker.ts';
 import type { HeapObject, Value } from '../../src/model.ts';
 import type { CdpCallFrame, CdpClient, CdpRemoteObject } from '../../src/v8Connection.ts';
 
@@ -42,47 +45,63 @@ const stackTrace = (frames: DapStackFrame[], requests: string[] = []): DapClient
 /** A call frame of V8 with the given scopes (innermost first), each with its variables in the order of V8. */
 interface FakeCallFrame {
   functionName: string;
-  scopes: { type: string; vars: [string, CdpRemoteObject | undefined][] }[];
+  /** `start`: where V8 says that the scope starts in SOURCE (line and column from 0). */
+  scopes: { type: string; vars: [string, CdpRemoteObject | undefined][]; start?: [number, number] }[];
   this?: CdpRemoteObject;
   returnValue?: CdpRemoteObject;
 }
 
 /**
  * V8 for the collector: the call frames, their scopes, and the heap walker. `walker` gives the value that the heap
- * walker reads for a name in a frame; `evaluatedIn` collects the frames in which source text was evaluated.
+ * walker reads for a variable of a frame, by its name and the index of its scope; `calledIn` collects the frames on
+ * whose global object a function of Mindbug ran. The fake gives every value an object id that names its variable, so it
+ * knows the variable of each value that goes to the walker (V8 gives object ids only to objects).
  */
 function fakeV8(
   frames: FakeCallFrame[],
-  walker: (frame: number, name: string) => Value,
+  walker: (frame: number, name: string, scope: number) => Value,
   objects: HeapObject[] = [],
-  evaluatedIn = new Set<number>(),
+  calledIn = new Set<number>(),
+  requests: string[] = [],
 ): CdpClient {
+  const tagged = (o: CdpRemoteObject | undefined, id: string) => (o ? { ...o, objectId: id } : undefined);
   const callFrames: CdpCallFrame[] = frames.map((f, i) => ({
     callFrameId: `frame:${i}`,
     functionName: f.functionName,
     url: 'file:///s/book.ts',
-    scopeChain: f.scopes.map((s, j) => ({ type: s.type, object: { type: 'object', objectId: `scope:${i}:${j}` } })),
-    this: f.this ?? { type: 'undefined' },
-    returnValue: f.returnValue,
+    scopeChain: f.scopes.map((s, j) => ({
+      type: s.type,
+      object: { type: 'object', objectId: `scope:${i}:${j}` },
+      ...(s.start ? { startLocation: { scriptId: 'book', lineNumber: s.start[0], columnNumber: s.start[1] } } : {}),
+    })),
+    this: tagged(f.this ?? { type: 'undefined' }, `var|${i}|-1|this`)!,
+    returnValue: tagged(f.returnValue, `var|${i}|0|${RETURN_VALUE}`),
   }));
   return {
     async callFrames() {
       return callFrames;
     },
     async send(method: string, params: any): Promise<any> {
+      requests.push(method);
+      if (method === 'Debugger.getScriptSource') {
+        assert.equal(params.scriptId, 'book');
+        return { scriptSource: SOURCE };
+      }
       if (method === 'Runtime.getProperties') {
         const [, i, j] = String(params.objectId).split(':').map(Number);
-        return { result: frames[i].scopes[j].vars.map(([name, value]) => ({ name, value })) };
+        return { result: frames[i].scopes[j].vars.map(([name, value]) => ({ name, value: tagged(value, `var|${i}|${j}|${name}`) })) };
       }
-      if (method === 'Debugger.evaluateOnCallFrame') {
-        const i = Number(String(params.callFrameId).split(':')[1]);
-        evaluatedIn.add(i);
-        // The install of the helper
-        if (!params.expression.includes('.begin(')) return { result: { type: 'string', value: 'installed' } };
-        // The helper reads each name in the frame.
-        const names = [...params.expression.matchAll(/\.v\("([^"]+)"/g)].map((m: RegExpMatchArray) => m[1]);
-        const vars = names.map((name) => ({ name, value: walker(i, name) }));
-        return { result: { type: 'string', value: JSON.stringify({ v: 5, vars, objects, missing: [] }) } };
+      if (method === 'Runtime.callFunctionOn') {
+        const i = Number(String(params.objectId).split(':')[1]);
+        calledIn.add(i);
+        if (params.functionDeclaration === installFunction()) return { result: { type: 'string', value: 'installed' } };
+        assert.equal(params.functionDeclaration, walkerFunction());
+        // The first argument is the limits, the others the values of the variables.
+        const vars = params.arguments.slice(1).map((a: { objectId: string }, k: number) => {
+          const [, , j, name] = a.objectId.split('|');
+          return { name: String(k), value: walker(i, name, Number(j)) };
+        });
+        return { result: { type: 'string', value: JSON.stringify({ v: WALKER_VERSION, vars, objects, missing: [] }) } };
       }
       throw new Error(`not in this test: ${method}`);
     },
@@ -90,6 +109,15 @@ function fakeV8(
 }
 
 const num = (v: number): CdpRemoteObject => ({ type: 'number', value: v, description: String(v) });
+
+/** The code of the program, as the runtime runs it. */
+const SOURCE = ['function shop(prices) {', '  let sum = 0;', '  for (const price of prices) {', '    if (price > 4) {', '      const note = 3;', '    }', '  }', '}'].join('\n');
+
+/** Line and column (from 0) of `text` in SOURCE, from the line `line` on. */
+function at(text: string, line: number): [number, number] {
+  const lines = SOURCE.split('\n');
+  return [line, lines[line].indexOf(text)];
+}
 
 test('scope types of V8', () => {
   assert.equal(classifyScope('local'), 'local');
@@ -115,6 +143,119 @@ test('values of V8', () => {
     k: 'text',
     v: 'Book',
   });
+});
+
+test('values of V8 as arguments of a function call', () => {
+  assert.deepEqual(callArgument({ type: 'object', className: 'Car', objectId: '7' }), { objectId: '7' });
+  assert.deepEqual(callArgument({ type: 'symbol', description: 'Symbol(id)', objectId: '8' }), { objectId: '8' });
+  assert.deepEqual(callArgument(num(250)), { value: 250 });
+  assert.deepEqual(callArgument({ type: 'string', value: 'BMW' }), { value: 'BMW' });
+  assert.deepEqual(callArgument({ type: 'object', subtype: 'null', value: null }), { value: null });
+  assert.deepEqual(callArgument({ type: 'number', unserializableValue: '-0', description: '-0' }), {
+    unserializableValue: '-0',
+  });
+  assert.deepEqual(callArgument({ type: 'bigint', unserializableValue: '10n' }), { unserializableValue: '10n' });
+  assert.deepEqual(callArgument({ type: 'undefined' }), {}, 'an argument without a value is undefined');
+});
+
+test('a variable of a block with the name of a variable of its scope: both are shown, with their own values', async () => {
+  // let a = { x: 10 }; let b = 20; { let a = { x: 200 }; let c = 500; ... } — paused in the block.
+  const dap = stackTrace([dapFrame(1, '<anonymous>', 27)]);
+  const obj = (id: string): CdpRemoteObject => ({ type: 'object', className: 'Object', description: 'Object', objectId: id });
+  const frames: FakeCallFrame[] = [
+    {
+      functionName: '',
+      scopes: [
+        { type: 'block', vars: [['a', obj('inner')], ['c', undefined]] },
+        { type: 'module', vars: [['a', obj('outer')], ['b', num(20)]] },
+        { type: 'global', vars: [] },
+      ],
+    },
+  ];
+  const walker = (_frame: number, name: string, scope: number): Value =>
+    name === 'a' ? { k: 'ref', id: scope === 0 ? 2 : 1 } : name === 'b' ? { k: 'num', v: '20' } : { k: 'undef' };
+  const s = await collectSnapshot(dap, fakeV8(frames, walker), 1, 1);
+  assert.deepEqual(s.frames[0].vars, [
+    { name: 'a', value: { k: 'ref', id: 1 }, scope: 'module' },
+    { name: 'b', value: { k: 'num', v: '20' }, scope: 'module' },
+    { name: 'a', value: { k: 'ref', id: 2 }, scope: 'block', block: 1 },
+    { name: 'c', value: { k: 'uninit' }, scope: 'block', block: 1 },
+  ]);
+});
+
+test('blocks inside blocks get their numbers from the outermost block', async () => {
+  const dap = stackTrace([dapFrame(1, 'shop')]);
+  const frames: FakeCallFrame[] = [
+    {
+      functionName: 'shop',
+      scopes: [
+        { type: 'block', vars: [['note', num(3)]] },
+        { type: 'block', vars: [['price', num(5)]] },
+        { type: 'local', vars: [['sum', num(0)]] },
+        { type: 'global', vars: [] },
+      ],
+    },
+  ];
+  const walker = (_frame: number, name: string): Value => (name === 'this' ? { k: 'undef' } : { k: 'num', v: '1' });
+  const s = await collectSnapshot(dap, fakeV8(frames, walker), 1, 1);
+  assert.deepEqual(
+    s.frames[0].vars.map((v) => [v.name, v.scope, v.block]),
+    [
+      ['sum', 'local', undefined],
+      ['price', 'block', 1],
+      ['note', 'block', 2],
+    ],
+  );
+});
+
+test('each block scope is named after its statement, from the code where V8 says that it starts', async () => {
+  const dap = stackTrace([dapFrame(1, 'shop', 5)]);
+  const frames: FakeCallFrame[] = [
+    {
+      functionName: 'shop',
+      scopes: [
+        { type: 'block', vars: [['note', num(3)]], start: at('{', 3) },
+        { type: 'block', vars: [], start: at('{', 2) },
+        { type: 'block', vars: [['price', num(5)]], start: at('const price', 2) },
+        { type: 'local', vars: [['sum', num(5)]], start: at('(prices)', 0) },
+        { type: 'global', vars: [] },
+      ],
+    },
+  ];
+  const walker = (_frame: number, name: string): Value => (name === 'this' ? { k: 'undef' } : { k: 'num', v: '1' });
+  const requests: string[] = [];
+  const v8 = fakeV8(frames, walker, [], new Set(), requests);
+  const s = await collectSnapshot(dap, v8, 1, 1);
+  assert.deepEqual(s.frames[0].blocks, ['for', 'for body', 'if']);
+  assert.deepEqual(
+    s.frames[0].vars.map((v) => [v.name, v.block]),
+    [
+      ['sum', undefined],
+      ['price', 1],
+      ['note', 3],
+    ],
+  );
+  // The code of a script does not change: V8 sends it once.
+  await collectSnapshot(dap, v8, 1, 2);
+  assert.equal(requests.filter((m) => m === 'Debugger.getScriptSource').length, 1);
+});
+
+test('a block scope without a position is a plain block', async () => {
+  const dap = stackTrace([dapFrame(1, 'shop')]);
+  const frames: FakeCallFrame[] = [
+    {
+      functionName: 'shop',
+      scopes: [
+        { type: 'catch', vars: [['error', num(1)]] },
+        { type: 'block', vars: [['price', num(5)]] },
+        { type: 'local', vars: [] },
+        { type: 'global', vars: [] },
+      ],
+    },
+  ];
+  const walker = (): Value => ({ k: 'num', v: '1' });
+  const s = await collectSnapshot(dap, fakeV8(frames, walker), 1, 1);
+  assert.deepEqual(s.frames[0].blocks, ['block', 'catch']);
 });
 
 test('the call frames of V8 for the frames of the student’s code', () => {
@@ -249,7 +390,7 @@ test('the variables keep the order of V8: own variables, then blocks from the ou
   const noWalker: CdpClient = {
     callFrames: () => v8.callFrames(),
     send: (method, params) =>
-      method === 'Debugger.evaluateOnCallFrame'
+      method === 'Runtime.callFunctionOn'
         ? Promise.resolve({ result: { type: 'string', value: 'mindbug: not installed' } })
         : v8.send(method, params),
   };
@@ -364,12 +505,13 @@ test('a constructor shows no return value, a function shows its return value; no
   };
   const walker = (i: number, name: string): Value => {
     if (name === 'this') return frames[i].this ? { k: 'ref', id: 2 } : { k: 'undef' };
+    if (name === RETURN_VALUE) return frames[i].returnValue === book ? { k: 'ref', id: 2 } : { k: 'undef' };
     return readable[name] ?? { k: 'unavail', v: `${name} is not defined` };
   };
-  /** The frames in which source text was evaluated. */
-  const evaluatedIn = new Set<number>();
+  /** The frames on whose global object a function of Mindbug ran. */
+  const calledIn = new Set<number>();
   const dap = stackTrace(frames.map((f, id) => dapFrame(id, f.functionName || '<anonymous>', 26)));
-  const s = await collectSnapshot(dap, fakeV8(frames, walker, objects, evaluatedIn), 1, 1);
+  const s = await collectSnapshot(dap, fakeV8(frames, walker, objects, calledIn), 1, 1);
 
   const names = (frame: string) => s.frames.find((f) => f.name === frame)?.vars.map((v) => v.name);
   assert.deepEqual(
@@ -379,10 +521,10 @@ test('a constructor shows no return value, a function shows its return value; no
   assert.deepEqual(names('Book.constructor'), ['this', 'title', 'pages'], 'no return value in the constructor');
   assert.deepEqual(names('Book (set up fields)'), ['this'], 'no return value in the set-up of the fields');
   assert.deepEqual(names('createBook'), ['title', 'pages', 'book', 'Return value'], 'the return value of a function');
-  assert.deepEqual(s.frames[1].vars.at(-1)?.value, { k: 'text', v: 'Book' });
-  // Node.js 22 stops with a fatal error when code is evaluated in the frame of <instance_members_initializer>. Its
-  // `this` is the object of the constructor.
-  assert.ok(!evaluatedIn.has(0), 'no evaluate in the set-up of the fields');
+  assert.deepEqual(s.frames[1].vars.at(-1)?.value, { k: 'ref', id: 2 }, 'the return value points to the new book');
+  // Node.js 22 stops with a fatal error when code is evaluated in the frame of <instance_members_initializer>. Mindbug
+  // runs no function for that frame; its `this` is the object of the constructor.
+  assert.ok(!calledIn.has(0), 'no function of Mindbug for the set-up of the fields');
   assert.deepEqual(s.frames[3].vars, [{ name: 'this', value: { k: 'ref', id: 2 }, scope: 'local' }]);
 });
 

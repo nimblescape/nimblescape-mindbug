@@ -15,7 +15,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectSnapshot } from '../../src/snapshot.ts';
-import type { MemorySnapshot, Value } from '../../src/model.ts';
+import type { MemorySnapshot, Value, Variable } from '../../src/model.ts';
 import { DEFAULT_LIMITS } from '../../src/heapWalker.ts';
 import { FakeDap, inspectorV8, RoundCounter } from './fakeDap.ts';
 import { DenoInspector } from './inspector.ts';
@@ -107,28 +107,57 @@ test.skipIf(!hasDeno)('the variables of each scope are in the order of the progr
 test.skipIf(!hasDeno)('var and let: before their lines, and in blocks', async () => {
   const [start, inShop, inBlock] = await pauses('hoisting.ts', 3);
   const vars = (s: MemorySnapshot, frame: string) =>
-    s.frames.find((f) => f.name === frame)?.vars.map((v) => [v.name, v.scope, v.value.k === 'ref' ? 'ref' : v.value]);
+    s.frames.find((f) => f.name === frame)?.vars.map((v) => [v.name, v.scope, v.block, v.value.k === 'ref' ? 'ref' : v.value]);
   const undef = { k: 'undef' };
   const uninit = { k: 'uninit' };
   // A function declaration has its value from the start.
   assert.deepEqual(vars(start, 'Global scope'), [
-    ['label', 'module', undef],
-    ['total', 'module', uninit],
-    ['shop', 'module', 'ref'],
+    ['label', 'module', undefined, undef],
+    ['total', 'module', undefined, uninit],
+    ['shop', 'module', undefined, 'ref'],
   ]);
   assert.deepEqual(vars(inShop, 'shop'), [
-    ['prices', 'local', 'ref'],
-    ['sum', 'local', uninit],
-    ['note', 'local', undef],
+    ['prices', 'local', undefined, 'ref'],
+    ['sum', 'local', undefined, uninit],
+    ['note', 'local', undefined, undef],
   ]);
   // The var in the block is a variable of the function; the const of the loop and of its body are block variables.
   assert.deepEqual(vars(inBlock, 'shop'), [
-    ['prices', 'local', 'ref'],
-    ['sum', 'local', { k: 'num', v: '13' }],
-    ['note', 'local', { k: 'str', v: 'expensive' }],
-    ['price', 'block', { k: 'num', v: '5' }],
-    ['withShipping', 'block', { k: 'num', v: '7' }],
+    ['prices', 'local', undefined, 'ref'],
+    ['sum', 'local', undefined, { k: 'num', v: '13' }],
+    ['note', 'local', undefined, { k: 'str', v: 'expensive' }],
+    ['price', 'block', 1, { k: 'num', v: '5' }],
+    ['withShipping', 'block', 2, { k: 'num', v: '7' }],
   ]);
+  // The if block declares only a var, so it has no scope.
+  assert.deepEqual(inBlock.frames.find((f) => f.name === 'shop')?.blocks, ['for', 'for body']);
+});
+
+test.skipIf(!hasDeno)('each block scope is named after its statement', async () => {
+  const steps = await pauses('statements.ts', 5);
+  assert.deepEqual(
+    steps.map((s) => s.frames.find((f) => f.name === 'Global scope')?.blocks),
+    [['if'], ['for', 'for body'], ['while'], ['catch', 'catch body'], ['block', 'switch']],
+  );
+});
+
+test.skipIf(!hasDeno)('a variable of a block with the name of a variable of the Global scope: both are shown', async () => {
+  const [s] = await pauses('shadowing.ts', 1);
+  const global = s.frames.find((f) => f.name === 'Global scope')!;
+  // An object is shown by the value of its only field.
+  const shown = (v: Variable) => [
+    v.name,
+    v.scope,
+    v.block,
+    v.value.k === 'ref' ? s.objects[v.value.id]?.fields?.[0]?.value : v.value,
+  ];
+  assert.deepEqual(global.vars.map(shown), [
+    ['a', 'module', undefined, { k: 'num', v: '10' }],
+    ['car', 'module', undefined, { k: 'str', v: 'VW' }],
+    ['a', 'block', 1, { k: 'num', v: '200' }],
+    ['car', 'block', 1, { k: 'str', v: 'BMW' }],
+  ]);
+  assert.deepEqual(global.blocks, ['block']);
 });
 
 test.skipIf(!hasDeno)('objects: getters are not called, closures, uninitialized let', async () => {

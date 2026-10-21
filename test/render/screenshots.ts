@@ -143,6 +143,7 @@ async function main(): Promise<void> {
   const people = loadSteps('people');
   const list = loadSteps('linked-list');
   const calls = loadSteps('call-stack');
+  const blocks = loadSteps('blocks');
 
   try {
     for (const theme of Object.keys(THEMES) as ThemeName[]) {
@@ -205,6 +206,27 @@ async function main(): Promise<void> {
       const globals = await page.$$eval('.frame:last-child .var-name', (els) => els.map((e) => e.textContent));
       if (globals.join(',') !== 'cart') throw new Error(`variables of the Global scope: ${globals.join(',')}`);
       await shot('call-stack');
+
+      // 6. Blocks: the program is in the if block inside the body of the for loop, inside the outer block. Each block
+      //    scope is a part inside the part around it, with the innermost block at the top, and is named after its
+      //    statement. The Global scope has two variables a: its own (10) and the one of the outer block (200), which
+      //    hides it from the code of the block.
+      const inIf = lastIndex(blocks, (s) => s.frames.at(-1)!.vars.some((v) => v.name === 'e' && v.value.k === 'num'));
+      await page.setViewportSize({ width: 1100, height: 820 });
+      await send(page, { type: 'history', snapshots: blocks.slice(0, inIf + 1), sessionId: 'blocks' });
+      const parts = await page.$$eval('.frame .block', (els) =>
+        els.map((e) => [...e.querySelectorAll(':scope > .var-name')].map((n) => n.textContent).join(' ')),
+      );
+      if (parts.join(',') !== 'c a,i,d,e') throw new Error(`block parts: ${parts.join(',')}`);
+      const labels = await page.$$eval('.frame .block-label', (els) => els.map((e) => e.textContent));
+      if (labels.join(',') !== 'block scope,for scope,for body scope,if scope') throw new Error(`labels: ${labels.join(',')}`);
+      const innermost = await page.$$eval('.block .block .block .block .var-name', (els) => els.map((e) => e.textContent));
+      if (innermost.join(',') !== 'e') throw new Error(`innermost block: ${innermost.join(',')}`);
+      const values = await page.$$eval('.frame .var-name', (els) =>
+        els.filter((e) => e.textContent === 'a').map((e) => e.nextElementSibling?.textContent),
+      );
+      if (values.join(',') !== '200,10') throw new Error(`the two variables a: ${values.join(',')}`);
+      await shot('blocks');
 
       if (errors.length > 0) throw new Error(`page errors in ${theme}:\n${errors.join('\n')}`);
       await page.close();

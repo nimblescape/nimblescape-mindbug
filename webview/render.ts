@@ -5,7 +5,7 @@
 // Builds the HTML of the frames column and the heap column.
 // Arrows are drawn afterwards by arrows.ts, from the `.ptr` dots to the `.obj` boxes.
 
-import type { ChangeSet, Frame, HeapObject, MemorySnapshot, Value } from '../src/model.ts';
+import type { BlockKind, ChangeSet, Frame, HeapObject, MemorySnapshot, Value } from '../src/model.ts';
 import { slotKey, varKey } from '../src/changes.ts';
 import { isHiddenRef, layoutHeap, varsBottomUp, type HeapTree, type ViewOptions } from './layout.ts';
 
@@ -102,6 +102,31 @@ function runsMark(live: boolean): SVGSVGElement {
   return svg;
 }
 
+/** What the variables of a block scope are, for the tooltip of its label. */
+const BLOCK_TEXTS: Record<BlockKind, string> = {
+  block: 'The variables of a block { … }.',
+  if: 'The variables of the block of an if statement.',
+  else: 'The variables of the else block of an if statement.',
+  for: 'The variables of the header of a for loop, such as i in for (let i = 0; …). Each turn of the loop has its own copy.',
+  'for body': 'The variables of the body { … } of a for loop. Each turn of the loop has new ones.',
+  while: 'The variables of the body { … } of a while loop. Each turn of the loop has new ones.',
+  do: 'The variables of the body { … } of a do … while loop. Each turn of the loop has new ones.',
+  switch: 'The variables of the cases of a switch statement.',
+  try: 'The variables of the try block.',
+  catch: 'The error of a catch clause, or the variables of its block.',
+  'catch body': 'The variables of the block of a catch clause.',
+  finally: 'The variables of the finally block.',
+};
+
+/** The part of a block scope: its label, such as "for scope", with a tooltip. */
+function blockPart(kind: BlockKind): HTMLElement {
+  const part = el('div', 'block');
+  const label = el('div', 'block-label', `${kind} scope`);
+  label.title = `${BLOCK_TEXTS[kind] ?? BLOCK_TEXTS.block} The scope is inside the scope around it, and exists only while the program runs in it.`;
+  part.append(label);
+  return part;
+}
+
 function renderFrame(frame: Frame, index: number, input: RenderInput, isTop: boolean): HTMLElement {
   const { snap, changes, opts } = input;
   const box = el('div', 'frame');
@@ -129,6 +154,18 @@ function renderFrame(frame: Frame, index: number, input: RenderInput, isTop: boo
     box.append(el('div', 'frame-empty', 'no variables'));
   }
   const grid = el('div', 'vars');
+  // The parts of the blocks, from the outermost block. The part of a block is inside the part of the block around it,
+  // on top of its variables: the parts nest like the braces in the code, and the innermost block is at the top.
+  const blocks: HTMLElement[] = [];
+  const partOf = (block: number | undefined): HTMLElement => {
+    if (!block) return grid;
+    while (blocks.length < block) {
+      const part = blockPart(frame.blocks?.[blocks.length] ?? 'block');
+      (blocks[blocks.length - 1] ?? grid).append(part);
+      blocks.push(part);
+    }
+    return blocks[block - 1];
+  };
   let lastScope: string | undefined;
   for (const v of vars) {
     if (v.scope === 'closure' && lastScope !== 'closure') {
@@ -137,14 +174,14 @@ function renderFrame(frame: Frame, index: number, input: RenderInput, isTop: boo
       grid.append(sep);
     }
     lastScope = v.scope;
-    const changed = changes.vars.has(varKey(index, frame.name, v.name));
+    const changed = changes.vars.has(varKey(index, frame.name, v));
     const n = el('div', 'var-name', v.name);
     if (v.name === 'this') n.classList.add('this');
     const slot = el('div', 'slot');
     if (changed) slot.classList.add('changed');
     if (v.value.k === 'ref') slot.classList.add('has-ptr');
     slot.append(renderValue(v.value, snap, opts));
-    grid.append(n, slot);
+    partOf(v.block).append(n, slot);
   }
   box.append(grid);
   if (frame.note) box.append(el('div', 'frame-note', frame.note));

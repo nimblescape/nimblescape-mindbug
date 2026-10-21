@@ -8,17 +8,19 @@
 // through the connection of src/v8Connection.ts: V8 gives the variables of each scope in the order of the program.
 // This file does not import 'vscode', so tests can run it with a fake debug session.
 
-import type { Frame, HeapObject, MemorySnapshot, ScopeKind, Value, Variable } from './model.ts';
+import { blockKind, ScriptText } from './blockKind.ts';
+import type { BlockKind, Frame, HeapObject, MemorySnapshot, ScopeKind, Value, Variable } from './model.ts';
 import {
   DEFAULT_LIMITS,
-  frameExpression,
-  installExpression,
-  isIdentifier,
+  GLOBAL_NAME,
+  installFunction,
   NOT_INSTALLED,
+  WALKER_VERSION,
+  walkerFunction,
   type WalkerLimits,
   type WalkerResult,
 } from './heapWalker.ts';
-import type { CdpCallFrame, CdpClient, CdpRemoteObject } from './v8Connection.ts';
+import type { CdpCallFrame, CdpClient, CdpRemoteObject, CdpScope } from './v8Connection.ts';
 
 /** The part of a debug session that the collector needs. */
 export interface DapClient {
@@ -238,17 +240,21 @@ function baseName(path: string): string {
 }
 
 /**
- * A variable as V8 lists it in a scope, with its value. The heap walker reads the value again, with the ids of the
- * objects; the value of V8 is for the names that the heap walker cannot read, for example the return value.
+ * A variable as V8 lists it in a scope: `value` is its value as text of V8, for a program without the heap walker, and
+ * `remote` the value of V8 itself, which goes to the heap walker. A variable without a value (a `let` before its line)
+ * has neither.
  */
 interface ListedVar {
   name: string;
   value?: Value;
+  remote?: CdpRemoteObject;
 }
 
 interface ScopeVars {
   kind: ScopeKind;
   vars: ListedVar[];
+  /** For a block scope: its statement. */
+  statement?: BlockKind;
 }
 
 /** A variable of a frame in the order of the view. */
@@ -257,15 +263,19 @@ interface DisplayVar {
   scope: ScopeKind;
   /** The number of the scope in the scope chain of V8, from the innermost scope. */
   group: number;
+  /** For a variable of a block: the number of the block, from the outermost block (1). */
+  block?: number;
   listed: ListedVar;
+  /** The index of its value in the arguments of the heap walker, when it has a value. */
+  arg?: number;
 }
 
-/** A frame with the names of its variables, before the heap walker reads their values. */
+/** A frame with its variables, before the heap walker reads their values. */
 interface FrameNames {
   frame: Frame;
   display: DisplayVar[];
-  /** The names that an expression can read. */
-  readable: string[];
+  /** The object id of V8 on which the heap walker runs: the global object of the frame. */
+  target?: string;
 }
 
 /** What the heap walker read in a frame: its result, an error, or nothing because it is not installed. */
@@ -325,14 +335,14 @@ export async function collectSnapshot(
 
   const v8Frames = matchCallFrames(callFrames, allFrames, stackIndexes);
   if (!v8Frames) throw new Error('the call frames of V8 do not match the call stack of the debugger');
-  const evaluate = (i: number, expression: string) => evaluateOnCallFrame(v8, v8Frames[i], expression);
 
   // The newest frame where the helper can run.
   const helperIndex = userFrames.findIndex((f) => !isFieldSetupFrame(f.name));
   const install = async (): Promise<boolean> => {
-    if (helperIndex < 0) return false;
+    const target = helperIndex < 0 ? undefined : targetOf(v8Frames[helperIndex]);
+    if (!target) return false;
     try {
-      await evaluate(helperIndex, installExpression());
+      await callFunction(v8, target, installFunction(), [{ value: WALKER_VERSION }, { value: GLOBAL_NAME }]);
       return true;
     } catch {
       return false;
@@ -344,8 +354,7 @@ export async function collectSnapshot(
     step === 1 ? install() : undefined,
   ]);
   // The helper never runs in the frame that sets up the fields of a new object.
-  const walk = (i: number) =>
-    isFieldSetupFrame(userFrames[i].name) ? undefined : walkFrame((e) => evaluate(i, e), named[i], limits);
+  const walk = (i: number) => (isFieldSetupFrame(userFrames[i].name) ? undefined : walkFrame(v8, named[i], limits));
   let reads = await Promise.all(named.map((_, i) => walk(i)));
 
   const notInstalled = (r: FrameRead) => r !== undefined && 'notInstalled' in r;
@@ -401,14 +410,31 @@ export function matchCallFrames(
   return complete ? stackIndexes.map((i) => callFrames[i]) : undefined;
 }
 
+/** The object id of the global object of a call frame, on which the functions of Mindbug run in the program. */
+function targetOf(callFrame: CdpCallFrame): string | undefined {
+  const scopes = callFrame.scopeChain;
+  return (scopes.find((s) => s.type === 'global') ?? scopes[0])?.object.objectId;
+}
+
+/** A value of V8 as an argument of `Runtime.callFunctionOn`: an object by its id, any other value by its value. */
+export function callArgument(o: CdpRemoteObject): object {
+  if (o.objectId) return { objectId: o.objectId };
+  if (o.unserializableValue !== undefined) return { unserializableValue: o.unserializableValue };
+  if (o.type === 'undefined') return {};
+  return { value: o.value };
+}
+
 /**
- * Evaluates source text in a call frame of V8 and gives the string that it returns. Silent: an exception in the text
- * does not pause the program, also when the debugger pauses on caught exceptions. By value: V8 gives the whole string.
+ * Runs a function of Mindbug in the program and gives the string that it returns. `target` is an object id of V8:
+ * the function runs in the realm of that object, and gets `args` (values, or objects by their ids). It does not run
+ * in the scope of a call frame, so it reads no variable by its name. Silent: an exception does not pause the program,
+ * also when the debugger pauses on caught exceptions. By value: V8 gives the whole string.
  */
-async function evaluateOnCallFrame(v8: CdpClient, callFrame: CdpCallFrame, expression: string): Promise<string> {
-  const res = await v8.send('Debugger.evaluateOnCallFrame', {
-    callFrameId: callFrame.callFrameId,
-    expression,
+async function callFunction(v8: CdpClient, target: string, declaration: string, args: object[]): Promise<string> {
+  const res = await v8.send('Runtime.callFunctionOn', {
+    objectId: target,
+    functionDeclaration: declaration,
+    arguments: args,
     silent: true,
     returnByValue: true,
   });
@@ -483,38 +509,89 @@ async function readNames(v8: CdpClient, f: DapStackFrame, cf: CdpCallFrame, isLa
       const kind: ScopeClass = cls === 'other' ? 'block' : cls;
       if (!wanted(kind) || !scope.object.objectId) return undefined;
       try {
-        const res = await v8.send('Runtime.getProperties', { objectId: scope.object.objectId, ownProperties: true });
+        const [res, statement] = await Promise.all([
+          v8.send('Runtime.getProperties', { objectId: scope.object.objectId, ownProperties: true }),
+          kind === 'block' ? statementOf(v8, scope) : undefined,
+        ]);
         const vars: ListedVar[] = (res?.result ?? []).map((p: { name: string; value?: CdpRemoteObject }) => ({
           name: String(p.name),
           value: remoteValue(p.value),
+          remote: p.value,
         }));
-        if (kind === 'local' && cf.returnValue) vars.push({ name: RETURN_VALUE, value: remoteValue(cf.returnValue) });
-        return { kind, vars };
+        if (kind === 'local' && cf.returnValue) {
+          vars.push({ name: RETURN_VALUE, value: remoteValue(cf.returnValue), remote: cf.returnValue });
+        }
+        return { kind, vars, statement };
       } catch {
         frame.note = 'Some variables could not be read.';
         return undefined;
       }
     }),
   );
-  return displayOf(
+  const named = displayOf(
     f,
     isLast,
     frame,
     read.filter((sv) => sv !== undefined),
+    cf.this,
   );
+  return { ...named, target: targetOf(cf) };
 }
 
-/** The variables of a frame in the order of the view, and the names that the heap walker reads. */
-function displayOf(f: DapStackFrame, isLast: boolean, frame: Frame, scopeVars: ScopeVars[]): FrameNames {
-  // The scopes come from the innermost to the outermost. The innermost name wins
-  // (this is also what an expression in this frame sees).
-  const seen = new Set<string>();
+/** The texts of the scripts by their ids, for each connection to V8: a script does not change while it runs. */
+const scriptTexts = new WeakMap<CdpClient, Map<string, Promise<ScriptText | undefined>>>();
+
+/** The text of a script of the program, from V8 (once for each script). */
+function scriptText(v8: CdpClient, scriptId: string): Promise<ScriptText | undefined> {
+  let texts = scriptTexts.get(v8);
+  if (!texts) scriptTexts.set(v8, (texts = new Map()));
+  let text = texts.get(scriptId);
+  if (!text) {
+    text = v8.send('Debugger.getScriptSource', { scriptId }).then(
+      (res) => (typeof res?.scriptSource === 'string' ? new ScriptText(res.scriptSource) : undefined),
+      () => {
+        // The next step asks again.
+        texts.delete(scriptId);
+        return undefined;
+      },
+    );
+    texts.set(scriptId, text);
+  }
+  return text;
+}
+
+/** The statement of a block scope, from the code where V8 says that it starts. A plain block when that is unknown. */
+async function statementOf(v8: CdpClient, scope: CdpScope): Promise<BlockKind> {
+  if (scope.type === 'catch') return 'catch';
+  const at = scope.startLocation;
+  const script = at && (await scriptText(v8, at.scriptId));
+  const offset = at && script?.offset(at.lineNumber, at.columnNumber);
+  return script && offset !== undefined ? blockKind(script.text, offset, scope.type) : 'block';
+}
+
+/** The variables of a frame in the order of the view, and the values that the heap walker reads. */
+function displayOf(
+  f: DapStackFrame,
+  isLast: boolean,
+  frame: Frame,
+  scopeVars: ScopeVars[],
+  thisValue: CdpRemoteObject,
+): FrameNames {
+  // The scopes come from the innermost to the outermost. Each scope keeps all its variables: a variable of a block
+  // can have the name of a variable of an outer scope, which it hides from the code of the block, and the view shows
+  // both. The blocks get their numbers from the outermost block (1) to the innermost.
+  const blockGroups = scopeVars.flatMap((sv, group) => (sv.kind === 'block' ? [group] : [])).reverse();
+  if (blockGroups.length > 0) frame.blocks = blockGroups.map((g) => scopeVars[g].statement ?? 'block');
+  let hasThis = false;
   let ordered: DisplayVar[] = [];
   scopeVars.forEach((sv, group) => {
+    const block = sv.kind === 'block' ? blockGroups.indexOf(group) + 1 : undefined;
     for (const v of sv.vars) {
-      if (seen.has(v.name)) continue;
-      seen.add(v.name);
-      ordered.push({ name: v.name, scope: sv.kind, group, listed: v });
+      if (v.name === 'this') {
+        if (hasThis) continue;
+        hasThis = true;
+      }
+      ordered.push({ name: v.name, scope: sv.kind, group, block, listed: v });
     }
   });
   const localNames = ordered.filter((o) => o.scope === 'local').map((o) => o.name);
@@ -523,9 +600,9 @@ function displayOf(f: DapStackFrame, isLast: boolean, frame: Frame, scopeVars: S
     frame.name = 'Global scope';
     ordered = ordered.filter((o) => !(o.scope === 'local' && COMMONJS_PARAMETERS.includes(o.name)));
   }
-  // V8 gives `this` with the call frame, not in a scope. The heap walker reads it.
-  if (!frame.isGlobal && !seen.has('this')) {
-    ordered.push({ name: 'this', scope: 'local', group: 0, listed: { name: 'this' } });
+  // V8 gives `this` with the call frame, not in a scope. Only the heap walker gives its value to the view.
+  if (!frame.isGlobal && !hasThis) {
+    ordered.push({ name: 'this', scope: 'local', group: 0, listed: { name: 'this', remote: thisValue } });
   }
 
   // Display order: local variables, then block variables from the outer to the inner block,
@@ -542,19 +619,17 @@ function displayOf(f: DapStackFrame, isLast: boolean, frame: Frame, scopeVars: S
   const thisIndex = display.findIndex((o) => o.name === 'this');
   if (thisIndex > 0) display.unshift(...display.splice(thisIndex, 1));
 
-  const readable = display.filter((o) => isIdentifier(o.name)).map((o) => o.name);
-  return { frame, display, readable };
+  let arg = 0;
+  for (const o of display) if (o.listed.remote) o.arg = arg++;
+  return { frame, display };
 }
 
-/** Runs the heap walker in a frame. `evaluate` evaluates source text in the frame. */
-async function walkFrame(
-  evaluate: (expression: string) => Promise<string>,
-  named: FrameNames,
-  limits: WalkerLimits,
-): Promise<FrameRead> {
-  if (named.readable.length === 0) return undefined;
+/** Runs the heap walker for the values of the variables of a frame. */
+async function walkFrame(v8: CdpClient, named: FrameNames, limits: WalkerLimits): Promise<FrameRead> {
+  const values = named.display.flatMap((o) => (o.listed.remote ? [callArgument(o.listed.remote)] : []));
+  if (values.length === 0 || !named.target) return undefined;
   try {
-    const text = await evaluate(frameExpression(named.readable, limits));
+    const text = await callFunction(v8, named.target, walkerFunction(), [{ value: limits }, ...values]);
     if (text === NOT_INSTALLED) return { notInstalled: true };
     const result = parseWalkerResult(text);
     if (!result) throw new Error('the heap walker result could not be parsed');
@@ -569,13 +644,14 @@ function withValues(named: FrameNames, read: FrameRead, objects: Record<number, 
   const { frame, display } = named;
   if (read && 'error' in read) frame.note = `The heap could not be read in this scope: ${read.error}`;
 
-  const walkedVars = new Map<string, Value>();
+  // The heap walker names the value of each variable by its index in its arguments.
+  const walked = new Map<string, Value>();
   if (read && 'result' in read) {
-    for (const v of read.result.vars) walkedVars.set(v.name, v.value);
+    for (const v of read.result.vars) walked.set(v.name, v.value);
   }
 
   for (const o of display) {
-    const value = walkedVars.get(o.name) ?? o.listed.value;
+    const value = (o.arg === undefined ? undefined : walked.get(String(o.arg))) ?? o.listed.value;
     // Only `this` has no value of V8: without the heap walker, it is not shown.
     if (!value) continue;
     if (o.name === 'this') {
@@ -589,6 +665,7 @@ function withValues(named: FrameNames, read: FrameRead, objects: Record<number, 
       if (target?.kind === 'class' && target.type === o.name) continue;
     }
     const variable: Variable = { name: o.name, value, scope: o.scope };
+    if (o.block !== undefined) variable.block = o.block;
     frame.vars.push(variable);
   }
   return frame;

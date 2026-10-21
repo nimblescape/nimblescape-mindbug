@@ -4,15 +4,18 @@
 
 // Finds what changed between two snapshots, so the webview can highlight it.
 
-import type { ChangeSet, HeapObject, MemorySnapshot, Value } from './model.ts';
+import type { ChangeSet, HeapObject, MemorySnapshot, Value, Variable } from './model.ts';
 
 export function sameValue(a: Value, b: Value): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-/** Key of a variable: frames are matched by position from the bottom and by name. */
-export function varKey(frameIndex: number, frameName: string, varName: string): string {
-  return `${frameIndex}:${frameName}:${varName}`;
+/**
+ * Key of a variable: frames are matched by position from the bottom and by name, variables by their scope, their block
+ * and their name. A variable of a block can have the name of a variable of the function; they are two variables.
+ */
+export function varKey(frameIndex: number, frameName: string, v: Pick<Variable, 'name' | 'scope' | 'block'>): string {
+  return `${frameIndex}:${frameName}:${v.scope}${v.block ?? ''}:${v.name}`;
 }
 
 /** Key of one slot of a heap object. */
@@ -45,13 +48,13 @@ export function computeChanges(prev: MemorySnapshot | undefined, next: MemorySna
   const prevVars = new Map<string, Value>();
   prev.frames.forEach((f, i) => {
     prevFrames.add(`${i}:${f.name}`);
-    for (const v of f.vars) prevVars.set(varKey(i, f.name, v.name), v.value);
+    for (const v of f.vars) prevVars.set(varKey(i, f.name, v), v.value);
   });
   next.frames.forEach((f, i) => {
     // A new call: all its variables are new, so nothing is marked.
     if (!prevFrames.has(`${i}:${f.name}`)) return;
     for (const v of f.vars) {
-      const key = varKey(i, f.name, v.name);
+      const key = varKey(i, f.name, v);
       const old = prevVars.get(key);
       if (!old || !sameValue(old, v.value)) out.vars.add(key);
     }

@@ -54,7 +54,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const out = join(here, 'snapshots');
   mkdirSync(out, { recursive: true });
   let port = 9340;
-  for (const name of ['insertion-sort', 'people', 'linked-list', 'call-stack']) {
+  for (const name of ['insertion-sort', 'people', 'linked-list', 'call-stack', 'blocks']) {
     const file = join(root, 'examples', `${name}.ts`);
     const steps = await record(file, port++);
     // Paths differ from machine to machine; keep only the part below the repository.

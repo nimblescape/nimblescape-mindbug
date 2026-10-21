@@ -271,6 +271,31 @@ async function varAndLet(api: MindbugApi, start: Start): Promise<void> {
   await stop();
 }
 
+async function blocks(api: MindbugApi, start: Start): Promise<void> {
+  const file = path.join(examples(), 'blocks.ts');
+  await debug(api, start, file, [30]);
+  const s = await runToLine(api, file, 30);
+  const global = s.frames.find((f) => f.name === 'Global scope');
+  assert.ok(global, `the Global scope in ${s.frames.map((f) => f.name).join(', ')}`);
+  // The block declares a second variable a. The view shows both: the a of the Global scope and the a of the block.
+  assert.deepEqual(
+    global.vars.filter((v) => v.name === 'a').map((v) => [v.block ?? 0, v.value]),
+    [
+      [0, { k: 'num', v: '10' }],
+      [1, { k: 'num', v: '200' }],
+    ],
+  );
+  // The blocks nest like the braces: the outer block, the header of the for loop, its body, and the if block.
+  assert.deepEqual(
+    ['c', 'i', 'd', 'e'].map((name) => global.vars.find((v) => v.name === name)?.block),
+    [1, 2, 3, 4],
+  );
+  // Each block scope is named after its statement.
+  assert.deepEqual(global.blocks, ['block', 'for', 'for body', 'if']);
+  assert.deepEqual(variable(s, 'Global scope', 'e'), { k: 'num', v: '442' });
+  await stop();
+}
+
 async function insertionSort(api: MindbugApi, start: Start): Promise<void> {
   const file = path.join(examples(), 'insertion-sort.ts');
   // The breakpoint is not on line 19 (the line after the loop): before the source map of Node.js is loaded, the
@@ -761,6 +786,7 @@ describe('the Mindbug view in VS Code', () => {
       it('steps into the set-up of the static variable of an exported class', () => exportsBeforeDeclaration(api, start));
       it('shows the variables of each scope in the order of the program', () => variableOrder(api, start));
       it('shows a var and a let before their lines, and a var in a block', () => varAndLet(api, start));
+      it('shows the variables of each block, also a variable that hides one of the same name', () => blocks(api, start));
       it('does not stop in the code of the runtime: a step after the last line ends the program', () =>
         stepsToTheEnd(api, start));
     });

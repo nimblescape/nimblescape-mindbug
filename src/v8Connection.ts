@@ -28,6 +28,15 @@ export interface CdpScope {
   type: string;
   name?: string;
   object: CdpRemoteObject;
+  /** Where the scope starts in the code that the runtime runs; V8 gives it for the scopes of functions and blocks. */
+  startLocation?: CdpLocation;
+}
+
+/** A position in a script of V8 (Debugger.Location): line and column count from 0. */
+export interface CdpLocation {
+  scriptId: string;
+  lineNumber: number;
+  columnNumber?: number;
 }
 
 /** A call frame of a pause (Debugger.CallFrame). */
