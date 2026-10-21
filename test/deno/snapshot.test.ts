@@ -171,3 +171,39 @@ test.skipIf(!hasDeno)('a result longer than the debugger gives back is read in p
   // Four rounds, then all parts of the text at the same time.
   assert.equal(s.rounds, 5);
 });
+
+test.skipIf(!hasDeno)('exported names before their lines have run are uninitialized, and the program goes on', async () => {
+  // Reading such a name with `typeof` stopped Deno ("abort: Unexpected instance type encountered").
+  const insp = await DenoInspector.start(deno, join(fixtures, 'exports.ts'), port++, true);
+  try {
+    let ev = await insp.waitForPause();
+    // FakeDap lists also the names without a value, which VS Code's JavaScript debugger leaves out.
+    const entry = await collectSnapshot(new FakeDap(insp, ev), 1, 1);
+    assert.deepEqual(variable(entry, 'Global scope', 'LIMIT'), { k: 'uninit' });
+    assert.deepEqual(variable(entry, 'Global scope', 'Car'), { k: 'uninit' });
+
+    // Step Into until JavaScript sets up the static variable of Car: the class itself is not initialized yet.
+    let step = 1;
+    let inStatic: MemorySnapshot | undefined;
+    while (!inStatic && step < 20) {
+      const next = await insp.step('stepInto');
+      assert.ok(next, `the program still runs after step ${step}`);
+      ev = next;
+      const s = await collectSnapshot(new FakeDap(insp, ev), 1, ++step);
+      if (s.frames.some((f) => f.name === 'Car (set up static variables)')) inStatic = s;
+    }
+    assert.ok(inStatic, 'a step pauses in the set-up of the static variables');
+    assert.deepEqual(variable(inStatic, 'Global scope', 'LIMIT'), { k: 'num', v: '3' });
+    assert.deepEqual(variable(inStatic, 'Global scope', 'Car'), { k: 'uninit' });
+    const self = inStatic.objects[idOf(variable(inStatic, 'Car (set up static variables)', 'this'))];
+    assert.equal(self.kind, 'class');
+
+    ev = await insp.resumeToNextPause();
+    const atEnd = await collectSnapshot(new FakeDap(insp, ev), 1, step + 1);
+    const car = atEnd.objects[idOf(variable(atEnd, 'Global scope', 'Car'))];
+    assert.equal(car.id, self.id);
+    assert.deepEqual(car.fields?.find((f) => f.name === 'count')?.value, { k: 'num', v: '1' });
+  } finally {
+    await insp.close();
+  }
+});

@@ -3,6 +3,17 @@
 Each section lists the changes of one released version. The release workflow
 takes the section of a version as the notes of its GitHub release.
 
+## 0.1.4
+
+**Static variables of an exported class.** With Deno, a step in the set-up
+of a static variable of an exported class, for example at `static count = 0`
+in `export class Car`, stopped the program with "abort: Unexpected instance
+type encountered". At that step, the name of the class is not initialized
+yet, and V8 gives the debugger an internal value for it instead of the usual
+error. The program stopped as soon as Mindbug read the type of that value.
+Mindbug now shows the class in the Global scope as "uninitialized", as for a
+class that is not exported, and the program goes on.
+
 ## 0.1.3
 
 **No return value in a constructor.** When you step to the end of a

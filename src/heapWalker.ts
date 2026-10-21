@@ -13,7 +13,7 @@
 
 import type { Value } from './model.ts';
 
-export const WALKER_VERSION = 3;
+export const WALKER_VERSION = 4;
 export const GLOBAL_NAME = '__mindbug';
 
 export interface WalkerLimits {
@@ -31,7 +31,7 @@ export const DEFAULT_LIMITS: WalkerLimits = { objects: 300, items: 100, fields: 
 
 /**
  * Installs `globalThis.__mindbug` in the program. Returns "installed" or "ready" (already there).
- * The api: begin(limits), v(name, value), err(name, error), end(key) -> "<length>:<JSON text>", chunk(key, i, size).
+ * The api: begin(limits), v(name, [value]), err(name, error), end(key) -> "<length>:<JSON text>", chunk(key, i, size).
  */
 export function installHeapWalker(version: number, globalName: string): string {
   const g: any = globalThis;
@@ -44,6 +44,7 @@ export function installHeapWalker(version: number, globalName: string): string {
   const O = Object;
   const getProto = O.getPrototypeOf;
   const getOwnDesc = O.getOwnPropertyDescriptor;
+  const hasOwn = O.hasOwn;
   const ownKeys = Reflect.ownKeys;
   const apply = Reflect.apply;
   const isArray = Array.isArray;
@@ -478,8 +479,14 @@ export function installHeapWalker(version: number, globalName: string): string {
       }
       cur = { vars: [], seen: new SetCtor<number>(), queue: [] };
     },
-    v(name: string, value: unknown): void {
-      if (cur) cur.vars.push({ name, value: enc(value) });
+    /**
+     * `box` is an array with the value of the variable as its only item. For an exported `let`, `const` or `class`
+     * before its declaration, V8 gives the debugger an internal empty value instead of a ReferenceError, and `typeof`
+     * on that value stops the program ("Unexpected instance type encountered"). In an array, V8 stores that value as
+     * an empty slot, so the box then has no item 0.
+     */
+    v(name: string, box: unknown[]): void {
+      if (cur) cur.vars.push({ name, value: hasOwn(box, 0) ? enc(box[0]) : { k: 'uninit' } });
     },
     err(name: string, e: unknown): void {
       if (!cur) return;
@@ -533,9 +540,9 @@ export const NOT_INSTALLED = 'mindbug: not installed';
 /**
  * Source text that reads the given variables in one frame and returns "<length>:<JSON text>" of the snapshot. `key`
  * names the frame, for `chunk` when the debugger shortens the text. Each variable is read in its own try/catch, so an
- * uninitialized `let` does not stop the others. The text is statements, not one expression: the debugger must
- * evaluate it as it is, in the scope of the frame (see `evaluateFrame` in src/snapshot.ts). Without the walker, it
- * returns NOT_INSTALLED.
+ * uninitialized `let` does not stop the others, and goes to the walker in an array (see `v` in the walker). The text is
+ * statements, not one expression: the debugger must evaluate it as it is, in the scope of the frame (see
+ * `evaluateFrame` in src/snapshot.ts). Without the walker, it returns NOT_INSTALLED.
  */
 export function frameExpression(names: string[], limits: WalkerLimits, key = 0): string {
   const api = `globalThis.${GLOBAL_NAME}`;
@@ -544,7 +551,7 @@ export function frameExpression(names: string[], limits: WalkerLimits, key = 0):
   for (const name of names) {
     if (!isIdentifier(name)) continue;
     const lit = JSON.stringify(name);
-    lines.push(`  try { ${api}.v(${lit}, ${name}); } catch (e) { ${api}.err(${lit}, e); }`);
+    lines.push(`  try { ${api}.v(${lit}, [${name}]); } catch (e) { ${api}.err(${lit}, e); }`);
   }
   lines.push(`  ${api}.end(${key});`, '}');
   return lines.join('\n');

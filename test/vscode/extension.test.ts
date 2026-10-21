@@ -441,6 +441,63 @@ async function names(api: MindbugApi, start: Start): Promise<void> {
   }
 }
 
+/**
+ * A module that exports a class with a static variable. While JavaScript sets up the static variable (line 8), the
+ * class `Car` is not initialized yet. Deno lists the name `Car` there, and V8 gives the debugger an internal empty
+ * value for an exported name before its declaration, not a ReferenceError: `typeof` on that value stopped Deno with
+ * "abort: Unexpected instance type encountered".
+ */
+const EXPORTS_PROGRAM = `// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
+export const LIMIT = 3;
+
+export class Car {
+  static count = 0;
+  brand: string;
+
+  constructor(brand: string) {
+    Car.count++;
+    this.brand = brand;
+  }
+}
+
+const car = new Car('VW');
+debugger;
+console.log(car.brand, Car.count, LIMIT);
+`;
+
+async function exportsBeforeDeclaration(api: MindbugApi, start: Start): Promise<void> {
+  const file = path.join(examples(), 'exports-test.ts');
+  fs.writeFileSync(file, EXPORTS_PROGRAM);
+  try {
+    // No breakpoint: with Deno, a breakpoint hid the pause at the first statement (see insertionSort). Step Into
+    // leads to the set-up of the static variable, and the program pauses again at its `debugger` statement.
+    let s = await debug(api, start, file, []);
+    for (let i = 0; i < 10 && top(s).name !== 'Car (set up static variables)'; i++) s = await step(api, 'stepInto');
+    assert.deepEqual(
+      s.frames.map((f) => f.name),
+      ['Global scope', 'Car (set up static variables)'],
+    );
+    assert.equal(top(s).line, 8);
+    assert.deepEqual(variable(s, 'Global scope', 'LIMIT'), { k: 'num', v: '3' });
+    // Deno lists Car in the Global scope here, Node.js does not.
+    const cls = s.frames[0].vars.find((v) => v.name === 'Car');
+    if (start.runtime === 'deno') assert.ok(cls, 'Deno lists Car in the Global scope');
+    if (cls) assert.deepEqual(cls.value, { k: 'uninit' });
+    // The program still runs, and the class has its static variable.
+    s = await runToLine(api, file, 18);
+    const car = s.objects[idOf(variable(s, 'Global scope', 'Car'))];
+    assert.equal(car.kind, 'class');
+    assert.deepEqual(car.fields?.find((f) => f.name === 'count')?.value, { k: 'num', v: '1' });
+    await stop();
+  } finally {
+    await closeTextEditors();
+    fs.rmSync(file, { force: true });
+  }
+}
+
 describe('the Mindbug view in VS Code', () => {
   let api: MindbugApi;
 
@@ -511,6 +568,7 @@ describe('the Mindbug view in VS Code', () => {
       it('steps into the set-up of the fields of a new object', () => fieldSetup(api, start));
       it('starts a new step history when the debug session restarts', () => restart(api, start));
       it('reads the variables named t, e, r, n, i and o', () => names(api, start));
+      it('steps into the set-up of the static variable of an exported class', () => exportsBeforeDeclaration(api, start));
     });
   }
 });
