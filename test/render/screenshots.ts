@@ -191,7 +191,8 @@ async function main(): Promise<void> {
       await shot('linked-list');
 
       // 5. Call stack: the program is in lineTotal, so four scopes are on the stack. The variables of each scope
-      //    build bottom up: cart, the first variable of the Global scope, is at the bottom.
+      //    build bottom up: cart, the first variable of the Global scope, is at the bottom. bill is not drawn: its
+      //    line has not run yet, and the switch "Show uninitialized" is off by default.
       const inLineTotal = lastIndex(calls, (s) => s.frames.at(-1)?.name === 'lineTotal');
       // Four scopes and three classes need a taller panel.
       await page.setViewportSize({ width: 1100, height: 1240 });
@@ -202,7 +203,7 @@ async function main(): Promise<void> {
       const callClasses = await page.$$eval('.class-box .class-name', (els) => els.map((e) => e.textContent).sort());
       if (callClasses.join(',') !== 'Bill,Discount,Item') throw new Error(`classes: ${callClasses.join(',')}`);
       const globals = await page.$$eval('.frame:last-child .var-name', (els) => els.map((e) => e.textContent));
-      if (globals.join(',') !== 'bill,cart') throw new Error(`variables of the Global scope: ${globals.join(',')}`);
+      if (globals.join(',') !== 'cart') throw new Error(`variables of the Global scope: ${globals.join(',')}`);
       await shot('call-stack');
 
       if (errors.length > 0) throw new Error(`page errors in ${theme}:\n${errors.join('\n')}`);
