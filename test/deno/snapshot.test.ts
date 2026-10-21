@@ -134,10 +134,20 @@ test.skipIf(!hasDeno)('var and let: before their lines, and in blocks', async ()
 });
 
 test.skipIf(!hasDeno)('each block scope is named after its statement', async () => {
-  const steps = await pauses('statements.ts', 5);
+  const steps = await pauses('statements.ts', 6);
   assert.deepEqual(
     steps.map((s) => s.frames.find((f) => f.name === 'Global scope')?.blocks),
-    [['if'], ['for', 'for body'], ['while'], ['catch', 'catch body'], ['block', 'switch']],
+    [['if'], ['for', 'for body'], ['while'], ['catch', 'catch body'], ['block', 'switch'], ['block']],
+  );
+  // A block around a function is no block of the function: its variables are closure variables of the function.
+  const inner = steps[5].frames.find((f) => f.name === 'inner')!;
+  assert.deepEqual(inner.blocks, ['if']);
+  assert.deepEqual(
+    inner.vars.map((v) => [v.name, v.scope, v.block]),
+    [
+      ['inside', 'block', 1],
+      ['outside', 'closure', undefined],
+    ],
   );
 });
 
@@ -202,6 +212,7 @@ test.skipIf(!hasDeno)('classes: class boxes with static variables, attributes, m
     ['this'],
     "the class's own name binding is not shown as a variable of the method",
   );
+  assert.equal(birthday.blocks, undefined, 'the scope of the class around the method is no block of the method');
 });
 
 test.skipIf(!hasDeno)('names: the variables t, e, r, n, i and o, in three rounds of requests for three scopes', async () => {
