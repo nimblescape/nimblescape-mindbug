@@ -3,29 +3,39 @@
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
 // The heap walker runs inside the debugged program. Node uses the same V8 engine as Deno,
-// so these tests install the walker in this Node process and read local variables with it.
+// so these tests install the walker in this Node process and give it values, as Runtime.callFunctionOn does.
 
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_LIMITS,
-  frameExpression,
   GLOBAL_NAME,
-  installExpression,
-  isIdentifier,
+  installFunction,
   NOT_INSTALLED,
+  WALKER_VERSION,
+  walkerFunction,
+  type WalkerLimits,
   type WalkerResult,
 } from '../../src/heapWalker.ts';
 import type { HeapObject } from '../../src/model.ts';
 import { parseWalkerResult } from '../../src/snapshot.ts';
 
-(0, eval)(installExpression());
+const install = (): string => (0, eval)(`(${installFunction()})(${WALKER_VERSION}, ${JSON.stringify(GLOBAL_NAME)})`);
+install();
+const walker = (0, eval)(`(${walkerFunction()})`) as (limits: WalkerLimits, ...values: unknown[]) => string;
 
-/** The result of a frame expression (JSON text). */
+/** The result of the walker (JSON text). */
 function parsed(text: string): WalkerResult {
   const result = parseWalkerResult(text);
   assert.ok(result, 'a complete result');
   return result;
+}
+
+/** Runs the walker for the values, as Runtime.callFunctionOn does, and gives each result the name of its value. */
+function walk(values: Record<string, unknown>, limits: WalkerLimits = DEFAULT_LIMITS): WalkerResult {
+  const names = Object.keys(values);
+  const r = parsed(walker(limits, ...Object.values(values)));
+  return { ...r, vars: r.vars.map((v) => ({ ...v, name: names[Number(v.name)] })) };
 }
 
 function byId(r: WalkerResult): Record<number, HeapObject> {
@@ -39,41 +49,41 @@ function varOf(r: WalkerResult, name: string) {
 }
 
 test('install is done once per version', () => {
-  assert.equal((0, eval)(installExpression()), 'ready');
+  assert.equal(install(), 'ready');
 });
 
-test('without the walker, the frame expression says so, and reads no variable', () => {
+test('without the walker, the walker function says so', () => {
   const g = globalThis as Record<string, unknown>;
   const api = g[GLOBAL_NAME];
-  // A global variable whose read can be counted.
-  let reads = 0;
-  Object.defineProperty(g, 'mindbugProbe', {
-    get: () => ++reads,
-    configurable: true,
-  });
   try {
     delete g[GLOBAL_NAME];
-    assert.equal(eval(frameExpression(['mindbugProbe'], DEFAULT_LIMITS)), NOT_INSTALLED);
+    assert.equal(walker(DEFAULT_LIMITS, 1), NOT_INSTALLED);
     // A walker of another version is not used either.
     g[GLOBAL_NAME] = { version: 1 };
-    assert.equal(eval(frameExpression(['mindbugProbe'], DEFAULT_LIMITS)), NOT_INSTALLED);
-    assert.equal(reads, 0);
+    assert.equal(walker(DEFAULT_LIMITS, 1), NOT_INSTALLED);
     Object.defineProperty(g, GLOBAL_NAME, { value: api, configurable: true, writable: true, enumerable: false });
-    assert.deepEqual(parsed(eval(frameExpression(['mindbugProbe'], DEFAULT_LIMITS))).vars, [
-      { name: 'mindbugProbe', value: { k: 'num', v: '1' } },
-    ]);
+    assert.deepEqual(parsed(walker(DEFAULT_LIMITS, 1)).vars, [{ name: '0', value: { k: 'num', v: '1' } }]);
   } finally {
     Object.defineProperty(g, GLOBAL_NAME, { value: api, configurable: true, writable: true, enumerable: false });
-    delete g.mindbugProbe;
   }
+});
+
+test('two values with the same name in the program are two variables of the walker', () => {
+  // A block hides the outer variable of the same name from its code; V8 gives both values, by their scopes.
+  const outer = { x: 10 };
+  const inner = { x: 200 };
+  const r = parsed(walker(DEFAULT_LIMITS, inner, outer));
+  const [first, second] = r.vars.map((v) => (v.value as { id: number }).id);
+  assert.notEqual(first, second);
+  assert.deepEqual(byId(r)[second].fields?.[0], { name: 'x', value: { k: 'num', v: '10' } });
 });
 
 test('the result is the JSON text of the snapshot, also with characters outside the BMP', () => {
   const words = ['😀😀😀', 'ä'.repeat(7)];
-  const text: string = eval(frameExpression(['words'], DEFAULT_LIMITS));
+  const text = walker(DEFAULT_LIMITS, words);
   const r = parsed(text);
   assert.equal(text, JSON.stringify(r));
-  const items = byId(r)[(varOf(r, 'words') as { id: number }).id].items;
+  const items = byId(r)[(varOf(r, '0') as { id: number }).id].items;
   assert.deepEqual(items, [
     { k: 'str', v: words[0] },
     { k: 'str', v: words[1] },
@@ -84,7 +94,7 @@ test('two variables that point to the same array get the same id, also in the ne
   const arr = [3, 1, 2];
   const alias = arr;
   const other = [3, 1, 2];
-  const read = (): WalkerResult => parsed(eval(frameExpression(['arr', 'alias', 'other'], DEFAULT_LIMITS)));
+  const read = (): WalkerResult => walk({ arr, alias, other });
   const first = read();
   const a = varOf(first, 'arr');
   assert.equal(a.k, 'ref');
@@ -96,8 +106,6 @@ test('two variables that point to the same array get the same id, also in the ne
   const o = byId(second)[(a as { id: number }).id];
   assert.equal(o.kind, 'array');
   assert.equal(o.length, 4);
-  void alias;
-  void other;
 });
 
 test('values: numbers, strings, holes, map, set, cut strings', () => {
@@ -105,7 +113,7 @@ test('values: numbers, strings, holes, map, set, cut strings', () => {
   const sparse = [1, , 3];
   const scores = new Map([['ann', 3]]);
   const tags = new Set(['a']);
-  const r = parsed(eval(frameExpression(['values', 'sparse', 'scores', 'tags'], { ...DEFAULT_LIMITS, str: 10 })));
+  const r = walk({ values, sparse, scores, tags }, { ...DEFAULT_LIMITS, str: 10 });
   const objs = byId(r);
   const v = objs[(varOf(r, 'values') as { id: number }).id];
   const field = (n: string) => v.fields!.find((f) => f.name === n)!.value;
@@ -129,32 +137,16 @@ test('getters are not called', () => {
       return 1;
     },
   };
-  const r: WalkerResult = parsed(eval(frameExpression(['obj'], DEFAULT_LIMITS)));
+  const r = walk({ obj });
   assert.equal(calls, 0);
   const o = byId(r)[(varOf(r, 'obj') as { id: number }).id];
   assert.deepEqual(o.fields![0].value, { k: 'accessor', get: true, set: false });
 });
 
-test('a let before its declaration is uninitialized', () => {
-  const read = () => parsed(eval(frameExpression(['later'], DEFAULT_LIMITS))) as WalkerResult;
-  const r = read();
-  let later = 5;
-  assert.deepEqual(varOf(r, 'later'), { k: 'uninit' });
-  void later;
-});
-
-test('a variable whose array has no item is uninitialized, and undefined stays undefined', () => {
-  // The frame expression puts each value into an array. For an exported `let`, `const` or `class` before its
-  // declaration, V8 gives the debugger an internal empty value, which becomes an empty slot of that array. An
-  // array with an empty slot shows the same here, where V8 throws the ReferenceError of the program.
-  const api = (globalThis as Record<string, any>)[GLOBAL_NAME];
-  assert.match(frameExpression(['later'], DEFAULT_LIMITS), /\.v\("later", \[later\]\);/);
-  api.begin(DEFAULT_LIMITS);
-  api.v('empty', new Array(1));
-  api.v('nothing', [undefined]);
-  const r = parsed(api.end(0));
-  assert.deepEqual(varOf(r, 'empty'), { k: 'uninit' });
-  assert.deepEqual(varOf(r, 'nothing'), { k: 'undef' });
+test('undefined stays undefined', () => {
+  // A variable without a value (a let before its line) does not go to the walker: the snapshot shows it as
+  // uninitialized. A variable with the value undefined does.
+  assert.deepEqual(varOf(walk({ nothing: undefined }), 'nothing'), { k: 'undef' });
 });
 
 test('classes: static variables, attributes, methods, superclass, and the class of each object', () => {
@@ -184,7 +176,7 @@ test('classes: static variables, attributes, methods, superclass, and the class 
   }
   const ann = new Person('Ann');
   const bob = new Student('Bob');
-  const r: WalkerResult = parsed(eval(frameExpression(['ann', 'bob'], DEFAULT_LIMITS)));
+  const r = walk({ ann, bob });
   const objs = byId(r);
   const annObj = objs[(varOf(r, 'ann') as { id: number }).id];
   const bobObj = objs[(varOf(r, 'bob') as { id: number }).id];
@@ -215,7 +207,7 @@ test('classes: static variables, attributes, methods, superclass, and the class 
 test('a class without declared fields lists the attributes that the code assigns', () => {
   const Point = (0, eval)('(class Point { constructor(x, y) { this.x = x; this.y = y; } move() { this.x += 1; } })');
   const p = new Point(1, 2);
-  const r: WalkerResult = parsed(eval(frameExpression(['p'], DEFAULT_LIMITS)));
+  const r = walk({ p });
   const objs = byId(r);
   const cls = objs[objs[(varOf(r, 'p') as { id: number }).id].cls!];
   assert.deepEqual(cls.attrs, ['x', 'y']);
@@ -232,7 +224,7 @@ test('field declarations with strings, arrow functions and comments are read cor
     method() { const e = 1; return e; }
   })`);
   const o = new Odd();
-  const r: WalkerResult = parsed(eval(frameExpression(['o'], DEFAULT_LIMITS)));
+  const r = walk({ o });
   const objs = byId(r);
   const cls = objs[objs[(varOf(r, 'o') as { id: number }).id].cls!];
   assert.deepEqual(cls.attrs, ['a', 'handler', 'quoted', 'd']);
@@ -241,14 +233,6 @@ test('field declarations with strings, arrow functions and comments are read cor
 test('plain objects and arrays have no class', () => {
   const plain = { a: 1 };
   const list = [1];
-  const r: WalkerResult = parsed(eval(frameExpression(['plain', 'list'], DEFAULT_LIMITS)));
+  const r = walk({ plain, list });
   for (const o of r.objects) assert.equal(o.cls, undefined);
-});
-
-test('isIdentifier', () => {
-  assert.ok(isIdentifier('arr2'));
-  assert.ok(isIdentifier('this'));
-  assert.ok(isIdentifier('$x_ä'));
-  assert.ok(!isIdentifier('a-b'));
-  assert.ok(!isIdentifier('2x'));
 });

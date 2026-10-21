@@ -79,6 +79,12 @@ export interface Variable {
   name: string;
   value: Value;
   scope: ScopeKind;
+  /**
+   * For a variable of a block (scope "block"): the number of its block in the frame, 1 for the outermost block, 2 for
+   * a block inside it, and so on. A variable of a block can have the name of a variable of the function or of an outer
+   * block, which it hides from the code of the block: the view shows both.
+   */
+  block?: number;
 }
 
 export interface Frame {
@@ -90,9 +96,33 @@ export interface Frame {
   line: number;
   file?: string;
   vars: Variable[];
+  /**
+   * The statement of each block scope of the frame, for the label of its part in the view, from the outermost block
+   * (block 1) on. Missing for a frame without blocks; a block without an entry is a plain block.
+   */
+  blocks?: BlockKind[];
   /** Set when the frame could not be read completely. */
   note?: string;
 }
+
+/**
+ * The statement that a block scope belongs to. "for" is the scope of the header of a for loop (`let i` in
+ * `for (let i = 0; …)`), "for body" the scope of its body. "catch" is the scope of the error of a catch clause, or of the
+ * body of a catch clause without an error variable; "catch body" is the scope of the body after `catch (error)`.
+ */
+export type BlockKind =
+  | 'block'
+  | 'if'
+  | 'else'
+  | 'for'
+  | 'for body'
+  | 'while'
+  | 'do'
+  | 'switch'
+  | 'try'
+  | 'catch'
+  | 'catch body'
+  | 'finally';
 
 export interface MemorySnapshot {
   /** Counts up with every pause of the same run of the program; a restart counts from 1 again. */

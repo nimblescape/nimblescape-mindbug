@@ -621,6 +621,24 @@ body.vscode-high-contrast-light .frame.active {
   border: 1px solid var(--mb-slot-border);
 }
 
+/* The part of a block inside its scope: the variables of a block { … }, on top of the variables around it. */
+.block {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 2px 6px 6px;
+  border: 1px dashed var(--mb-frame-edge);
+  border-radius: 4px;
+}
+
+.block-label {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--mb-dim);
+}
+
 .scope-sep {
   grid-column: 1 / -1;
   padding-top: 4px;

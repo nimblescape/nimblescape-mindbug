@@ -41,7 +41,7 @@ test('changed variable, array cell, static variable and new object', () => {
   next.objects[5].fields![0].value = { k: 'num', v: '1' };
   next.objects[7] = { id: 7, kind: 'object', type: 'Object', fields: [] };
   const c = computeChanges(prev, next);
-  assert.deepEqual([...c.vars], [varKey(0, 'Global scope', 'i')]);
+  assert.deepEqual([...c.vars], [varKey(0, 'Global scope', next.frames[0].vars[0])]);
   assert.deepEqual([...c.slots].sort(), [slotKey(1, '1'), slotKey(5, '.count')].sort());
   assert.deepEqual([...c.newObjects], [7]);
 });
@@ -59,4 +59,14 @@ test('an object that was not read before (object limit) is not marked as new', (
   const next = base();
   next.objects[7] = { id: 7, kind: 'object', type: 'Object', fields: [] };
   assert.equal(computeChanges(prev, next).newObjects.size, 0);
+});
+
+test('a variable of a block with the name of a variable of the scope is another variable', () => {
+  // let i = 1; { let i = 5; ... }: at the step into the block, the i of the block is new; the outer i did not change.
+  const prev = base();
+  const next = base();
+  next.frames[0].vars.push({ name: 'i', value: { k: 'num', v: '5' }, scope: 'block', block: 1 });
+  const c = computeChanges(prev, next);
+  assert.deepEqual([...c.vars], [varKey(0, 'Global scope', next.frames[0].vars[2])]);
+  assert.notEqual(varKey(0, 'Global scope', next.frames[0].vars[0]), varKey(0, 'Global scope', next.frames[0].vars[2]));
 });

@@ -41,11 +41,16 @@ The view has two areas: the **STACK** on the left and the **HEAP** on the right.
 - The stack has one **scope** for each function call, with the local variables and parameters of that call. The **Global scope** holds the variables of the file.
 - The stack builds bottom up: the Global scope is at the bottom, and each function call adds a scope on top. When the function returns, its scope goes away.
 - The top scope is the function that runs now. A **triangle** at its left points to it: yellow at the current step, and green at an earlier step of the [step history](#step-history), as the arrow of the debugger in the editor.
-- The variables of a scope also build bottom up, in the order of their declarations in the file: the first variable of the function, its first parameter, is at the bottom, and each later variable is above it. The variables of a block, for example of the body of a loop, are above the variables of the function. The variables of an outer function that a closure uses are below the own variables.
+- The variables of a scope also build bottom up, in the order of their declarations in the file: the first variable of the function, its first parameter, is at the bottom, and each later variable is above it. The variables of an outer function that a closure uses are below the own variables.
+- A block `{ … }` that declares a `let`, `const` or `class` has a scope of its own, a **block scope**, inside the scope of its function. The view draws it as a part with a dashed border inside the box of the scope, above the variables of the function, and names it after its statement: "if scope", "else scope", "while scope", "do scope", "switch scope", "try scope", "catch scope", "finally scope", or "block scope" for a plain `{ … }`. A `for` loop with `let i` in its header has two: the "for scope" with `i`, and inside it the "for body scope" with the variables of its body. Each turn of the loop gets its own copy of both. A block inside a block is a part inside the part, so the parts nest like the braces in the code, and the innermost block is at the top.
+- A block scope exists only while the program runs in its block. A block does not add a scope on top of the stack, because it is not a function call. A block that declares nothing, or only a `var`, has no scope.
+- A variable of a block can have the name of a variable around the block, for example `let a = 10; { let a = 200; }`. In the block, the name `a` means the variable of the block, and the code of the block cannot read the outer `a`. The outer `a` still exists and keeps its value: the view shows both, each one in its own part. The example [blocks.ts](../examples/blocks.ts) shows this and the block scopes of `for`, `if` and `while`.
 - Each variable is a box. A number, a string, a boolean, `null` or `undefined` is written in the box.
 - A `var` is a variable of the whole function from the start of the call, also when its line is inside a block, and shows `undefined` until its line has run. A `let`, `const` or `class` exists from the start of its scope too, but it cannot be read before its line has run. The view shows it from the step where its line runs; with the switch **Show uninitialized**, it shows it before, as "uninitialized". The example [var-and-let.ts](../examples/var-and-let.ts) shows both.
 - When you step to the end of a function, its scope shows **Return value**, the value that the function gives back. A constructor shows no return value: `new` gives the new object, not a value of the constructor.
 - A variable that holds an object or an array stores only *where* the object is on the heap. The view draws this as an arrow from the variable to the object.
+
+![Block scopes in the Global scope: the if scope with e inside the for body scope with d, inside the for scope with i, inside the block scope with the second a; the a of the Global scope is at the bottom](https://raw.githubusercontent.com/nimblescape/nimblescape-mindbug/main/docs/images/blocks.png)
 
 ### Heap
 
@@ -157,7 +162,7 @@ A higher limit shows more of a large program, and makes each step slower, becaus
 
 ## Examples
 
-The folder [examples](../examples) has six small programs:
+The folder [examples](../examples) has seven small programs:
 
 - [return-object.ts](../examples/return-object.ts): a function creates one object and returns it. The call adds a scope with the parameters title and pages to the stack. The object stays on the heap after the return, because the variable myBook of the Global scope points to it, and it goes away when myBook is set to `null`. The animation at the top of the [README](../README.md) steps through this example.
 - [insertion-sort.ts](../examples/insertion-sort.ts): two variables point to the same array, and the function changes the array on the heap.
@@ -165,6 +170,7 @@ The folder [examples](../examples) has six small programs:
 - [linked-list.ts](../examples/linked-list.ts): objects that point to each other.
 - [call-stack.ts](../examples/call-stack.ts): three functions on the stack at the same time, with objects of the classes Item, Discount and Bill. The Discount object that the inner function creates does not survive its call; the Bill object that the middle function creates survives the call of the inner function and is still there in the Global scope at the end.
 - [var-and-let.ts](../examples/var-and-let.ts): since when a variable exists, and in which scope it lives. At the first line, the Global scope already has the function shop, the `var` label with the value `undefined`, and, with the switch **Show uninitialized**, the `let` total, uninitialized. In the call of shop, the `var` note is a variable of the function, although its line is inside a block, and the `const` variables of the loop are variables of its blocks.
+- [blocks.ts](../examples/blocks.ts): block scopes. A block declares a second variable `a`, which hides the `a` of the Global scope from the code of the block; the view shows both. A `for` loop has a scope for its header (`i`) and one for its body (`d`), and an `if` block inside the body adds a third. Each part goes away when its block ends.
 
 ![Four scopes on the stack, lineTotal on top of makeBill, checkout and the Global scope; the Discount object of lineTotal above the Bill object of makeBill and the objects of the Global scope](https://raw.githubusercontent.com/nimblescape/nimblescape-mindbug/main/docs/images/call-stack.png)
 

@@ -3,6 +3,30 @@
 Each section lists the changes of one released version. The release workflow
 takes the section of a version as the notes of its GitHub release.
 
+## 0.1.6
+
+**Block scopes.** A block `{ … }` that declares a `let`, `const` or
+`class`, for example the body of a loop or of an `if`, has a scope of its
+own. The view now draws it as a part inside the box of its scope, and names
+it after its statement: "if scope", "while scope", "block scope", and so on.
+A `for` loop with `let i` has two: the "for scope" with `i`, and inside it
+the "for body scope" with the variables of its body. A block inside a block
+is a part inside the part. Before, the view put the variables of all blocks
+into the box of the function.
+
+**Two variables with the same name.** A variable of a block can have the
+name of a variable around the block, as in `let a = 10; { let a = 200; }`.
+The view showed only the `a` of the block. Now it shows both, each one in
+its own part. Mindbug now gives the values of the variables to its helper
+in the program, instead of their names.
+
+**Return value of an object.** At the end of a function that returns an
+object, "Return value" now points to the object on the heap with an arrow.
+Before, it showed the name of the class as text.
+
+The new example `blocks.ts` shows block scopes, and a variable of a block
+that hides a variable of the same name.
+
 ## 0.1.5
 
 **Variables in the order of the program.** The variables of a scope build

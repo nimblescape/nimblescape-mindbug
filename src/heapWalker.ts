@@ -2,8 +2,9 @@
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
-// The heap walker runs INSIDE the paused program (through the request `Debugger.evaluateOnCallFrame` of V8, see
-// src/snapshot.ts).
+// The heap walker runs INSIDE the paused program (through the request `Runtime.callFunctionOn` of V8, see
+// src/snapshot.ts). It gets the values of the variables, not their names: V8 gives each variable of each scope with
+// its value, so the walker also reads a variable that a variable of the same name in an inner block hides.
 //
 // Why: the debugger gives no stable id for an object. Two variables that point to the
 // same array would look like two arrays. The walker keeps a WeakMap from object to id, so the same
@@ -14,7 +15,7 @@
 
 import type { Value } from './model.ts';
 
-export const WALKER_VERSION = 5;
+export const WALKER_VERSION = 6;
 export const GLOBAL_NAME = '__mindbug';
 
 export interface WalkerLimits {
@@ -32,7 +33,7 @@ export const DEFAULT_LIMITS: WalkerLimits = { objects: 300, items: 100, fields: 
 
 /**
  * Installs `globalThis.__mindbug` in the program. Returns "installed" or "ready" (already there).
- * The api: begin(limits), v(name, [value]), err(name, error), end() -> JSON text.
+ * The api: begin(limits), v(name, value), end() -> JSON text.
  */
 export function installHeapWalker(version: number, globalName: string): string {
   const g: any = globalThis;
@@ -45,7 +46,6 @@ export function installHeapWalker(version: number, globalName: string): string {
   const O = Object;
   const getProto = O.getPrototypeOf;
   const getOwnDesc = O.getOwnPropertyDescriptor;
-  const hasOwn = O.hasOwn;
   const ownKeys = Reflect.ownKeys;
   const apply = Reflect.apply;
   const isArray = Array.isArray;
@@ -67,7 +67,6 @@ export function installHeapWalker(version: number, globalName: string): string {
   const weakSetHas = WeakSet.prototype.has;
   const PromiseCtor = Promise;
   const errorProto = Error.prototype;
-  const RefError = ReferenceError;
 
   const ids = new WeakMapCtor<object, number>();
   let nextId = 1;
@@ -478,22 +477,8 @@ export function installHeapWalker(version: number, globalName: string): string {
       }
       cur = { vars: [], seen: new SetCtor<number>(), queue: [] };
     },
-    /**
-     * `box` is an array with the value of the variable as its only item. For an exported `let`, `const` or `class`
-     * before its declaration, V8 gives the debugger an internal empty value instead of a ReferenceError, and `typeof`
-     * on that value stops the program ("Unexpected instance type encountered"). In an array, V8 stores that value as
-     * an empty slot, so the box then has no item 0.
-     */
-    v(name: string, box: unknown[]): void {
-      if (cur) cur.vars.push({ name, value: hasOwn(box, 0) ? enc(box[0]) : { k: 'uninit' } });
-    },
-    err(name: string, e: unknown): void {
-      if (!cur) return;
-      const msg = e instanceof Error ? e.message : String(e);
-      // V8 reports a `let`/`const` before its declaration as "Cannot access 'x' before
-      // initialization", or inside the debugger as "Cannot access 'x' from debugger".
-      const uninit = e instanceof RefError && /^Cannot access\b|before initiali[sz]ation|not initiali[sz]ed/i.test(msg);
-      cur.vars.push({ name, value: uninit ? { k: 'uninit' } : { k: 'unavail', v: msg } });
+    v(name: string, value: unknown): void {
+      if (cur) cur.vars.push({ name, value: enc(value) });
     },
     end(): string {
       const c = cur;
@@ -513,38 +498,30 @@ export function installHeapWalker(version: number, globalName: string): string {
   return 'installed';
 }
 
-/** Source text that installs the walker. Evaluate it once per program run, in any frame. */
-export function installExpression(): string {
-  return `(${installHeapWalker.toString()})(${WALKER_VERSION}, ${JSON.stringify(GLOBAL_NAME)})`;
+/** The function that installs the walker, for `Runtime.callFunctionOn` with the arguments WALKER_VERSION and GLOBAL_NAME. */
+export function installFunction(): string {
+  return installHeapWalker.toString();
 }
 
-const IDENTIFIER = /^[\p{L}\p{Nl}_$][\p{L}\p{Nl}\p{Mn}\p{Mc}\p{Nd}\p{Pc}_$‌‍]*$/u;
-
-/** True when `name` can be written as a plain identifier in an expression. */
-export function isIdentifier(name: string): boolean {
-  return name === 'this' || IDENTIFIER.test(name);
-}
-
-/** The result of `frameExpression` when the walker is not installed in the program, or has another version. */
+/** The result of `walkerFunction` when the walker is not installed in the program, or has another version. */
 export const NOT_INSTALLED = 'mindbug: not installed';
 
 /**
- * Source text that reads the given variables in one frame and returns the JSON text of the snapshot. Each variable is
- * read in its own try/catch, so an uninitialized `let` does not stop the others, and goes to the walker in an array
- * (see `v` in the walker). The text is statements, not one expression: V8 evaluates it in the scope of the frame and
- * gives the value of the last statement that ran. Without the walker, it returns NOT_INSTALLED.
+ * The function that reads the variables of one frame and returns the JSON text of the snapshot, for
+ * `Runtime.callFunctionOn`. Its arguments are the limits and the values of the variables; the walker names the
+ * variable of each value by its index ("0", "1", ...). Without the walker, it returns NOT_INSTALLED.
  */
-export function frameExpression(names: string[], limits: WalkerLimits): string {
+export function walkerFunction(): string {
   const api = `globalThis.${GLOBAL_NAME}`;
-  const lines = [`if (${api}?.version !== ${WALKER_VERSION}) {`, `  ${JSON.stringify(NOT_INSTALLED)};`, '} else {'];
-  lines.push(`  ${api}.begin(${JSON.stringify(limits)});`);
-  for (const name of names) {
-    if (!isIdentifier(name)) continue;
-    const lit = JSON.stringify(name);
-    lines.push(`  try { ${api}.v(${lit}, [${name}]); } catch (e) { ${api}.err(${lit}, e); }`);
-  }
-  lines.push(`  ${api}.end();`, '}');
-  return lines.join('\n');
+  return [
+    'function (limits, ...values) {',
+    `  const api = ${api};`,
+    `  if (api?.version !== ${WALKER_VERSION}) return ${JSON.stringify(NOT_INSTALLED)};`,
+    '  api.begin(limits);',
+    '  for (let i = 0; i < values.length; i++) api.v(String(i), values[i]);',
+    '  return api.end();',
+    '}',
+  ].join('\n');
 }
 
 /** Raw result of the heap walker for one frame. */
