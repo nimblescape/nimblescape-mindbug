@@ -119,6 +119,8 @@ Without a `launch.json` file, press F5 in a TypeScript file and select **Mindbug
 
 The view also works with a launch configuration of type `node` of the JavaScript debugger, and with the JavaScript Debug Terminal: it follows every debug session of the JavaScript debugger for Node.js and Deno. The [launch.json](../examples/.vscode/launch.json) of the examples has a configuration of type `mindbug` and one of type `node`.
 
+When an own launch configuration of type `node` starts Deno (`"runtimeExecutable": "deno"`), add the files of Deno to `skipFiles`, as the debug type `mindbug` does: `"skipFiles": ["<node_internals>/**", "ext:*/**"]`. The files of Deno have names that start with `ext:`. Without this, a step after the last line of the program stops in the code of Deno (for example `99_main.js`), and VS Code opens that file.
+
 ## Runtimes
 
 With the runtime `auto` (the default), Mindbug takes Deno when `deno --version` runs, else Node.js when `node --version` shows version 22.7 or newer. With `deno` or `node`, it takes only that runtime. When it finds no runtime, a message says what is missing, and the program does not start.
@@ -185,6 +187,7 @@ The folder [examples](../examples) has six small programs:
 | The program does not start, and the Debug Console says that the address is in use | Another program uses port 9229. Set `nimblescape.mindbug.inspectPort` to another port, for example 9230. |
 | The view does not open | Run **Open Mindbug** while the program is paused, or turn on `nimblescape.mindbug.openAutomatically`. |
 | The view says "The memory could not be read" | The debugger or V8 did not answer a request of Mindbug. Step once more; when the message stays, report it (see [Support](../SUPPORT.md)) with a small program and the text of the message. |
+| A step opens a file of Deno, such as `99_main.js` or `01_console.js` | This happens with an own launch configuration of type `node` that starts Deno. Add `"skipFiles": ["<node_internals>/**", "ext:*/**"]` to it (see [Launch configurations](#launch-configurations)), or use **Run with Mindbug** or the debug type `mindbug`. |
 | **Run with Mindbug** is missing | The button shows only in a TypeScript editor while no program runs. Check that the workspace is trusted. |
 
 ## Uninstall

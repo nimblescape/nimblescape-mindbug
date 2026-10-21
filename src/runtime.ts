@@ -51,9 +51,19 @@ export function debugConfiguration(file: string, cwd: string, runtime: Runtime, 
     stopOnEntry: s.stopOnEntry,
     console: 'internalConsole',
     outputCapture: 'std',
-    skipFiles: ['<node_internals>/**'],
+    skipFiles: SKIP_FILES,
   };
 }
+
+/**
+ * The code of the runtime, which a step does not stop in. Node.js: `<node_internals>`. Deno: the URLs that start with
+ * "ext:", such as ext:runtime_main/js/99_main.js, which runs after the last line of the program, and
+ * ext:deno_web/01_console.js. The skip patterns of V8 have no effect on the code of Deno (tested with Deno 2.9), but
+ * the JavaScript debugger then steps on by itself ("smartStep", on by default) until the program is in a file that is
+ * not skipped, or has ended. So a step after the last line ends the program, and Step Into on console.log does not go
+ * into the code of Deno.
+ */
+export const SKIP_FILES = ['<node_internals>/**', 'ext:*/**'];
 
 /** The output of `program --version`, or undefined when the program does not run. */
 export function versionOf(program: string): Promise<string | undefined> {

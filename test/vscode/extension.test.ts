@@ -604,6 +604,88 @@ async function exportsBeforeDeclaration(api: MindbugApi, start: Start): Promise<
   }
 }
 
+/**
+ * A program whose last line calls console.log. Deno runs its own code after the last line of the program
+ * (ext:runtime_main/js/99_main.js), and console.log is code of Deno too (ext:deno_web/01_console.js). A step stopped
+ * there, and VS Code opened the file of Deno.
+ */
+const END_PROGRAM = `// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
+const total = 2 + 3;
+console.log(total);
+`;
+
+interface DapMessage {
+  type: string;
+  seq: number;
+  command?: string;
+  request_seq?: number;
+  arguments?: { startFrame?: number };
+  body?: { stackFrames?: { name: string; source?: { path?: string; name?: string } }[] };
+}
+
+/** Records the file of the top frame of each call stack that the JavaScript debugger sends. */
+function recordTopFrames(): { files: string[]; dispose(): void } {
+  const files: string[] = [];
+  const firstFrame = new Set<number>();
+  const tracker = vscode.debug.registerDebugAdapterTrackerFactory('*', {
+    createDebugAdapterTracker: () => ({
+      onWillReceiveMessage: (m: DapMessage) => {
+        if (m.type === 'request' && m.command === 'stackTrace' && !m.arguments?.startFrame) firstFrame.add(m.seq);
+      },
+      onDidSendMessage: (m: DapMessage) => {
+        if (m.type !== 'response' || m.command !== 'stackTrace' || !firstFrame.delete(m.request_seq ?? -1)) return;
+        const frame = m.body?.stackFrames?.[0];
+        if (frame) files.push(frame.source?.path ?? frame.source?.name ?? frame.name);
+      },
+    }),
+  });
+  return { files, dispose: () => tracker.dispose() };
+}
+
+async function stepsToTheEnd(api: MindbugApi, start: Start): Promise<void> {
+  const file = path.join(examples(), 'end-test.ts');
+  fs.writeFileSync(file, END_PROGRAM);
+  const ended = new Promise<undefined>((resolve) => {
+    const d = vscode.debug.onDidTerminateDebugSession(() => {
+      d.dispose();
+      resolve(undefined);
+    });
+  });
+  const topFrames = recordTopFrames();
+  try {
+    let s: MemorySnapshot | undefined = await debug(api, start, file, []);
+    // Step Into on each line, also on console.log, until the program ends.
+    const lines: number[] = [];
+    for (let i = 0; s; i++) {
+      assert.ok(i < 10, `the program ends after a few steps; it paused at the lines ${lines.join(', ')}`);
+      lines.push(top(s).line);
+      const next = api.nextSnapshot(TIMEOUT);
+      next.catch(() => undefined);
+      await vscode.commands.executeCommand('workbench.action.debug.stepInto');
+      s = await Promise.race([next, ended]);
+    }
+    assert.ok(lines.includes(6), `the program paused at line 6 (console.log); it paused at the lines ${lines.join(', ')}`);
+    // Each pause is in the file of the program, and VS Code opened no file of the runtime.
+    assert.deepEqual([...new Set(topFrames.files)], [file]);
+    const opened = vscode.window.tabGroups.all
+      .flatMap((g) => g.tabs)
+      .map((t) => t.input)
+      .filter((input): input is vscode.TabInputText => input instanceof vscode.TabInputText)
+      .map((input) => input.uri);
+    assert.deepEqual(
+      opened.filter((uri) => uri.scheme !== 'file').map(String),
+      [],
+    );
+  } finally {
+    topFrames.dispose();
+    await closeTextEditors();
+    fs.rmSync(file, { force: true });
+  }
+}
+
 describe('the Mindbug view in VS Code', () => {
   let api: MindbugApi;
 
@@ -679,6 +761,8 @@ describe('the Mindbug view in VS Code', () => {
       it('steps into the set-up of the static variable of an exported class', () => exportsBeforeDeclaration(api, start));
       it('shows the variables of each scope in the order of the program', () => variableOrder(api, start));
       it('shows a var and a let before their lines, and a var in a block', () => varAndLet(api, start));
+      it('does not stop in the code of the runtime: a step after the last line ends the program', () =>
+        stepsToTheEnd(api, start));
     });
   }
 });
