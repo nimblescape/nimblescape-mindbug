@@ -42,7 +42,8 @@ The view has two areas: the **STACK** on the left and the **HEAP** on the right.
 - The stack builds bottom up: the Global scope is at the bottom, and each function call adds a scope on top. When the function returns, its scope goes away.
 - The top scope is the function that runs now. A **triangle** at its left points to it: yellow at the current step, and green at an earlier step of the [step history](#step-history), as the arrow of the debugger in the editor.
 - The variables of a scope also build bottom up, in the order of their declarations in the file: the first variable of the function, its first parameter, is at the bottom, and each later variable is above it. The variables of a block, for example of the body of a loop, are above the variables of the function. The variables of an outer function that a closure uses are below the own variables.
-- Each variable is a box. A number, a string, a boolean, `null` or `undefined` is written in the box. A `let`, `const` or `class` whose line has not run yet shows "uninitialized".
+- Each variable is a box. A number, a string, a boolean, `null` or `undefined` is written in the box.
+- A scope shows its variables from the start of the call, also before their lines have run. A `let`, `const` or `class` whose line has not run yet shows "uninitialized". A `var` shows `undefined` until its line has run, and it is a variable of the whole function, also when its line is inside a block. The example [var-and-let.ts](../examples/var-and-let.ts) shows both.
 - When you step to the end of a function, its scope shows **Return value**, the value that the function gives back. A constructor shows no return value: `new` gives the new object, not a value of the constructor.
 - A variable that holds an object or an array stores only *where* the object is on the heap. The view draws this as an arrow from the variable to the object.
 
@@ -152,13 +153,14 @@ A higher limit shows more of a large program, and makes each step slower, becaus
 
 ## Examples
 
-The folder [examples](../examples) has five small programs:
+The folder [examples](../examples) has six small programs:
 
 - [return-object.ts](../examples/return-object.ts): a function creates one object and returns it. The call adds a scope with the parameters title and pages to the stack. The object stays on the heap after the return, because the variable myBook of the Global scope points to it, and it goes away when myBook is set to `null`. The animation at the top of the [README](../README.md) steps through this example.
 - [insertion-sort.ts](../examples/insertion-sort.ts): two variables point to the same array, and the function changes the array on the heap.
 - [people.ts](../examples/people.ts): classes, a static variable, constructors, a subclass and methods.
 - [linked-list.ts](../examples/linked-list.ts): objects that point to each other.
 - [call-stack.ts](../examples/call-stack.ts): three functions on the stack at the same time, with objects of the classes Item, Discount and Bill. The Discount object that the inner function creates does not survive its call; the Bill object that the middle function creates survives the call of the inner function and is still there in the Global scope at the end.
+- [var-and-let.ts](../examples/var-and-let.ts): since when a variable exists, and in which scope it lives. At the first line, the Global scope already has the function shop, the `var` label with the value `undefined`, and the `let` total, uninitialized. In the call of shop, the `var` note is a variable of the function, although its line is inside a block, and the `const` variables of the loop are variables of its blocks.
 
 ![Four scopes on the stack, lineTotal on top of makeBill, checkout and the Global scope; the Discount object of lineTotal above the Bill object of makeBill and the objects of the Global scope](https://raw.githubusercontent.com/nimblescape/nimblescape-mindbug/main/docs/images/call-stack.png)
 
@@ -180,7 +182,7 @@ The folder [examples](../examples) has five small programs:
 | "Mindbug did not find Deno" or "Mindbug needs Deno or Node.js 22.7 or newer" | Install Deno or Node.js 22.7 or newer, or set `nimblescape.mindbug.denoPath` or `nimblescape.mindbug.nodePath` to the full path of the program. Restart VS Code after an installation, so that it sees the new `PATH`. |
 | The program does not start, and the Debug Console says that the address is in use | Another program uses port 9229. Set `nimblescape.mindbug.inspectPort` to another port, for example 9230. |
 | The view does not open | Run **Open Mindbug** while the program is paused, or turn on `nimblescape.mindbug.openAutomatically`. |
-| The view says "The memory could not be read" | The debugger did not answer a request of the helper. Step once more; when the message stays, report it (see [Support](../SUPPORT.md)) with a small program. |
+| The view says "The memory could not be read" | The debugger or V8 did not answer a request of Mindbug. Step once more; when the message stays, report it (see [Support](../SUPPORT.md)) with a small program and the text of the message. |
 | **Run with Mindbug** is missing | The button shows only in a TypeScript editor while no program runs. Check that the workspace is trusted. |
 
 ## Uninstall

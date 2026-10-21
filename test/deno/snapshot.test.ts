@@ -3,7 +3,8 @@
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
 // End-to-end test of the snapshot collector against a real Deno program, through Deno's V8 inspector.
-// FakeDap answers the Debug Adapter Protocol requests the way VS Code's JavaScript debugger does.
+// FakeDap answers the Debug Adapter Protocol request stackTrace the way VS Code's JavaScript debugger does, and the
+// collector sends its requests to V8 directly, as through the CDP proxy of the debugger.
 //
 // Needs Deno: set DENO_PATH, or have `deno` on the PATH. Without Deno the tests are skipped.
 // npm run test:deno (vitest.deno.config.mts); `npm test` does not run them.
@@ -11,13 +12,12 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectSnapshot } from '../../src/snapshot.ts';
 import type { MemorySnapshot, Value } from '../../src/model.ts';
 import { DEFAULT_LIMITS } from '../../src/heapWalker.ts';
-import { FakeDap, RoundCounter } from './fakeDap.ts';
+import { FakeDap, inspectorV8, RoundCounter } from './fakeDap.ts';
 import { DenoInspector } from './inspector.ts';
 
 const deno = process.env.DENO_PATH ?? 'deno';
@@ -25,26 +25,34 @@ const hasDeno = spawnSync(deno, ['--version']).status === 0;
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 let port = 9400;
 
+interface Pause {
+  snapshot: MemorySnapshot;
+  /** The number of rounds of requests, to the debugger and to V8. */
+  rounds: number;
+  /** The requests to the debugger. */
+  dapRequests: string[];
+}
+
 /**
- * Runs a fixture and returns a snapshot at each `debugger;` statement, with the number of rounds of requests that it
- * needed. `steps` gives the number of the step of each pause (1, 2, 3, … by default).
+ * Runs a fixture and returns a snapshot at each `debugger;` statement, with the requests that it needed. `steps` gives
+ * the number of the step of each pause (1, 2, 3, … by default).
  */
 async function pausesWithRounds(
   name: string,
   count: number,
   options: { steps?: number[]; limits?: typeof DEFAULT_LIMITS } = {},
-): Promise<{ snapshot: MemorySnapshot; rounds: number }[]> {
+): Promise<Pause[]> {
   const insp = await DenoInspector.start(deno, join(fixtures, name), port++);
-  const out: { snapshot: MemorySnapshot; rounds: number }[] = [];
+  const out: Pause[] = [];
   try {
     for (let i = 0; i < count; i++) {
       const ev = await insp.resumeToNextPause();
-      const dap = new RoundCounter(new FakeDap(insp, ev));
-      const snapshot = await collectSnapshot(dap, 1, options.steps?.[i] ?? i + 1, {
+      const dap = new FakeDap(insp, ev);
+      const counter = new RoundCounter(dap, inspectorV8(insp, ev));
+      const snapshot = await collectSnapshot(counter.dap, counter.v8, 1, options.steps?.[i] ?? i + 1, {
         limits: options.limits,
-        readSource: (path) => readFile(path, 'utf8'),
       });
-      out.push({ snapshot, rounds: dap.rounds });
+      out.push({ snapshot, rounds: counter.rounds, dapRequests: dap.log.map((r) => r.command) });
     }
   } finally {
     await insp.close();
@@ -89,11 +97,38 @@ test.skipIf(!hasDeno)('insertion sort: frames, aliasing and stable ids', async (
 });
 
 test.skipIf(!hasDeno)('the variables of each scope are in the order of the program, not of their names', async () => {
-  // VS Code's JavaScript debugger sorts the variables of a scope by name (FakeDap does the same).
+  // VS Code's JavaScript debugger sorts the variables of a scope by name; V8 gives them in the order of the program.
   const [s] = await pauses('order.ts', 1);
   const names = (frame: string) => s.frames.find((f) => f.name === frame)?.vars.map((v) => v.name);
   assert.deepEqual(names('Global scope'), ['Car', 'bmw', 'toyota', 'a', 'b', 'swap', 'zeta', 'alpha']);
   assert.deepEqual(names('swap'), ['values', 'second', 'first', 'kept']);
+});
+
+test.skipIf(!hasDeno)('var and let: before their lines, and in blocks', async () => {
+  const [start, inShop, inBlock] = await pauses('hoisting.ts', 3);
+  const vars = (s: MemorySnapshot, frame: string) =>
+    s.frames.find((f) => f.name === frame)?.vars.map((v) => [v.name, v.scope, v.value.k === 'ref' ? 'ref' : v.value]);
+  const undef = { k: 'undef' };
+  const uninit = { k: 'uninit' };
+  // A function declaration has its value from the start.
+  assert.deepEqual(vars(start, 'Global scope'), [
+    ['label', 'module', undef],
+    ['total', 'module', uninit],
+    ['shop', 'module', 'ref'],
+  ]);
+  assert.deepEqual(vars(inShop, 'shop'), [
+    ['prices', 'local', 'ref'],
+    ['sum', 'local', uninit],
+    ['note', 'local', undef],
+  ]);
+  // The var in the block is a variable of the function; the const of the loop and of its body are block variables.
+  assert.deepEqual(vars(inBlock, 'shop'), [
+    ['prices', 'local', 'ref'],
+    ['sum', 'local', { k: 'num', v: '13' }],
+    ['note', 'local', { k: 'str', v: 'expensive' }],
+    ['price', 'block', { k: 'num', v: '5' }],
+    ['withShipping', 'block', { k: 'num', v: '7' }],
+  ]);
 });
 
 test.skipIf(!hasDeno)('objects: getters are not called, closures, uninitialized let', async () => {
@@ -140,7 +175,7 @@ test.skipIf(!hasDeno)('classes: class boxes with static variables, attributes, m
   );
 });
 
-test.skipIf(!hasDeno)('names: the variables t, e, r, n, i and o, in four rounds of requests for three scopes', async () => {
+test.skipIf(!hasDeno)('names: the variables t, e, r, n, i and o, in three rounds of requests for three scopes', async () => {
   const [inLoop, atEnd] = await pausesWithRounds('names.ts', 2);
   assert.deepEqual(
     inLoop.snapshot.frames.map((f) => f.name),
@@ -159,10 +194,12 @@ test.skipIf(!hasDeno)('names: the variables t, e, r, n, i and o, in four rounds 
       ['r', { k: 'num', v: '10' }],
     ],
   );
-  // The stack trace, the scopes of the three frames (the first step also installs the heap walker), their variables,
-  // and the heap walker in the three frames.
-  assert.equal(inLoop.rounds, 4);
-  assert.equal(atEnd.rounds, 4);
+  // The stack trace with the call frames of V8, the variables of the three frames (the first step also installs the
+  // heap walker), and the heap walker in the three frames. Only the stack trace is a request to the debugger.
+  assert.equal(inLoop.rounds, 3);
+  assert.equal(atEnd.rounds, 3);
+  assert.deepEqual(inLoop.dapRequests, ['stackTrace']);
+  assert.deepEqual(atEnd.dapRequests, ['stackTrace']);
   assert.equal(inLoop.snapshot.fallback, false);
 });
 
@@ -171,17 +208,17 @@ test.skipIf(!hasDeno)('a new program in the same session: the heap walker is ins
   const [first] = await pausesWithRounds('names.ts', 1, { steps: [5] });
   assert.deepEqual(variable(first.snapshot, 'inner', 'i'), { k: 'num', v: '1' });
   assert.equal(first.snapshot.fallback, false);
-  // Four rounds, then the install, then the heap walker again.
-  assert.equal(first.rounds, 6);
+  // Three rounds, then the install, then the heap walker again.
+  assert.equal(first.rounds, 5);
 });
 
-test.skipIf(!hasDeno)('a result longer than the debugger gives back is read in parts', async () => {
+test.skipIf(!hasDeno)('a long result of the heap walker comes whole from V8', async () => {
   const [s] = await pausesWithRounds('long.ts', 1, { limits: { ...DEFAULT_LIMITS, str: 2000 } });
   const words = s.snapshot.objects[idOf(variable(s.snapshot, 'Global scope', 'words'))];
   assert.equal(words.items?.length, 100);
   words.items!.forEach((item, i) => assert.deepEqual(item, { k: 'str', v: `${i}:` + 'ä😀'.repeat(400) }));
-  // Four rounds, then all parts of the text at the same time.
-  assert.equal(s.rounds, 5);
+  // VS Code's JavaScript debugger gives at most 100,000 characters of a string; V8 gives the whole text.
+  assert.equal(s.rounds, 3);
 });
 
 test.skipIf(!hasDeno)('exported names before their lines have run are uninitialized, and the program goes on', async () => {
@@ -189,8 +226,8 @@ test.skipIf(!hasDeno)('exported names before their lines have run are uninitiali
   const insp = await DenoInspector.start(deno, join(fixtures, 'exports.ts'), port++, true);
   try {
     let ev = await insp.waitForPause();
-    // FakeDap lists also the names without a value, which VS Code's JavaScript debugger leaves out.
-    const entry = await collectSnapshot(new FakeDap(insp, ev), 1, 1);
+    // V8 lists also the names without a value, which VS Code's JavaScript debugger leaves out.
+    const entry = await collectSnapshot(new FakeDap(insp, ev), inspectorV8(insp, ev), 1, 1);
     assert.deepEqual(variable(entry, 'Global scope', 'LIMIT'), { k: 'uninit' });
     assert.deepEqual(variable(entry, 'Global scope', 'Car'), { k: 'uninit' });
 
@@ -201,7 +238,7 @@ test.skipIf(!hasDeno)('exported names before their lines have run are uninitiali
       const next = await insp.step('stepInto');
       assert.ok(next, `the program still runs after step ${step}`);
       ev = next;
-      const s = await collectSnapshot(new FakeDap(insp, ev), 1, ++step);
+      const s = await collectSnapshot(new FakeDap(insp, ev), inspectorV8(insp, ev), 1, ++step);
       if (s.frames.some((f) => f.name === 'Car (set up static variables)')) inStatic = s;
     }
     assert.ok(inStatic, 'a step pauses in the set-up of the static variables');
@@ -213,7 +250,7 @@ test.skipIf(!hasDeno)('exported names before their lines have run are uninitiali
     if (global.k !== 'uninit') assert.equal(idOf(global), self.id);
 
     ev = await insp.resumeToNextPause();
-    const atEnd = await collectSnapshot(new FakeDap(insp, ev), 1, step + 1);
+    const atEnd = await collectSnapshot(new FakeDap(insp, ev), inspectorV8(insp, ev), 1, step + 1);
     const car = atEnd.objects[idOf(variable(atEnd, 'Global scope', 'Car'))];
     assert.equal(car.id, self.id);
     assert.deepEqual(car.fields?.find((f) => f.name === 'count')?.value, { k: 'num', v: '1' });

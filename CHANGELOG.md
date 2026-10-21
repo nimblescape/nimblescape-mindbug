@@ -6,14 +6,28 @@ takes the section of a version as the notes of its GitHub release.
 ## 0.1.5
 
 **Variables in the order of the program.** The variables of a scope build
-bottom up in the order of their declarations in the file. For `let bmw`,
-`let toyota`, `let a` and `let b`, the Global scope shows `bmw` at the bottom,
-then `toyota`, `a` and `b`. Before, the variables were in the order of their
-names (`a`, `b`, `bmw`, `toyota`), and the variables of a block, for example
-of the body of a loop, in the reverse order of their names: VS Code's
-JavaScript debugger sorts the variables of each scope by name. Mindbug now
-finds the declaration of each variable in the file of the program and sorts
-the variables again.
+bottom up in the order of the program. For `let bmw`, `let toyota`, `let a`
+and `let b`, the Global scope shows `bmw` at the bottom, then `toyota`, `a`
+and `b`. Before, the variables were in the order of their names (`a`, `b`,
+`bmw`, `toyota`), and the variables of a block, for example of the body of a
+loop, in the reverse order of their names: VS Code's JavaScript debugger
+sorts the variables of each scope by name. Mindbug now reads the variables
+from V8, the JavaScript engine of Deno and Node.js, which gives them in the
+order of the program. It connects to V8 through the connection that the
+JavaScript debugger gives to other extensions.
+
+**Variables before their lines.** A scope now shows all its variables from
+the start of the call, as JavaScript has them: a `let`, `const` or `class`
+whose line has not run yet is "uninitialized", and a `var` is `undefined`.
+Before, the view left out a `let`, `const` or `class` before its line. The
+new example `var-and-let.ts` shows that a `var` is a variable of its whole
+function, also when its line is inside a block.
+
+**Faster steps in a remote window.** Mindbug now sends one request per step
+through VS Code (the stack trace) instead of four rounds of requests. The
+other requests go to V8 on the computer of the debugger, so in a GitHub
+Codespace, a Dev Container or over SSH, a step waits for one request over
+the network instead of four.
 
 ## 0.1.4
 

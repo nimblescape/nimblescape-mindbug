@@ -7,25 +7,141 @@ import assert from 'node:assert/strict';
 import {
   classifyScope,
   collectSnapshot,
+  type DapClient,
+  type DapStackFrame,
   frameLabel,
   frameName,
   isCommonJsModule,
   isUserFrame,
   localPath,
+  matchCallFrames,
   parseWalkerResult,
-  unquote,
+  remoteValue,
 } from '../../src/snapshot.ts';
 import type { HeapObject, Value } from '../../src/model.ts';
+import type { CdpCallFrame, CdpClient, CdpRemoteObject } from '../../src/v8Connection.ts';
 
-test('scope names of VS Code’s JavaScript debugger', () => {
-  const c = (name: string, expensive = false) => classifyScope({ name, variablesReference: 1, expensive });
-  assert.equal(c('Local: insertionSort'), 'local');
-  assert.equal(c('Lokal: insertionSort'), 'local');
-  assert.equal(c('Block'), 'block');
-  assert.equal(c('Closure (makeCounter)'), 'closure');
-  assert.equal(c('Module'), 'module');
-  assert.equal(c('Global', true), 'global');
-  assert.equal(c('Something'), 'other');
+/** A frame of the student's code as VS Code's JavaScript debugger gives it in the stack trace. */
+const dapFrame = (id: number, name: string, line = 1): DapStackFrame => ({
+  id,
+  name,
+  line,
+  column: 1,
+  source: { name: 'book.ts', path: '/s/book.ts' },
+});
+
+/** A debugger that answers only the request stackTrace. */
+const stackTrace = (frames: DapStackFrame[], requests: string[] = []): DapClient => ({
+  async request(command: string): Promise<any> {
+    requests.push(command);
+    if (command === 'stackTrace') return { stackFrames: frames };
+    throw new Error('not in this test');
+  },
+});
+
+/** A call frame of V8 with the given scopes (innermost first), each with its variables in the order of V8. */
+interface FakeCallFrame {
+  functionName: string;
+  scopes: { type: string; vars: [string, CdpRemoteObject | undefined][] }[];
+  this?: CdpRemoteObject;
+  returnValue?: CdpRemoteObject;
+}
+
+/**
+ * V8 for the collector: the call frames, their scopes, and the heap walker. `walker` gives the value that the heap
+ * walker reads for a name in a frame; `evaluatedIn` collects the frames in which source text was evaluated.
+ */
+function fakeV8(
+  frames: FakeCallFrame[],
+  walker: (frame: number, name: string) => Value,
+  objects: HeapObject[] = [],
+  evaluatedIn = new Set<number>(),
+): CdpClient {
+  const callFrames: CdpCallFrame[] = frames.map((f, i) => ({
+    callFrameId: `frame:${i}`,
+    functionName: f.functionName,
+    url: 'file:///s/book.ts',
+    scopeChain: f.scopes.map((s, j) => ({ type: s.type, object: { type: 'object', objectId: `scope:${i}:${j}` } })),
+    this: f.this ?? { type: 'undefined' },
+    returnValue: f.returnValue,
+  }));
+  return {
+    async callFrames() {
+      return callFrames;
+    },
+    async send(method: string, params: any): Promise<any> {
+      if (method === 'Runtime.getProperties') {
+        const [, i, j] = String(params.objectId).split(':').map(Number);
+        return { result: frames[i].scopes[j].vars.map(([name, value]) => ({ name, value })) };
+      }
+      if (method === 'Debugger.evaluateOnCallFrame') {
+        const i = Number(String(params.callFrameId).split(':')[1]);
+        evaluatedIn.add(i);
+        // The install of the helper
+        if (!params.expression.includes('.begin(')) return { result: { type: 'string', value: 'installed' } };
+        // The helper reads each name in the frame.
+        const names = [...params.expression.matchAll(/\.v\("([^"]+)"/g)].map((m: RegExpMatchArray) => m[1]);
+        const vars = names.map((name) => ({ name, value: walker(i, name) }));
+        return { result: { type: 'string', value: JSON.stringify({ v: 5, vars, objects, missing: [] }) } };
+      }
+      throw new Error(`not in this test: ${method}`);
+    },
+  };
+}
+
+const num = (v: number): CdpRemoteObject => ({ type: 'number', value: v, description: String(v) });
+
+test('scope types of V8', () => {
+  assert.equal(classifyScope('local'), 'local');
+  assert.equal(classifyScope('block'), 'block');
+  assert.equal(classifyScope('catch'), 'block');
+  assert.equal(classifyScope('closure'), 'closure');
+  assert.equal(classifyScope('module'), 'module');
+  assert.equal(classifyScope('script'), 'module');
+  assert.equal(classifyScope('global'), 'global');
+  assert.equal(classifyScope('eval'), 'other');
+});
+
+test('values of V8', () => {
+  assert.deepEqual(remoteValue(undefined), { k: 'uninit' }, 'a let before its line has no value');
+  assert.deepEqual(remoteValue({ type: 'undefined' }), { k: 'undef' });
+  assert.deepEqual(remoteValue(num(250)), { k: 'num', v: '250' });
+  assert.deepEqual(remoteValue({ type: 'number', unserializableValue: '-0', description: '-0' }), { k: 'num', v: '-0' });
+  assert.deepEqual(remoteValue({ type: 'string', value: 'BMW' }), { k: 'str', v: 'BMW' });
+  assert.deepEqual(remoteValue({ type: 'boolean', value: false }), { k: 'bool', v: false });
+  assert.deepEqual(remoteValue({ type: 'bigint', unserializableValue: '10n' }), { k: 'big', v: '10n' });
+  assert.deepEqual(remoteValue({ type: 'object', subtype: 'null', value: null }), { k: 'null' });
+  assert.deepEqual(remoteValue({ type: 'object', className: 'Book', description: 'Book', objectId: '1' }), {
+    k: 'text',
+    v: 'Book',
+  });
+});
+
+test('the call frames of V8 for the frames of the student’s code', () => {
+  const cf = (functionName: string): CdpCallFrame => ({
+    callFrameId: functionName,
+    functionName,
+    url: '',
+    scopeChain: [],
+    this: { type: 'undefined' },
+  });
+  const frames = [dapFrame(1, 'inner'), { ...dapFrame(2, 'run'), source: { path: 'node:internal/x' } }, dapFrame(3, 'outer')];
+  assert.deepEqual(
+    matchCallFrames([cf('inner'), cf('run'), cf('outer')], frames, [0, 2]),
+    [cf('inner'), cf('outer')],
+  );
+  // The frames after an async boundary are not call frames of V8.
+  const label = { ...dapFrame(4, 'async'), presentationHint: 'label' };
+  assert.deepEqual(matchCallFrames([cf('inner'), cf('run'), cf('outer')], [...frames, label, dapFrame(5, 'main')], [0, 2]), [
+    cf('inner'),
+    cf('outer'),
+  ]);
+  // Another number of frames: the stack changed between the two answers.
+  assert.equal(matchCallFrames([cf('inner'), cf('outer')], frames, [0, 2]), undefined);
+  // The debugger gives at most 200 frames; V8 gives all.
+  const deep = Array.from({ length: 200 }, (_, i) => dapFrame(i, `f${i}`));
+  const deepV8 = Array.from({ length: 250 }, (_, i) => cf(`f${i}`));
+  assert.deepEqual(matchCallFrames(deepV8, deep, [0, 1]), [cf('f0'), cf('f1')]);
 });
 
 test('user frames: own files only', () => {
@@ -73,34 +189,100 @@ test('file paths of the URIs of a remote window', () => {
   assert.equal(localPath('vscode-remote://localhost:8123/tmp/%E0%A4%A.ts'), 'vscode-remote://localhost:8123/tmp/%E0%A4%A.ts');
 });
 
-test('a remote window: the frames of the own files are read, with their file paths', async () => {
+test('a remote window: the frames of the own files are read, with their file paths, and one DAP request', async () => {
   // The stack frames as customRequest('stackTrace') returns them in VS Code in the browser
   const requests: string[] = [];
-  const dap = {
-    async request(command: string): Promise<any> {
-      requests.push(command);
-      if (command === 'stackTrace') {
-        return {
-          stackFrames: [
-            {
-              id: 7,
-              name: '<anonymous>',
-              line: 13,
-              column: 1,
-              source: { name: 'bill.ts', path: 'vscode-remote://localhost:8123/tmp/ws/bill.ts', sourceReference: 0 },
-            },
-          ],
-        };
-      }
-      if (command === 'scopes') return { scopes: [] };
-      throw new Error('not in this test');
-    },
-  };
-  const snapshot = await collectSnapshot(dap, 1, 1);
+  const dap = stackTrace(
+    [
+      {
+        id: 7,
+        name: '<anonymous>',
+        line: 13,
+        column: 1,
+        source: { name: 'bill.ts', path: 'vscode-remote://localhost:8123/tmp/ws/bill.ts', sourceReference: 0 },
+      },
+    ],
+    requests,
+  );
+  const v8 = fakeV8([{ functionName: '', scopes: [{ type: 'module', vars: [['total', num(12)]] }] }], () => ({
+    k: 'num',
+    v: '12',
+  }));
+  const snapshot = await collectSnapshot(dap, v8, 1, 1);
   assert.equal(snapshot.location, 'bill.ts:13');
   assert.equal(snapshot.frames.length, 1);
   assert.equal(snapshot.frames[0].file, '/tmp/ws/bill.ts');
-  assert.ok(requests.includes('scopes'), 'the frame is read');
+  assert.deepEqual(snapshot.frames[0].vars, [{ name: 'total', value: { k: 'num', v: '12' }, scope: 'module' }]);
+  assert.deepEqual(requests, ['stackTrace'], 'only the stack trace goes through the window');
+});
+
+test('the variables keep the order of V8: own variables, then blocks from the outer to the inner, then closures', async () => {
+  const dap = stackTrace([dapFrame(1, 'swap'), dapFrame(2, '<anonymous>')]);
+  const frames: FakeCallFrame[] = [
+    {
+      functionName: 'swap',
+      scopes: [
+        { type: 'block', vars: [['kept', num(1)]] },
+        { type: 'block', vars: [['temp', num(2)]] },
+        // A `var` before its line is undefined, a `let` before its line has no value.
+        {
+          type: 'local',
+          vars: [
+            ['values', { type: 'object', className: 'Array', description: 'Array(2)' }],
+            ['second', num(1)],
+            ['first', num(0)],
+            ['later', { type: 'undefined' }],
+            ['total', undefined],
+          ],
+        },
+        { type: 'closure', vars: [['zeta', num(26)], ['alpha', num(1)]] },
+        { type: 'global', vars: [['console', { type: 'object', description: 'console' }]] },
+      ],
+    },
+    {
+      functionName: '',
+      scopes: [{ type: 'module', vars: [['zeta', num(26)], ['alpha', num(1)], ['swap', { type: 'function' }]] }],
+    },
+  ];
+  // Without the heap walker (it is not installed and cannot be installed), the values of V8 are shown.
+  const v8 = fakeV8(frames, () => ({ k: 'unavail', v: 'not read' }));
+  const noWalker: CdpClient = {
+    callFrames: () => v8.callFrames(),
+    send: (method, params) =>
+      method === 'Debugger.evaluateOnCallFrame'
+        ? Promise.resolve({ result: { type: 'string', value: 'mindbug: not installed' } })
+        : v8.send(method, params),
+  };
+  const s = await collectSnapshot(dap, noWalker, 1, 2);
+  const swap = s.frames.find((f) => f.name === 'swap')!;
+  assert.deepEqual(
+    swap.vars.map((v) => [v.name, v.scope]),
+    [
+      ['values', 'local'],
+      ['second', 'local'],
+      ['first', 'local'],
+      ['later', 'local'],
+      ['total', 'local'],
+      ['temp', 'block'],
+      ['kept', 'block'],
+      ['zeta', 'closure'],
+      ['alpha', 'closure'],
+    ],
+  );
+  assert.deepEqual(swap.vars.find((v) => v.name === 'later')?.value, { k: 'undef' });
+  assert.deepEqual(swap.vars.find((v) => v.name === 'total')?.value, { k: 'uninit' });
+  assert.deepEqual(swap.vars.find((v) => v.name === 'values')?.value, { k: 'text', v: 'Array(2)' });
+  assert.deepEqual(
+    s.frames[0].vars.map((v) => v.name),
+    ['zeta', 'alpha', 'swap'],
+  );
+  assert.equal(s.fallback, true);
+});
+
+test('a stack that changed between the answers of the debugger and of V8 is not read', async () => {
+  const dap = stackTrace([dapFrame(1, 'inner'), dapFrame(2, '<anonymous>')]);
+  const v8 = fakeV8([{ functionName: '', scopes: [] }], () => ({ k: 'undef' }));
+  await assert.rejects(collectSnapshot(dap, v8, 1, 1), /call frames of V8 do not match/);
 });
 
 test('readable names for the functions that V8 makes for class fields', () => {
@@ -145,14 +327,28 @@ test('frame names of constructors and methods name the class that declares them'
 });
 
 test('a constructor shows no return value, a function shows its return value; no helper in the set-up of fields', async () => {
-  // The frames at a return, newest first, as VS Code's JavaScript debugger gives them: the set-up of the fields of
-  // new Book(...), the constructor of Book, the function createBook, and the module. At a return, the debugger adds
-  // the return value to the local scope, with a name in the display language of VS Code.
-  const stack = (returnValue: string) => [
-    { name: '<instance_members_initializer>', locals: [['this', 'Book'], [returnValue, 'undefined']] },
-    { name: 'Book', locals: [['this', 'Book'], ['pages', '250'], [returnValue, 'undefined'], ['title', "'TypeScript'"]] },
-    { name: 'createBook', locals: [['book', 'Book'], ['pages', '250'], [returnValue, 'Book'], ['title', "'TypeScript'"]] },
-    { name: '<anonymous>', module: [['Book', 'class Book'], ['createBook', 'ƒ createBook(title, pages)']] },
+  // The frames at a return, newest first: the set-up of the fields of new Book(...), the constructor of Book, the
+  // function createBook, and the module. At a return, V8 gives the return value with the call frame.
+  const book: CdpRemoteObject = { type: 'object', className: 'Book', description: 'Book', objectId: 'book' };
+  const undef: CdpRemoteObject = { type: 'undefined' };
+  const title: CdpRemoteObject = { type: 'string', value: 'TypeScript' };
+  const frames: FakeCallFrame[] = [
+    { functionName: '<instance_members_initializer>', scopes: [{ type: 'local', vars: [] }], this: book, returnValue: undef },
+    {
+      functionName: 'Book',
+      scopes: [{ type: 'local', vars: [['title', title], ['pages', num(250)]] }],
+      this: book,
+      returnValue: undef,
+    },
+    {
+      functionName: 'createBook',
+      scopes: [{ type: 'local', vars: [['title', title], ['pages', num(250)], ['book', book]] }],
+      returnValue: book,
+    },
+    {
+      functionName: '',
+      scopes: [{ type: 'module', vars: [['Book', { type: 'function' }], ['createBook', { type: 'function' }]] }],
+    },
   ];
   const objects: HeapObject[] = [
     { id: 1, kind: 'class', type: 'Book', methods: [], attrs: ['title', 'pages'] },
@@ -160,65 +356,34 @@ test('a constructor shows no return value, a function shows its return value; no
     { id: 3, kind: 'function', type: 'createBook' },
   ];
   const readable: Record<string, Value> = {
-    this: { k: 'ref', id: 2 },
     book: { k: 'ref', id: 2 },
     pages: { k: 'num', v: '250' },
     title: { k: 'str', v: 'TypeScript' },
     Book: { k: 'ref', id: 1 },
     createBook: { k: 'ref', id: 3 },
   };
-  /** The frames in which an expression was evaluated. */
-  const evaluatedIn = new Set<number>();
-  const snapshotAt = (returnValue: string) => {
-    const frames = stack(returnValue);
-    const dap = {
-      async request(command: string, args: any): Promise<any> {
-        if (command === 'stackTrace') {
-          return {
-            stackFrames: frames.map((f, id) => ({ id, name: f.name, line: 26, column: 1, source: { name: 'book.ts', path: '/s/book.ts' } })),
-          };
-        }
-        if (command === 'scopes') {
-          const f = frames[args.frameId];
-          return { scopes: [{ name: f.module ? 'Module' : `Local: ${f.name}`, variablesReference: 100 + args.frameId }] };
-        }
-        if (command === 'variables') {
-          const f = frames[args.variablesReference - 100];
-          return { variables: (f.locals ?? f.module ?? []).map(([name, value]) => ({ name, value, variablesReference: 0 })) };
-        }
-        if (command === 'evaluate') {
-          evaluatedIn.add(args.frameId);
-          if (!args.expression.includes('.begin(')) return { result: 'true' }; // the install of the helper
-          // The helper reads each name in the frame; a name that is not a variable is not defined.
-          const names = [...args.expression.matchAll(/\.v\("([^"]+)"/g)].map((m: RegExpMatchArray) => m[1]);
-          const self = frames[args.frameId].locals?.some(([name]) => name === 'this');
-          const value = (name: string): Value =>
-            name === 'this' && !self ? { k: 'undef' } : (readable[name] ?? { k: 'unavail', v: `${name} is not defined` });
-          const vars = names.map((name) => ({ name, value: value(name) }));
-          const json = JSON.stringify({ v: 1, vars, objects, missing: [] });
-          return { result: `${json.length}:${json}` };
-        }
-        throw new Error('not in this test');
-      },
-    };
-    return collectSnapshot(dap, 1, 1);
+  const walker = (i: number, name: string): Value => {
+    if (name === 'this') return frames[i].this ? { k: 'ref', id: 2 } : { k: 'undef' };
+    return readable[name] ?? { k: 'unavail', v: `${name} is not defined` };
   };
+  /** The frames in which source text was evaluated. */
+  const evaluatedIn = new Set<number>();
+  const dap = stackTrace(frames.map((f, id) => dapFrame(id, f.functionName || '<anonymous>', 26)));
+  const s = await collectSnapshot(dap, fakeV8(frames, walker, objects, evaluatedIn), 1, 1);
 
-  for (const returnValue of ['Return value', 'Rückgabewert']) {
-    const s = await snapshotAt(returnValue);
-    const names = (frame: string) => s.frames.find((f) => f.name === frame)?.vars.map((v) => v.name);
-    assert.deepEqual(
-      s.frames.map((f) => f.name),
-      ['Global scope', 'createBook', 'Book.constructor', 'Book (set up fields)'],
-    );
-    assert.deepEqual(names('Book.constructor'), ['this', 'pages', 'title'], `no ${returnValue} in the constructor`);
-    assert.deepEqual(names('Book (set up fields)'), ['this'], `no ${returnValue} in the set-up of the fields`);
-    assert.deepEqual(names('createBook'), ['book', 'pages', returnValue, 'title'], `the ${returnValue} of a function`);
-    // Node.js 22 stops with a fatal error when code is evaluated in the frame of <instance_members_initializer>. Its
-    // `this` is the object of the constructor.
-    assert.ok(!evaluatedIn.has(0), 'no evaluate in the set-up of the fields');
-    assert.deepEqual(s.frames[3].vars, [{ name: 'this', value: { k: 'ref', id: 2 }, scope: 'local' }]);
-  }
+  const names = (frame: string) => s.frames.find((f) => f.name === frame)?.vars.map((v) => v.name);
+  assert.deepEqual(
+    s.frames.map((f) => f.name),
+    ['Global scope', 'createBook', 'Book.constructor', 'Book (set up fields)'],
+  );
+  assert.deepEqual(names('Book.constructor'), ['this', 'title', 'pages'], 'no return value in the constructor');
+  assert.deepEqual(names('Book (set up fields)'), ['this'], 'no return value in the set-up of the fields');
+  assert.deepEqual(names('createBook'), ['title', 'pages', 'book', 'Return value'], 'the return value of a function');
+  assert.deepEqual(s.frames[1].vars.at(-1)?.value, { k: 'text', v: 'Book' });
+  // Node.js 22 stops with a fatal error when code is evaluated in the frame of <instance_members_initializer>. Its
+  // `this` is the object of the constructor.
+  assert.ok(!evaluatedIn.has(0), 'no evaluate in the set-up of the fields');
+  assert.deepEqual(s.frames[3].vars, [{ name: 'this', value: { k: 'ref', id: 2 }, scope: 'local' }]);
 });
 
 test('Node.js runs a file without import or export in a function: its frame is the Global scope', () => {
@@ -229,13 +394,9 @@ test('Node.js runs a file without import or export in a function: its frame is t
   assert.ok(!isCommonJsModule('<anonymous>', true, ['arr1', 'require']), 'only with all parameters of the module');
 });
 
-test('unquote and parseWalkerResult', () => {
-  assert.equal(unquote('"a\\nb"'), 'a\nb');
-  assert.equal(unquote("'it\\'s'"), "it's");
-  assert.equal(unquote('plain'), 'plain');
-  const json = JSON.stringify({ v: 2, vars: [], objects: [], missing: [] });
+test('parseWalkerResult', () => {
+  const json = JSON.stringify({ v: 5, vars: [], objects: [], missing: [] });
   assert.ok(parseWalkerResult(json));
-  assert.ok(parseWalkerResult(JSON.stringify(json)));
-  assert.ok(parseWalkerResult(`'${json}'`));
-  assert.equal(parseWalkerResult('{"v":2,"vars":[],"objects":[],"missing'), undefined);
+  assert.equal(parseWalkerResult('{"v":5,"vars":[],"objects":[],"missing'), undefined);
+  assert.equal(parseWalkerResult('"text"'), undefined);
 });
