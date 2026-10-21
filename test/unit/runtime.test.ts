@@ -50,3 +50,9 @@ test('the debug configuration: the runtime waits for the debugger on the port, f
   assert.ok(node.runtimeArgs.includes('--experimental-transform-types'));
   assert.equal(node.program, '/w/a.ts');
 });
+
+test('the debug configuration skips the code of Node.js and of Deno', () => {
+  for (const runtime of ['deno', 'node'] as const) {
+    assert.deepEqual(debugConfiguration('/w/a.ts', '/w', runtime, settings).skipFiles, ['<node_internals>/**', 'ext:*/**']);
+  }
+});

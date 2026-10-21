@@ -24,6 +24,14 @@ exists from the start of its scope, but the program cannot read it yet. A
 `var-and-let.ts` shows that a `var` is a variable of its whole function,
 also when its line is inside a block.
 
+**No step into the code of Deno.** With Deno, a step after the last line of
+the program stopped in the code of Deno (`99_main.js`), and VS Code opened
+that file. Step Into on `console.log` also stopped in the code of Deno
+(`01_console.js`). Now a step after the last line ends the program, and the
+editor stays on the file of the program. Step Into on `console.log` does not
+go into the code of Deno. Mindbug tells VS Code's JavaScript debugger to
+skip the files of Deno, as it already did for the files of Node.js.
+
 **Faster steps in a remote window.** Mindbug now sends one request per step
 through VS Code (the stack trace) instead of four rounds of requests. The
 other requests go to V8 on the computer of the debugger, so in a GitHub
