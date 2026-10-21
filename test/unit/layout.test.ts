@@ -36,6 +36,15 @@ test('the variables of a scope build bottom up: closure variables first, then th
   );
 });
 
+test('a variable whose line has not run yet is drawn only with "Show uninitialized"', () => {
+  const s = snapshot([v('label', { k: 'undef' }), v('total', { k: 'uninit' }), v('shop', num(1))], []);
+  const names = (showUninitialized: boolean) =>
+    visibleVars(s.frames[0], s, { ...DEFAULT_VIEW_OPTIONS, showUninitialized }).map((x) => x.name);
+  assert.deepEqual(names(false), ['label', 'shop'], 'a var before its line is undefined, and is drawn');
+  assert.deepEqual(names(true), ['label', 'total', 'shop']);
+  assert.equal(DEFAULT_VIEW_OPTIONS.showUninitialized, false);
+});
+
 test('rows start at objects of frame variables; a shared object is placed once', () => {
   const s = snapshot(
     [v('a', ref(1)), v('b', ref(1)), v('c', ref(2))],

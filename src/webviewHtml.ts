@@ -40,6 +40,7 @@ export function webviewHtml(o: WebviewHtmlInput): string {
   <label class="toggle" title="Show the classes, with their static variables, at the top of the heap"><input type="checkbox" id="showClasses"> Show classes</label>
   <label class="toggle" title="Show functions, and the variables that hold functions or classes"><input type="checkbox" id="showFunctions"> Show functions</label>
   <label class="toggle"><input type="checkbox" id="showIds"> Show ids</label>
+  <label class="toggle" title="Show the variables whose line has not run yet: a let, const or class before its line"><input type="checkbox" id="showUninitialized"> Show uninitialized</label>
 </header>
 <nav id="history" class="history" aria-label="Step history" hidden>
   <div class="history-controls">

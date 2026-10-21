@@ -226,7 +226,7 @@ export class MemoryController implements vscode.Disposable {
    * you changed. A switch that the settings of the workspace set is not saved (see `viewOverrides`).
    */
   saveViewOption(name: keyof ViewOptions, value: boolean): Promise<void> {
-    // The message comes from the page of the view: only the three switches, only true or false.
+    // The message comes from the page of the view: only the switches of the view, only true or false.
     if (!(VIEW_OPTION_NAMES as readonly string[]).includes(name) || typeof value !== 'boolean') return this.saving;
     this.shownOptions = { ...this.shownOptions, [name]: value };
     this.pendingSaves++;

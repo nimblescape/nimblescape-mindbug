@@ -69,7 +69,7 @@ Where its protection ends:
 
 The view is a webview of VS Code. Its content security policy (`src/webviewHtml.ts`) allows only the script of the extension with the nonce of the page, and the styles and images of the extension (`default-src 'none'`). It loads nothing from the network, and it reaches no file: it gets the snapshots from the extension as messages.
 
-The view sends three kinds of messages to the extension: `viewStep` and `openLocation`, which open a file of a stack frame of a snapshot at its line in the editor, and `viewOption`, which carries the name and the value of a switch of the view after a click. The extension opens the file as a text document; it runs nothing. Of a `viewOption` message, it saves only the values `true` and `false` of the three user settings `nimblescape.mindbug.showClasses`, `showFunctions` and `showIds`, and ignores any other name or value.
+The view sends three kinds of messages to the extension: `viewStep` and `openLocation`, which open a file of a stack frame of a snapshot at its line in the editor, and `viewOption`, which carries the name and the value of a switch of the view after a click. The extension opens the file as a text document; it runs nothing. Of a `viewOption` message, it saves only the values `true` and `false` of the four user settings `nimblescape.mindbug.showClasses`, `showFunctions`, `showIds` and `showUninitialized`, and ignores any other name or value.
 
 ## Stored data
 

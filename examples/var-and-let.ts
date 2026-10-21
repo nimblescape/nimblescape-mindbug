@@ -5,13 +5,13 @@
 // Since when a variable exists, and in which scope it lives.
 // Use Step Into (F11) on each line and look at the STACK.
 //
-// 1. At the first line, the Global scope already has all its
-//    variables: shop is a function, label (var) is undefined,
-//    and total (let) is uninitialized. A let cannot be read
-//    before its line has run.
-// 2. In the call of shop, sum (let) is uninitialized, and
-//    note (var) is undefined, although the line of note is
-//    inside a block.
+// 1. At the first line, the Global scope already has shop
+//    (a function) and label (a var, undefined). total (a let)
+//    exists too, but cannot be read before its line has run:
+//    the switch "Show uninitialized" shows it.
+// 2. In the call of shop, note (var) is undefined, although
+//    its line is inside a block. sum (let) appears at the
+//    step where its line runs.
 // 3. In the loop, price and withShipping are variables of the
 //    blocks of the loop. They go away when the loop ends.
 // 4. note is a variable of the whole function: it is still

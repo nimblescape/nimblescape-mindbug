@@ -154,6 +154,11 @@
           "default": true,
           "markdownDescription": "Show the number of each object in the Mindbug view, which stays the same from step to step. A click on the switch **Show ids** of the view changes this setting in the user settings, unless the settings of the workspace set it."
         },
+        "nimblescape.mindbug.showUninitialized": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Show the variables whose line has not run yet in the Mindbug view: a `let`, `const` or `class` before its line, as \"uninitialized\". A click on the switch **Show uninitialized** of the view changes this setting in the user settings, unless the settings of the workspace set it."
+        },
         "nimblescape.mindbug.maxHistorySteps": {
           "type": "number",
           "default": 500,

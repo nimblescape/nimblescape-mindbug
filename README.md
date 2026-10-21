@@ -57,6 +57,7 @@ Without a `launch.json` file, F5 in a TypeScript file also offers **Mindbug**. T
 | `nimblescape.mindbug.showClasses` | `true` | Show the classes at the top of the heap (the switch **Show classes** of the view). |
 | `nimblescape.mindbug.showFunctions` | `false` | Show functions, and the variables that hold functions or classes (the switch **Show functions**). |
 | `nimblescape.mindbug.showIds` | `true` | Show the number of each object (the switch **Show ids**). |
+| `nimblescape.mindbug.showUninitialized` | `false` | Show the variables whose line has not run yet, as "uninitialized": a `let`, `const` or `class` before its line (the switch **Show uninitialized**). |
 | `nimblescape.mindbug.maxHistorySteps` | `500` | Number of steps that the view keeps for the step history. |
 | `nimblescape.mindbug.maxObjects` | `300` | Number of heap objects that are read per scope. |
 | `nimblescape.mindbug.maxArrayItems` | `100` | Number of array items, set members and map entries per object. |
