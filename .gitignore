@@ -13,3 +13,6 @@ test/render/output/
 test/gif/output/
 test-results/
 coverage/
+
+# The programs that the tests in VS Code write into the examples while they run.
+examples/*-test.ts
