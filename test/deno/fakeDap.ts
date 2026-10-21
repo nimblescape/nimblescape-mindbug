@@ -5,7 +5,8 @@
 // A small stand-in for VS Code's JavaScript debugger (js-debug): it answers the four
 // Debug Adapter Protocol requests that the collector uses, from a paused V8 inspector.
 // Scope names follow js-debug ("Local: fn", "Block", "Closure (fn)", "Module", "Global"), and the results of
-// `evaluate` follow js-debug 1.140 (see `evaluate` below).
+// `evaluate` follow js-debug 1.140 (see `evaluate` below). As js-debug, it gives the place of each scope in the
+// TypeScript file, and the variables of a scope sorted by name.
 
 import { fileURLToPath } from 'node:url';
 import type { DapClient } from '../../src/snapshot.ts';
@@ -136,7 +137,16 @@ export class FakeDap implements DapClient {
             let name = SCOPE_NAMES[s.type] ?? s.type;
             if (s.name && s.type === 'closure') name = `Closure (${s.name})`;
             else if (s.name) name = `${name}: ${s.name}`;
-            return { name, variablesReference: ref, expensive: s.type === 'global' };
+            const scope: Record<string, unknown> = { name, variablesReference: ref, expensive: s.type === 'global' };
+            if (s.startLocation && cf.url.startsWith('file:')) {
+              const start = this.inspector.originalPosition(s.startLocation);
+              Object.assign(scope, { line: start.line, column: start.column, source: { path: fileURLToPath(cf.url) } });
+              if (s.endLocation) {
+                const end = this.inspector.originalPosition(s.endLocation);
+                Object.assign(scope, { endLine: end.line, endColumn: end.column });
+              }
+            }
+            return scope;
           }),
         };
       }
@@ -147,11 +157,14 @@ export class FakeDap implements DapClient {
           objectId: entry.objectId,
           ownProperties: true,
         });
-        const vars = (res.result as any[]).map((p) => ({
-          name: p.name,
-          value: p.value?.description ?? String(p.value?.value ?? 'undefined'),
-          variablesReference: 0,
-        }));
+        const vars = (res.result as any[])
+          .map((p) => ({
+            name: p.name,
+            value: p.value?.description ?? String(p.value?.value ?? 'undefined'),
+            variablesReference: 0,
+          }))
+          // js-debug sorts the variables of a scope by name, numbers by their value (js-debug 1.140 in VS Code 1.143).
+          .sort((a, b) => +a.name - +b.name || a.name.localeCompare(b.name));
         if (entry.thisObject && entry.thisObject.type !== 'undefined') {
           vars.unshift({ name: 'this', value: 'this', variablesReference: 0 });
         }

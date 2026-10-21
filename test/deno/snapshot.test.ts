@@ -11,6 +11,7 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectSnapshot } from '../../src/snapshot.ts';
@@ -39,7 +40,10 @@ async function pausesWithRounds(
     for (let i = 0; i < count; i++) {
       const ev = await insp.resumeToNextPause();
       const dap = new RoundCounter(new FakeDap(insp, ev));
-      const snapshot = await collectSnapshot(dap, 1, options.steps?.[i] ?? i + 1, { limits: options.limits });
+      const snapshot = await collectSnapshot(dap, 1, options.steps?.[i] ?? i + 1, {
+        limits: options.limits,
+        readSource: (path) => readFile(path, 'utf8'),
+      });
       out.push({ snapshot, rounds: dap.rounds });
     }
   } finally {
@@ -82,6 +86,14 @@ test.skipIf(!hasDeno)('insertion sort: frames, aliasing and stable ids', async (
     atEnd.objects[arr].items!.map((v) => (v as { v: string }).v),
     ['-4', '1', '3', '3', '4', '5', '6', '7'],
   );
+});
+
+test.skipIf(!hasDeno)('the variables of each scope are in the order of the program, not of their names', async () => {
+  // VS Code's JavaScript debugger sorts the variables of a scope by name (FakeDap does the same).
+  const [s] = await pauses('order.ts', 1);
+  const names = (frame: string) => s.frames.find((f) => f.name === frame)?.vars.map((v) => v.name);
+  assert.deepEqual(names('Global scope'), ['Car', 'bmw', 'toyota', 'a', 'b', 'swap', 'zeta', 'alpha']);
+  assert.deepEqual(names('swap'), ['values', 'second', 'first', 'kept']);
 });
 
 test.skipIf(!hasDeno)('objects: getters are not called, closures, uninitialized let', async () => {

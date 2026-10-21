@@ -10,6 +10,7 @@
 // Writes test/render/snapshots/<example>.json: an array with one snapshot for each step.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectSnapshot } from '../../src/snapshot.ts';
@@ -38,7 +39,9 @@ export async function record(file: string, port: number): Promise<MemorySnapshot
         continue;
       }
       // The last line usually calls console.log; stop there.
-      const snap = await collectSnapshot(new FakeDap(insp, ev), 1, steps.length + 1);
+      const snap = await collectSnapshot(new FakeDap(insp, ev), 1, steps.length + 1, {
+        readSource: (path) => readFile(path, 'utf8'),
+      });
       steps.push(snap);
       const next = await insp.step('stepInto');
       if (!next) break;

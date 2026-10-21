@@ -5,6 +5,7 @@
 // Connects the debugger with the memory panel: it watches the debug sessions, reads a new
 // snapshot at every pause and sends it to the panel.
 
+import { readFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
 import {
   DEFAULT_VIEW_OPTIONS,
@@ -420,7 +421,8 @@ export class MemoryController implements vscode.Disposable {
         { request: (command, args) => Promise.resolve(pause.session.customRequest(command, args)) },
         pause.threadId,
         step,
-        { limits: this.limits() },
+        // The file on disk is the text that the program runs, also when the editor has changes that are not saved.
+        { limits: this.limits(), readSource: (path) => readFile(path, 'utf8') },
       );
       if (seq !== this.refreshSeq) return; // the program moved on; this result is old
       this.lastSnapshot = snapshot;

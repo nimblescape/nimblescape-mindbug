@@ -6,14 +6,20 @@
 // VS Code's JavaScript debugger talks the same protocol to Deno; these tests use it directly.
 
 import { spawn, type ChildProcess } from 'node:child_process';
-import { lineMapFromUrl, originalLine, type LineMap } from './sourceMap.ts';
+import { lineMapFromUrl, originalPosition, type LineMap } from './sourceMap.ts';
 
 export interface CdpCallFrame {
   callFrameId: string;
   functionName: string;
   location: { scriptId: string; lineNumber: number; columnNumber: number };
   url: string;
-  scopeChain: { type: string; name?: string; object: { objectId?: string } }[];
+  scopeChain: {
+    type: string;
+    name?: string;
+    object: { objectId?: string };
+    startLocation?: { scriptId: string; lineNumber: number; columnNumber: number };
+    endLocation?: { scriptId: string; lineNumber: number; columnNumber: number };
+  }[];
   this: { type: string; className?: string; objectId?: string };
 }
 
@@ -126,9 +132,20 @@ export class DenoInspector {
 
   /** 1-based line in the original (TypeScript) file for a paused location. */
   originalLine(location: { scriptId: string; lineNumber: number; columnNumber: number }): number {
+    return this.originalPosition(location).line;
+  }
+
+  /** 1-based line and column in the original (TypeScript) file for a location in the JavaScript that Deno runs. */
+  originalPosition(location: { scriptId: string; lineNumber: number; columnNumber: number }): {
+    line: number;
+    column: number;
+  } {
     const map = this.sourceMaps.get(location.scriptId);
-    const line = map ? originalLine(map, location.lineNumber, location.columnNumber) : undefined;
-    return (line ?? location.lineNumber) + 1;
+    const p = (map && originalPosition(map, location.lineNumber, location.columnNumber)) || {
+      line: location.lineNumber,
+      column: location.columnNumber,
+    };
+    return { line: p.line + 1, column: p.column + 1 };
   }
 
   send(method: string, params: object = {}): Promise<any> {

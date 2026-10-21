@@ -3,6 +3,18 @@
 Each section lists the changes of one released version. The release workflow
 takes the section of a version as the notes of its GitHub release.
 
+## 0.1.5
+
+**Variables in the order of the program.** The variables of a scope build
+bottom up in the order of their declarations in the file. For `let bmw`,
+`let toyota`, `let a` and `let b`, the Global scope shows `bmw` at the bottom,
+then `toyota`, `a` and `b`. Before, the variables were in the order of their
+names (`a`, `b`, `bmw`, `toyota`), and the variables of a block, for example
+of the body of a loop, in the reverse order of their names: VS Code's
+JavaScript debugger sorts the variables of each scope by name. Mindbug now
+finds the declaration of each variable in the file of the program and sorts
+the variables again.
+
 ## 0.1.4
 
 **Static variables of an exported class.** With Deno, a step in the set-up
