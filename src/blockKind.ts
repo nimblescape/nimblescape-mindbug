@@ -4,8 +4,8 @@
 
 // The statement of a block scope, which the view names the scope after: "if scope", "for scope", and so on. V8 does
 // not give the statement, but it gives the position where each block scope starts in the code that the runtime runs
-// (Debugger.Scope.startLocation): the `{` of the block, the declaration in the header of a for loop (after `for (`),
-// the `(` of a catch clause, or the word `switch`. The words before that position name the statement.
+// (Debugger.Scope.startLocation): the `{` of the block, a place in the header of a for loop, the `(` of a catch
+// clause, or the word `switch`. The words before that position name the statement.
 // This file does not import 'vscode'.
 
 import type { BlockKind } from './model.ts';
@@ -75,8 +75,13 @@ export function blockKind(text: string, offset: number, type: string): BlockKind
   if (text.startsWith('switch', offset) && !isWordChar(text[offset + 6])) return 'switch';
   const end = skipSpaceBack(text, offset);
   if (text[offset] !== '{') {
-    // The header of a for loop: its scope starts at the declaration, after `for (` or `for await (`.
-    return text[end - 1] === '(' && isFor(text, end - 1) ? 'for' : 'block';
+    // The header of a for loop (`for (` or `for await (`). Its scope starts at the declaration after the `(` (V8 of
+    // Deno 2.9 and Node.js 24), or at the `(` of a for loop and at the `)` of a for … of or for … in loop (V8 of
+    // Node.js 22).
+    if (text[end - 1] === '(' && isFor(text, end - 1)) return 'for';
+    if (text[offset] === '(' && isFor(text, offset)) return 'for';
+    const open = text[offset] === ')' ? openParen(text, offset) : undefined;
+    return open !== undefined && isFor(text, open) ? 'for' : 'block';
   }
   if (text[end - 1] === ')') {
     const open = openParen(text, end - 1);

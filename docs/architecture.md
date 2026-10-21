@@ -127,7 +127,7 @@ V8 gives a scope for each block `{ … }` that declares a `let`, `const` or `cla
 V8 does not say which statement a block belongs to, but each scope has a `startLocation`: the position where it starts in the code that the runtime runs. `blockKind` in `src/blockKind.ts` reads the words before that position:
 
 - At a `{`: after `if (…)`, `while (…)`, `for (…)` ("for body") or `catch (…)` ("catch body"), or after the word `else`, `do`, `try`, `catch` or `finally`. After anything else, it is a plain block, for example after a label or a `case`.
-- After `for (` or `for await (`: the header of a for loop ("for"). V8 starts this scope at the declaration of the header.
+- In the header of a for loop (`for (` or `for await (`): the scope of the header ("for"). V8 starts it at the declaration after the `(` (Deno 2.9 and Node.js 24), or at the `(` of a for loop and at the `)` of a for … of or for … in loop (Node.js 22).
 - At the word `switch`: the cases of a switch statement.
 
 Deno runs JavaScript that it makes from the TypeScript file (`for(let i = 0; …){`), and Node.js runs the TypeScript file with the types replaced by spaces; the rules hold for both. When the code cannot be read, the scope is a plain block. The view labels each part with the statement and the word "scope", such as "for body scope".
