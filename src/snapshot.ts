@@ -255,6 +255,8 @@ interface ScopeVars {
   vars: ListedVar[];
   /** For a block scope: its statement. */
   statement?: BlockKind;
+  /** A block scope around the function, which the view shows as a closure. */
+  outerBlock?: boolean;
 }
 
 /** A variable of a frame in the order of the view. */
@@ -265,6 +267,8 @@ interface DisplayVar {
   group: number;
   /** For a variable of a block: the number of the block, from the outermost block (1). */
   block?: number;
+  /** A variable of a block scope around the function. */
+  outerBlock?: boolean;
   listed: ListedVar;
   /** The index of its value in the arguments of the heap walker, when it has a value. */
   arg?: number;
@@ -499,14 +503,20 @@ function frameOf(
  */
 async function readNames(v8: CdpClient, f: DapStackFrame, cf: CdpCallFrame, isLast: boolean): Promise<FrameNames> {
   const scopes = cf.scopeChain.map((scope) => ({ cls: classifyScope(scope.type), scope }));
+  // A block scope after the scope of the function, or of the module, is no block of this frame. It is a block around
+  // the function, whose variables the function uses (the view shows them as closure variables), or the scope of the
+  // class around a method, with the name of the class. V8 gives it no position in the code of the function.
+  const own = scopes.findIndex((s) => s.cls === 'local' || s.cls === 'module');
   const { frame, wanted } = frameOf(
     f,
     isLast,
     scopes.map((s) => s.cls),
   );
   const read = await Promise.all(
-    scopes.map(async ({ cls, scope }): Promise<ScopeVars | undefined> => {
-      const kind: ScopeClass = cls === 'other' ? 'block' : cls;
+    scopes.map(async ({ cls, scope }, index): Promise<ScopeVars | undefined> => {
+      const block = cls === 'block' || cls === 'other';
+      const outerBlock = block && own >= 0 && index > own;
+      const kind: ScopeClass = outerBlock ? 'closure' : block ? 'block' : cls;
       if (!wanted(kind) || !scope.object.objectId) return undefined;
       try {
         const [res, statement] = await Promise.all([
@@ -521,7 +531,7 @@ async function readNames(v8: CdpClient, f: DapStackFrame, cf: CdpCallFrame, isLa
         if (kind === 'local' && cf.returnValue) {
           vars.push({ name: RETURN_VALUE, value: remoteValue(cf.returnValue), remote: cf.returnValue });
         }
-        return { kind, vars, statement };
+        return outerBlock ? { kind, vars, outerBlock } : { kind, vars, statement };
       } catch {
         frame.note = 'Some variables could not be read.';
         return undefined;
@@ -591,7 +601,7 @@ function displayOf(
         if (hasThis) continue;
         hasThis = true;
       }
-      ordered.push({ name: v.name, scope: sv.kind, group, block, listed: v });
+      ordered.push({ name: v.name, scope: sv.kind, group, block, outerBlock: sv.outerBlock, listed: v });
     }
   });
   const localNames = ordered.filter((o) => o.scope === 'local').map((o) => o.name);
@@ -658,9 +668,9 @@ function withValues(named: FrameNames, read: FrameRead, objects: Record<number, 
       if (value.k === 'undef' || value.k === 'null') continue;
       if (value.k === 'ref' && objects[value.id]?.type === 'globalThis') continue;
     }
-    // Inside a method, V8 shows the class's own name binding as a block scope variable.
+    // Inside a method, V8 shows the class's own name binding in a block scope around the method.
     // It is not a variable of the method, so it is left out.
-    if (!frame.isGlobal && o.scope === 'block' && value.k === 'ref') {
+    if (o.outerBlock && value.k === 'ref') {
       const target = objects[value.id];
       if (target?.kind === 'class' && target.type === o.name) continue;
     }

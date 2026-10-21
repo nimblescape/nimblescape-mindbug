@@ -34,4 +34,16 @@ try {
       debugger; // block, switch
   }
 }
+{
+  const outside = 1;
+  const inner = () => {
+    if (outside > 0) {
+      const inside = 2;
+      debugger; // if in inner; the block around inner is no block of inner
+      return inside;
+    }
+    return 0;
+  };
+  inner();
+}
 console.log(n);

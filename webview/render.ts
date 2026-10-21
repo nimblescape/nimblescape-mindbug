@@ -169,8 +169,8 @@ function renderFrame(frame: Frame, index: number, input: RenderInput, isTop: boo
   let lastScope: string | undefined;
   for (const v of vars) {
     if (v.scope === 'closure' && lastScope !== 'closure') {
-      const sep = el('div', 'scope-sep', 'from the enclosing function');
-      sep.title = 'These variables belong to an outer function. This function can still use them (closure).';
+      const sep = el('div', 'scope-sep', 'from the enclosing scope');
+      sep.title = 'These variables belong to an outer function or to a block around this function. This function can still use them (closure).';
       grid.append(sep);
     }
     lastScope = v.scope;

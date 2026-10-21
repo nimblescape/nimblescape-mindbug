@@ -11,8 +11,11 @@ own. The view now draws it as a part inside the box of its scope, and names
 it after its statement: "if scope", "while scope", "block scope", and so on.
 A `for` loop with `let i` has two: the "for scope" with `i`, and inside it
 the "for body scope" with the variables of its body. A block inside a block
-is a part inside the part. Before, the view put the variables of all blocks
-into the box of the function.
+is a part inside the part. A block around a function is no part of the
+function: the variables of the block that the function uses are closure
+variables of the function, like the variables of an outer function. The
+line above them now says "from the enclosing scope". Before, the view put
+the variables of all blocks into the box of the function.
 
 **Two variables with the same name.** A variable of a block can have the
 name of a variable around the block, as in `let a = 10; { let a = 200; }`.

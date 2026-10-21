@@ -258,6 +258,37 @@ test('a block scope without a position is a plain block', async () => {
   assert.deepEqual(s.frames[0].blocks, ['block', 'catch']);
 });
 
+test('a block scope around the function is no block of its frame: the scope of the class, and a block that a closure uses', async () => {
+  // { const rate = 2; class Shop { total() { if (rate > 1) { const note = 3; ... } } } } — paused in the if block.
+  const dap = stackTrace([dapFrame(1, 'total', 5)]);
+  const cls: CdpRemoteObject = { type: 'function', className: 'Function', description: 'class Shop', objectId: 'cls' };
+  const frames: FakeCallFrame[] = [
+    {
+      functionName: 'total',
+      scopes: [
+        { type: 'block', vars: [['note', num(3)]], start: at('{', 3) },
+        { type: 'local', vars: [], start: at('(prices)', 0) },
+        // V8 gives these scopes the start of the script, or of the function around them.
+        { type: 'block', vars: [['Shop', cls]], start: [0, 0] },
+        { type: 'block', vars: [['rate', num(2)]], start: [0, 0] },
+        { type: 'global', vars: [] },
+      ],
+    },
+  ];
+  const objects: HeapObject[] = [{ id: 1, kind: 'class', type: 'Shop', fields: [] }];
+  const walker = (_frame: number, name: string): Value =>
+    name === 'this' ? { k: 'undef' } : name === 'Shop' ? { k: 'ref', id: 1 } : { k: 'num', v: name === 'rate' ? '2' : '3' };
+  const s = await collectSnapshot(dap, fakeV8(frames, walker, objects), 1, 1);
+  assert.deepEqual(s.frames[0].blocks, ['if']);
+  assert.deepEqual(
+    s.frames[0].vars.map((v) => [v.name, v.scope, v.block]),
+    [
+      ['note', 'block', 1],
+      ['rate', 'closure', undefined],
+    ],
+  );
+});
+
 test('the call frames of V8 for the frames of the student’s code', () => {
   const cf = (functionName: string): CdpCallFrame => ({
     callFrameId: functionName,

@@ -49,7 +49,7 @@ export function visibleVars(frame: Frame, snap: MemorySnapshot, opts: ViewOption
 
 /**
  * The visible variables of a frame from the bottom up, as the view draws them: the variables of a scope build bottom
- * up, like the stack. The variables of an enclosing function (closure) come first, because that function ran first;
+ * up, like the stack. The variables of an enclosing scope (closure) come first, because that scope ran first;
  * then the function's own variables, in the order of the program.
  */
 export function varsBottomUp(frame: Frame, snap: MemorySnapshot, opts: ViewOptions): Variable[] {
