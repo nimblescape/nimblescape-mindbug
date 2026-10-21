@@ -293,15 +293,15 @@ async function blocks(api: MindbugApi, start: Start): Promise<void> {
   // Each block scope is named after its statement.
   assert.deepEqual(global.blocks, ['block', 'for', 'for body', 'if']);
   assert.deepEqual(variable(s, 'Global scope', 'e'), { k: 'num', v: '442' });
-  // The editor marks each block scope in the color of its part: a bar at the indent of the block on its lines (from
-  // 1 here), and a frame around the header of the for loop.
+  // The editor draws a rectangle in the color of its part around each block scope: around the lines between the
+  // braces of a block (from 1 here, with the column of the left side), and around the whole for loop.
   assert.deepEqual(
-    api.blockMarks(file).map((m) => [m.block, m.kind, m.bar ? [m.bar.column, m.bar.lines[0] + 1, m.bar.lines.at(-1)! + 1] : 'frame']),
+    api.blockMarks(file).map((m) => [m.block, m.kind, m.first + 1, m.last + 1, m.indent]),
     [
-      [1, 'block', [0, 24, 38]],
-      [2, 'for', 'frame'],
-      [3, 'for body', [2, 27, 31]],
-      [4, 'if', [4, 29, 30]],
+      [1, 'block', 24, 38, 2],
+      [2, 'for', 26, 32, 2],
+      [3, 'for body', 27, 31, 4],
+      [4, 'if', 29, 30, 6],
     ],
   );
   await stop();
