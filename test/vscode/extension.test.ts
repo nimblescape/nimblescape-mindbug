@@ -482,9 +482,9 @@ async function exportsBeforeDeclaration(api: MindbugApi, start: Start): Promise<
     );
     assert.equal(top(s).line, 8);
     assert.deepEqual(variable(s, 'Global scope', 'LIMIT'), { k: 'num', v: '3' });
-    // Deno lists Car in the Global scope here, Node.js does not.
+    // Deno 2.5 and newer (CI: 2.9.7) list Car in the Global scope here, and reading it stopped Deno. Deno 2.0 to 2.4
+    // and Node.js do not list it.
     const cls = s.frames[0].vars.find((v) => v.name === 'Car');
-    if (start.runtime === 'deno') assert.ok(cls, 'Deno lists Car in the Global scope');
     if (cls) assert.deepEqual(cls.value, { k: 'uninit' });
     // The program still runs, and the class has its static variable.
     s = await runToLine(api, file, 18);

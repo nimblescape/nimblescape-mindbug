@@ -194,9 +194,11 @@ test.skipIf(!hasDeno)('exported names before their lines have run are uninitiali
     }
     assert.ok(inStatic, 'a step pauses in the set-up of the static variables');
     assert.deepEqual(variable(inStatic, 'Global scope', 'LIMIT'), { k: 'num', v: '3' });
-    assert.deepEqual(variable(inStatic, 'Global scope', 'Car'), { k: 'uninit' });
     const self = inStatic.objects[idOf(variable(inStatic, 'Car (set up static variables)', 'this'))];
     assert.equal(self.kind, 'class');
+    // Deno 2.5 and newer give the internal empty value for Car here. Deno 2.0 to 2.4 read the class itself.
+    const global = variable(inStatic, 'Global scope', 'Car');
+    if (global.k !== 'uninit') assert.equal(idOf(global), self.id);
 
     ev = await insp.resumeToNextPause();
     const atEnd = await collectSnapshot(new FakeDap(insp, ev), 1, step + 1);
