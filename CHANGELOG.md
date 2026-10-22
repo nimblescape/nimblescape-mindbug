@@ -33,7 +33,10 @@ program is: around the lines between the braces of a block, and around the
 whole `for` loop for the scope of its header. Each part in the view has the
 same color as its rectangle, so you see which code belongs to which part.
 The four colors are theme colors (`nimblescape.mindbug.blockScope1` to
-`4`).
+`4`). The new switch **Show scope frames** of the view turns the rectangles
+off and on. Like the other switches, it is a setting
+(`nimblescape.mindbug.showScopeFrames`, on by default), so it stays after
+the view closes and after a restart of VS Code.
 
 The new example `blocks.ts` shows block scopes, and a variable of a block
 that hides a variable of the same name.

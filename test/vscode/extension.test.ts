@@ -304,6 +304,18 @@ async function blocks(api: MindbugApi, start: Start): Promise<void> {
       [4, 'if', 29, 30, 6],
     ],
   );
+  // The switch "Show scope frames" turns the rectangles off and on again, and saves its setting.
+  const config = () => vscode.workspace.getConfiguration('nimblescape.mindbug');
+  try {
+    await api.saveViewOption('showScopeFrames', false);
+    assert.deepEqual(api.blockMarks(file), [], 'no rectangles while the switch is off');
+    assert.equal(config().inspect('showScopeFrames')?.globalValue, false);
+    await api.saveViewOption('showScopeFrames', true);
+    assert.equal(api.blockMarks(file).length, 4, 'the rectangles are back when the switch is on');
+    assert.equal(config().inspect('showScopeFrames')?.globalValue, undefined, 'the default removes the user setting');
+  } finally {
+    await config().update('showScopeFrames', undefined, vscode.ConfigurationTarget.Global);
+  }
   await stop();
   assert.deepEqual(api.blockMarks(file), [], 'the marks go away when the program ends');
 }
@@ -749,7 +761,7 @@ describe('the Mindbug view in VS Code', () => {
       await api.saveViewOption('showFunctions', false);
       assert.equal(config().inspect('showFunctions')?.globalValue, undefined, 'the default removes the user setting');
     } finally {
-      for (const name of ['showFunctions', 'showClasses', 'showIds', 'showUninitialized']) {
+      for (const name of ['showFunctions', 'showClasses', 'showIds', 'showUninitialized', 'showScopeFrames']) {
         await config().update(name, undefined, vscode.ConfigurationTarget.Global);
       }
     }

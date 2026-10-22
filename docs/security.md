@@ -78,7 +78,7 @@ The view sends three kinds of messages to the extension: `viewStep` and `openLoc
 | Data | Where | How long |
 | --- | --- | --- |
 | The steps of the step history | The memory of the extension host and of the view | Until the next debug session starts, the debug session restarts, or VS Code closes |
-| The settings of Mindbug, also the four switches of the toolbar of the view | The settings of VS Code (`settings.json`), when you change them or click a switch | Until you change them |
+| The settings of Mindbug, also the five switches of the toolbar of the view | The settings of VS Code (`settings.json`), when you change them or click a switch | Until you change them |
 
 Mindbug itself writes no file: VS Code saves the user settings, also the switches of the view. Mindbug uses neither `globalState` nor `workspaceState` of VS Code, stores no secret, and sends nothing to any address.
 
