@@ -41,7 +41,11 @@ at the top. Like the other switches, it is a setting
 the view closes and after a restart of VS Code.
 
 The new example `blocks.ts` shows block scopes, and a variable of a block
-that hides a variable of the same name.
+that hides a variable of the same name. The new examples
+`inner-functions.ts` and `closures.ts` show an inner function that uses
+the variables of its outer function, and an inner function that keeps
+these variables after the call of the outer function has ended (a
+closure).
 
 ## 0.1.5
 
