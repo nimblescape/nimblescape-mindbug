@@ -165,7 +165,7 @@ A higher limit shows more of a large program, and makes each step slower, becaus
 
 ## Examples
 
-The folder [examples](../examples) has seven small programs:
+The folder [examples](../examples) has nine small programs:
 
 - [return-object.ts](../examples/return-object.ts): a function creates one object and returns it. The call adds a scope with the parameters title and pages to the stack. The object stays on the heap after the return, because the variable myBook of the Global scope points to it, and it goes away when myBook is set to `null`. The animation at the top of the [README](../README.md) steps through this example.
 - [insertion-sort.ts](../examples/insertion-sort.ts): two variables point to the same array, and the function changes the array on the heap.
@@ -174,6 +174,8 @@ The folder [examples](../examples) has seven small programs:
 - [call-stack.ts](../examples/call-stack.ts): three functions on the stack at the same time, with objects of the classes Item, Discount and Bill. The Discount object that the inner function creates does not survive its call; the Bill object that the middle function creates survives the call of the inner function and is still there in the Global scope at the end.
 - [var-and-let.ts](../examples/var-and-let.ts): since when a variable exists, and in which scope it lives. At the first line, the Global scope already has the function shop, the `var` label with the value `undefined`, and, with the switch **Show uninitialized**, the `let` total, uninitialized. In the call of shop, the `var` note is a variable of the function, although its line is inside a block, and the `const` variables of the loop are variables of its blocks.
 - [blocks.ts](../examples/blocks.ts): block scopes. A block declares a second variable `a`, which hides the `a` of the Global scope from the code of the block; the view shows both. A `for` loop has a scope for its header (`i`) and one for its body (`d`), and an `if` block inside the body adds a third. Each part goes away when its block ends.
+- [inner-functions.ts](../examples/inner-functions.ts): an outer function and an inner function. The inner function addLine is declared inside the outer function receipt. In a call of addLine, its scope is on top of the scope of receipt, and its box shows its own variables and, below the line "from the enclosing scope", the variables of receipt that it uses: taxRate and lines. They are the same variables as in the box of receipt, so lines in both boxes points to the same array.
+- [closures.ts](../examples/closures.ts): closures. The outer function makeCounter returns its inner function next without calling it. In a later call of next, makeCounter is not on the stack any more, but the box of next still shows the variables prefix and count of the call of makeCounter that made it. The two counters ticketsA and ticketsB each have their own count. With the switch **Show functions**, the view also shows the two function objects on the heap.
 
 ![Four scopes on the stack, lineTotal on top of makeBill, checkout and the Global scope; the Discount object of lineTotal above the Bill object of makeBill and the objects of the Global scope](https://raw.githubusercontent.com/nimblescape/nimblescape-mindbug/main/docs/images/call-stack.png)
 

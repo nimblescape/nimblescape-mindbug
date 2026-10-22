@@ -473,6 +473,74 @@ async function callStack(api: MindbugApi, start: Start): Promise<void> {
   await stop();
 }
 
+async function innerFunctions(api: MindbugApi, start: Start): Promise<void> {
+  const file = path.join(examples(), 'inner-functions.ts');
+  await debug(api, start, file, [28, 33]);
+  // The scope of the inner function is on top of the scope of the outer function. It has its own variables, and the
+  // variables of the outer function that it uses, as closure variables: the same variables, not copies.
+  const first = await runToLine(api, file, 28);
+  assert.deepEqual(
+    first.frames.map((f) => f.name),
+    ['Global scope', 'receipt', 'addLine'],
+  );
+  const inner = first.frames.at(-1)!;
+  assert.deepEqual(
+    inner.vars.map((v) => [v.name, v.scope]),
+    [
+      ['name', 'local'],
+      ['price', 'local'],
+      ['withTax', 'local'],
+      ['taxRate', 'closure'],
+      ['lines', 'closure'],
+    ],
+    'only the variables of receipt that addLine uses',
+  );
+  assert.deepEqual(variable(first, 'addLine', 'withTax'), { k: 'num', v: '2.5' });
+  const lines = idOf(variable(first, 'receipt', 'lines'));
+  assert.equal(idOf(variable(first, 'addLine', 'lines')), lines, 'lines of addLine is the variable of receipt');
+  // The second call has its own scope; the array of receipt has the line of the first call.
+  const second = await continueToLine(api, file, 28);
+  assert.deepEqual(variable(second, 'addLine', 'name'), { k: 'str', v: 'milk' });
+  assert.equal(second.objects[lines].items?.length, 2);
+  const end = await continueToLine(api, file, 33);
+  assert.deepEqual(
+    end.frames.map((f) => f.name),
+    ['Global scope', 'receipt'],
+  );
+  assert.deepEqual(variable(end, 'receipt', 'total'), { k: 'num', v: '7.5' });
+  await stop();
+}
+
+async function closures(api: MindbugApi, start: Start): Promise<void> {
+  const file = path.join(examples(), 'closures.ts');
+  await debug(api, start, file, [29]);
+  // The call of makeCounter has ended, but next still has its variables prefix and count: each counter its own.
+  const counts: [string, string][] = [];
+  for (let i = 0; i < 3; i++) {
+    const s = i === 0 ? await runToLine(api, file, 29) : await continueToLine(api, file, 29);
+    assert.deepEqual(
+      s.frames.map((f) => f.name),
+      ['Global scope', 'next'],
+      'makeCounter is not on the stack any more',
+    );
+    const vars = s.frames.at(-1)!.vars;
+    assert.deepEqual(
+      vars.map((v) => [v.name, v.scope]),
+      [
+        ['prefix', 'closure'],
+        ['count', 'closure'],
+      ],
+    );
+    counts.push([(vars[0].value as { v: string }).v, (vars[1].value as { v: string }).v]);
+  }
+  assert.deepEqual(counts, [
+    ['A', '0'],
+    ['A', '1'],
+    ['B', '0'],
+  ]);
+  await stop();
+}
+
 /** Runs Step Over or Step Into and returns the snapshot of the next pause. */
 async function step(api: MindbugApi, command: 'stepOver' | 'stepInto'): Promise<MemorySnapshot> {
   const next = api.nextSnapshot(TIMEOUT);
@@ -803,6 +871,8 @@ describe('the Mindbug view in VS Code', () => {
       it('shows the scopes, the arrays and the aliasing of insertion sort', () => insertionSort(api, start));
       it('shows classes, static variables and the scopes of constructors and methods', () => people(api, start));
       it('shows a call stack of several functions that share the objects on the heap', () => callStack(api, start));
+      it('shows the variables of an outer function that an inner function uses', () => innerFunctions(api, start));
+      it('shows the variables of a closure after the call of its outer function', () => closures(api, start));
       it('shows no return value in a constructor, and the return value of a function', () => returnValues(api, start));
       it('steps into the set-up of the fields of a new object', () => fieldSetup(api, start));
       it('starts a new step history when the debug session restarts', () => restart(api, start));

@@ -43,7 +43,7 @@ The animation steps through the example [return-object.ts](https://github.com/ni
 3. The program pauses at its first line, and the **Mindbug** view opens next to the code.
 4. Use **Step Over** (F10) and **Step Into** (F11) of the debugger. The view changes at each step.
 
-Without a `launch.json` file, F5 in a TypeScript file also offers **Mindbug**. The [user guide](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/guide.md#launch-configurations) explains the launch configurations of type `mindbug`, and the [examples](https://github.com/nimblescape/nimblescape-mindbug/tree/main/examples) are seven small programs to start with.
+Without a `launch.json` file, F5 in a TypeScript file also offers **Mindbug**. The [user guide](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/guide.md#launch-configurations) explains the launch configurations of type `mindbug`, and the [examples](https://github.com/nimblescape/nimblescape-mindbug/tree/main/examples) are nine small programs to start with.
 
 ## Settings
 
