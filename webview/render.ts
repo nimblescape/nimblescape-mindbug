@@ -152,9 +152,12 @@ function renderFrame(frame: Frame, index: number, input: RenderInput, isTop: boo
   box.append(title);
   if (isTop) box.append(runsMark(input.live !== false));
 
-  // The variables build bottom up, like the stack: the first variable of the function is at the bottom.
+  // The variables build bottom up, like the stack: the first variable of the function is at the bottom. The variables
+  // of the blocks are on top of them, the innermost block at the top.
   const vars = varsBottomUp(frame, snap, opts).reverse();
-  if (vars.length === 0 && !frame.blocks?.length) {
+  // The switch "Show scope frames" draws the parts of the block scopes; without it, their variables are in the box.
+  const parts = opts.showScopeFrames && !!frame.blocks?.length;
+  if (vars.length === 0 && !parts) {
     box.append(el('div', 'frame-empty', 'no variables'));
   }
   const grid = el('div', 'vars');
@@ -162,7 +165,7 @@ function renderFrame(frame: Frame, index: number, input: RenderInput, isTop: boo
   // on top of its variables: the parts nest like the braces in the code, and the innermost block is at the top.
   const blocks: HTMLElement[] = [];
   const partOf = (block: number | undefined): HTMLElement => {
-    if (!block) return grid;
+    if (!block || !parts) return grid;
     while (blocks.length < block) {
       const part = blockPart(frame.blocks?.[blocks.length] ?? 'block', blocks.length + 1);
       (blocks[blocks.length - 1] ?? grid).append(part);
@@ -171,7 +174,7 @@ function renderFrame(frame: Frame, index: number, input: RenderInput, isTop: boo
     return blocks[block - 1];
   };
   // Every block scope has its part, also one whose variables are hidden (uninitialized), as its mark in the editor.
-  if (frame.blocks?.length) partOf(frame.blocks.length);
+  if (parts) partOf(frame.blocks!.length);
   let lastScope: string | undefined;
   for (const v of vars) {
     if (v.scope === 'closure' && lastScope !== 'closure') {

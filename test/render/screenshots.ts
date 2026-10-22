@@ -231,6 +231,19 @@ async function main(): Promise<void> {
       if (values.join(',') !== '200,10') throw new Error(`the two variables a: ${values.join(',')}`);
       await shot('blocks');
 
+      // 7. The switch "Show scope frames" off: no parts, the variables of the blocks are in the box of the Global
+      //    scope, in the same order, and the click is saved as a setting.
+      await page.click('#showScopeFrames');
+      const flatParts = await page.$$eval('.frame .block', (els) => els.length);
+      if (flatParts !== 0) throw new Error(`block parts with the switch off: ${flatParts}`);
+      const flat = await page.$$eval('.frame:last-child .var-name', (els) => els.map((e) => e.textContent));
+      if (flat.join(',') !== 'e,d,i,c,a,b,a') throw new Error(`variables with the switch off: ${flat.join(',')}`);
+      const option = (await page.evaluate(() => (window as any).__sent as any[])).filter((m) => m.type === 'viewOption').pop();
+      if (option?.name !== 'showScopeFrames' || option.value !== false) throw new Error(`viewOption message: ${JSON.stringify(option)}`);
+      await shot('blocks-no-frames');
+      await page.click('#showScopeFrames');
+      if ((await page.$$eval('.frame .block', (els) => els.length)) !== 4) throw new Error('the parts are not back with the switch on');
+
       if (errors.length > 0) throw new Error(`page errors in ${theme}:\n${errors.join('\n')}`);
       await page.close();
     }
