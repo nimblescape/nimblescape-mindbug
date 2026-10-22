@@ -156,7 +156,10 @@ export interface ViewOptions {
   showClasses: boolean;
   /** Show the variables whose line has not run yet: a `let`, `const` or `class` before its line. */
   showUninitialized: boolean;
-  /** Draw a rectangle around each block scope in the editor, in the color of its part in the view. */
+  /**
+   * Draw the block scopes: a part in the box of their scope in the view, and a rectangle with the same color around
+   * their lines in the editor. Without it, the variables of the blocks are in the box of their scope.
+   */
   showScopeFrames: boolean;
 }
 

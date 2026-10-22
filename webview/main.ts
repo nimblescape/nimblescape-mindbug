@@ -282,10 +282,10 @@ showUninitialized.addEventListener('change', () => {
   saveOption('showUninitialized');
   render();
 });
-// The rectangles are in the editor: the view itself does not change.
 showScopeFrames.addEventListener('change', () => {
   state.opts = { ...state.opts, showScopeFrames: showScopeFrames.checked };
   saveOption('showScopeFrames');
+  render();
 });
 
 framesEl.addEventListener('click', (e) => {

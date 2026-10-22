@@ -384,7 +384,7 @@ export class MemoryController implements vscode.Disposable {
   }
 
   private showBlockMarks(): void {
-    // The switch "Show scope frames" of the view hides the rectangles.
+    // The switch "Show scope frames" of the view hides the rectangles, and the parts of the block scopes in the view.
     const frame = this.shownOptions.showScopeFrames ? this.shownFrame() : undefined;
     this.shownBlockMarks.clear();
     for (const editor of vscode.window.visibleTextEditors) {
