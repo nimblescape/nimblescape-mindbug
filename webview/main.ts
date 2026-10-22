@@ -61,6 +61,7 @@ const showIds = $<HTMLInputElement>('showIds');
 const showClasses = $<HTMLInputElement>('showClasses');
 const showUninitialized = $<HTMLInputElement>('showUninitialized');
 const showScopeFrames = $<HTMLInputElement>('showScopeFrames');
+const stopOnEntry = $<HTMLInputElement>('stopOnEntry');
 
 function showOptions(): void {
   showFunctions.checked = state.opts.showFunctions;
@@ -68,6 +69,7 @@ function showOptions(): void {
   showClasses.checked = state.opts.showClasses;
   showUninitialized.checked = state.opts.showUninitialized;
   showScopeFrames.checked = state.opts.showScopeFrames;
+  stopOnEntry.checked = state.opts.stopOnEntry;
 }
 showOptions();
 
@@ -286,6 +288,11 @@ showScopeFrames.addEventListener('change', () => {
   state.opts = { ...state.opts, showScopeFrames: showScopeFrames.checked };
   saveOption('showScopeFrames');
   render();
+});
+// The switch changes the next start of a program, not the view.
+stopOnEntry.addEventListener('change', () => {
+  state.opts = { ...state.opts, stopOnEntry: stopOnEntry.checked };
+  saveOption('stopOnEntry');
 });
 
 framesEl.addEventListener('click', (e) => {

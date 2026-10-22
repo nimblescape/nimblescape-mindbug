@@ -23,6 +23,12 @@ The view showed only the `a` of the block. Now it shows both, each one in
 its own part. Mindbug now gives the values of the variables to its helper
 in the program, instead of their names.
 
+**Stop on entry in the view.** The toolbar of the view has the new switch
+**Stop on entry**. It is the setting `nimblescape.mindbug.stopOnEntry`:
+when it is on, **Run with Mindbug** and a launch configuration of type
+`mindbug` pause at the first line of the program. Before, only the
+settings of VS Code changed it.
+
 **Return value of an object.** At the end of a function that returns an
 object, "Return value" now points to the object on the heap with an arrow.
 Before, it showed the name of the class as text.

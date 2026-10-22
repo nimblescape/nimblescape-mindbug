@@ -42,6 +42,13 @@ function currentFile(): MindbugConfiguration {
 }
 
 export class MindbugConfigurationProvider implements vscode.DebugConfigurationProvider {
+  /** The switch "Stop on entry" of the view; without it, the setting decides. */
+  private readonly stopOnEntry: (() => boolean) | undefined;
+
+  constructor(stopOnEntry?: () => boolean) {
+    this.stopOnEntry = stopOnEntry;
+  }
+
   /** The configuration that the list of "Run and Debug" shows under "Mindbug", also without launch.json. */
   provideDebugConfigurations(): vscode.DebugConfiguration[] {
     return [currentFile()];
@@ -63,6 +70,7 @@ export class MindbugConfigurationProvider implements vscode.DebugConfigurationPr
       return undefined;
     }
     const settings = readLaunchSettings();
+    if (this.stopOnEntry) settings.stopOnEntry = this.stopOnEntry();
     if (c.runtime !== undefined) {
       if (c.runtime !== 'auto' && c.runtime !== 'deno' && c.runtime !== 'node') {
         void vscode.window.showErrorMessage(

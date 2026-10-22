@@ -132,7 +132,7 @@
         "nimblescape.mindbug.stopOnEntry": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "When on, **Run with Mindbug** and a launch configuration of type `mindbug` pause at the first line of the program, so you can step from the start."
+          "markdownDescription": "When on, **Run with Mindbug** and a launch configuration of type `mindbug` pause at the first line of the program, so you can step from the start. The attribute `stopOnEntry` of a launch configuration wins over this setting. A click on the switch **Stop on entry** of the Mindbug view changes this setting in the user settings, unless the settings of the workspace set it."
         },
         "nimblescape.mindbug.openAutomatically": {
           "type": "boolean",
