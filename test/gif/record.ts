@@ -2,18 +2,18 @@
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
-// Records the animation of the README from a real VS Code: VS Code runs examples/return-object.ts with the Mindbug
-// package, and the driver (driver.ts) steps through it, goes back through the step history, and takes a screenshot of
-// the screen after each action. Each screenshot gets the captions of the GIFs of nimblescape PlantUML and nimblescape
-// Comment Links: a blue band above the window with the scene, and for a short time a label with the key that the user
-// pressed.
+// Records the animation of the README from a real VS Code: VS Code runs examples/return-object.ts, examples/blocks.ts
+// and examples/closures.ts with the Mindbug package, and the driver (driver.ts) steps through them, goes back through
+// the step history, and takes a screenshot of the screen after each action. Each screenshot gets the captions of the
+// GIFs of nimblescape PlantUML and nimblescape Comment Links: a blue band above the window with the scene, and for a
+// short time a label with the key that the user pressed.
 //
 //   xvfb-run -a -s "-screen 0 1440x816x24" npm run gif
 //
 // Linux only: it needs Xvfb (or another X display), ffmpeg with x11grab and drawtext, xdotool, the font Inter
 // (fc-match finds it; Debian and Ubuntu: fonts-inter), and Deno or Node.js 22.7 or newer on the PATH. It builds the
 // package (npm run package), packs the driver as a second extension, downloads VS Code to .vscode-test/, installs both
-// extensions into a new profile in test/gif/output/, and writes test/gif/output/return-object.gif. Copy it to
+// extensions into a new profile in test/gif/output/, and writes test/gif/output/mindbug-run.gif. Copy it to
 // docs/images/ after a check.
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -46,14 +46,15 @@ const AFTER_LABEL_SECONDS = 0.8;
 const LAST_SECONDS = 3;
 
 /**
- * VS Code in the dark theme at a zoom of 120 %, with nothing that is not about the program: no activity bar (it gives
- * its width to the view), no minimap, no sticky scroll, no folding marks, no chat, no hints. The window of 1440 x 816
- * pixels at 120 % has the layout of a window of 1200 x 680 pixels, as in the GIFs of nimblescape PlantUML and
- * nimblescape Comment Links.
+ * VS Code in the dark theme at a zoom of 110 % (zoom level 0.5), with nothing that is not about the program: no
+ * activity bar (it gives its width to the view), no minimap, no sticky scroll, no folding marks, no chat, no hints. The
+ * GIFs of nimblescape PlantUML and nimblescape Comment Links show a window of 1440 x 816 pixels at 120 %. The toolbar
+ * of the Mindbug view needs two lines for its six switches, and at 120 % the view then has no room for the object of
+ * the return step and for the parts of the nested blocks.
  */
 const SETTINGS = {
   'workbench.colorTheme': 'Default Dark Modern',
-  'window.zoomLevel': 1,
+  'window.zoomLevel': 0.5,
   'workbench.activityBar.location': 'hidden',
   'workbench.startupEditor': 'none',
   'workbench.tips.enabled': false,
@@ -234,6 +235,6 @@ if (!existsSync(join(frames, 'done'))) {
   const error = join(frames, 'error.txt');
   throw new Error(`the recording failed: ${existsSync(error) ? readFileSync(error, 'utf8') : 'VS Code closed before the end'}`);
 }
-const gif = join(out, 'return-object.gif');
+const gif = join(out, 'mindbug-run.gif');
 makeGif(gif, fonts);
 console.log(`Wrote ${gif}`);
