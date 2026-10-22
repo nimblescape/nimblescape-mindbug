@@ -78,6 +78,7 @@ Everything that changed in the last step has a yellow background: a new or chang
 | **Show ids** | Shows the number of each object, which stays the same from step to step. |
 | **Show uninitialized** | Shows the variables whose line has not run yet: a `let`, `const` or `class` before its line, as "uninitialized". When it is off, such a variable appears at the step where its line runs. |
 | **Show scope frames** | Draws the block scopes: a colored part in the box of their scope, and a rectangle with the same color around their lines in the editor (see [Stack](#stack)). When it is off, the variables of the blocks are in the box of their scope, the innermost block at the top, and the editor has no rectangles. Two variables with the same name are then both in the box, as in `let a = 10; { let a = 200; }`. |
+| **Stop on entry** | Pauses at the first line of the program at the next start with **Run with Mindbug** or a launch configuration of type `mindbug`, so that you can step from the start. When it is off, the program runs until a breakpoint. It changes nothing in the view. |
 
 Each switch is a setting (see [Settings](#settings)). A click on a switch changes its setting, so the view has the switches again after you close it and after a restart of VS Code. When the settings of a workspace set a switch, they decide: a click on that switch changes the view only until you close it, because Mindbug does not change the settings of a workspace, a file of the workspace (`.vscode/settings.json`).
 
@@ -120,7 +121,7 @@ The debug type `mindbug` starts a TypeScript file from a launch configuration (`
 | `program` | `${file}` (the file of the active editor) | The TypeScript file to run. |
 | `runtime` | the setting `nimblescape.mindbug.runtime` | `auto`, `deno` or `node`. |
 | `cwd` | the workspace folder | The folder in which the program runs. |
-| `stopOnEntry` | the setting `nimblescape.mindbug.stopOnEntry` | Pause at the first line of the program. |
+| `stopOnEntry` | the switch **Stop on entry** of the view (the setting `nimblescape.mindbug.stopOnEntry`) | Pause at the first line of the program. |
 
 Without a `launch.json` file, press F5 in a TypeScript file and select **Mindbug**. The list **Run and Debug** also offers **Mindbug: current file**.
 
@@ -149,7 +150,7 @@ With `--allow-all`, Deno gives the program all the rights of your user, as Node.
 | `nimblescape.mindbug.denoPath` | `deno` | Path to the Deno program. The default works when Deno is on the `PATH`. |
 | `nimblescape.mindbug.nodePath` | `node` | Path to Node.js 22.7 or newer. The default works when Node.js is on the `PATH`. |
 | `nimblescape.mindbug.inspectPort` | `9229` | Port on which Deno or Node.js waits for the debugger. Change it when another program uses port 9229. |
-| `nimblescape.mindbug.stopOnEntry` | `true` | Pause at the first line of the program, so that you can step from the start. |
+| `nimblescape.mindbug.stopOnEntry` | `true` | Pause at the first line of the program, so that you can step from the start. The switch **Stop on entry** of the view changes it. |
 | `nimblescape.mindbug.openAutomatically` | `true` | Open the Mindbug view at the first pause of a debug session. |
 | `nimblescape.mindbug.showClasses` | `true` | Show the classes, with their static variables, at the top of the heap. The switch **Show classes** of the view changes it. |
 | `nimblescape.mindbug.showFunctions` | `false` | Show functions, and the variables that hold functions or classes. The switch **Show functions** of the view changes it. |

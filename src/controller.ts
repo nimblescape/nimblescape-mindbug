@@ -239,6 +239,14 @@ export class MemoryController implements vscode.Disposable {
     return opts;
   }
 
+  /**
+   * The switch "Stop on entry" of the view, for the next start of a program: its setting, or a click on it that the
+   * settings of the workspace overrule only in this window (see `viewOverrides`).
+   */
+  stopOnEntry(): boolean {
+    return this.viewOptions().stopOnEntry;
+  }
+
   /** Sends the switches to the view when they differ from the switches that it shows, or always with `force`. */
   private showViewOptions(force = false): void {
     const opts = this.viewOptions();

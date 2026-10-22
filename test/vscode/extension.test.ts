@@ -829,7 +829,7 @@ describe('the Mindbug view in VS Code', () => {
       await api.saveViewOption('showFunctions', false);
       assert.equal(config().inspect('showFunctions')?.globalValue, undefined, 'the default removes the user setting');
     } finally {
-      for (const name of ['showFunctions', 'showClasses', 'showIds', 'showUninitialized', 'showScopeFrames']) {
+      for (const name of ['showFunctions', 'showClasses', 'showIds', 'showUninitialized', 'showScopeFrames', 'stopOnEntry']) {
         await config().update(name, undefined, vscode.ConfigurationTarget.Global);
       }
     }
@@ -848,6 +848,32 @@ describe('the Mindbug view in VS Code', () => {
       assert.equal(config().inspect('showClasses')?.globalValue, false);
     } finally {
       for (const name of ['showFunctions', 'showClasses']) await config().update(name, undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  it('starts a program without a pause at its first line when the switch "Stop on entry" is off', async () => {
+    const config = () => vscode.workspace.getConfiguration('nimblescape.mindbug');
+    const file = path.join(examples(), 'blocks.ts');
+    const sessions: vscode.DebugSession[] = [];
+    const started = vscode.debug.onDidStartDebugSession((s) => sessions.push(s));
+    try {
+      await api.saveViewOption('stopOnEntry', false);
+      assert.equal(config().inspect('stopOnEntry')?.globalValue, false);
+      vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+      const uri = vscode.Uri.file(file);
+      vscode.debug.addBreakpoints([new vscode.SourceBreakpoint(new vscode.Location(uri, new vscode.Position(29, 0)))]);
+      await vscode.window.showTextDocument(uri);
+      const first = api.nextSnapshot(TIMEOUT);
+      assert.ok(await runWithMindbug('deno', file), 'the debug session starts');
+      const s = await first;
+      const launched = sessions.find((x) => x.type === 'pwa-node')?.configuration;
+      assert.equal(launched?.stopOnEntry, false);
+      assert.ok(launched?.runtimeArgs?.some((a: string) => a.startsWith('--inspect-wait=')), 'Deno waits for the debugger without a pause');
+      assert.equal(top(s)?.line, 30, 'the first pause is the breakpoint');
+    } finally {
+      started.dispose();
+      vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+      await config().update('stopOnEntry', undefined, vscode.ConfigurationTarget.Global);
     }
   });
 
