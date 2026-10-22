@@ -4,12 +4,13 @@
 
 // The driver of the animation of the README (record.ts). record.ts packs this file as a small extension and installs
 // it next to the Mindbug package into a separate VS Code. When that VS Code starts with MINDBUG_GIF_FRAMES set, the
-// driver opens examples/return-object.ts, starts it with F5 (the launch configuration "Mindbug: current file" of
-// examples/.vscode/launch.json), and steps through it like a student with Step Into and Step Over. Then it goes back
-// through the step history, as the Left arrow key of the view does. After each action it waits until the view shows
-// the step, saves a screenshot of the whole screen with ffmpeg into the folder MINDBUG_GIF_FRAMES, and writes the
-// captions of the screenshot next to it: <name>.band.txt with the scene, and <name>.key.txt with the pressed key. Then
-// it closes VS Code.
+// driver runs three examples with F5 (the launch configuration "Mindbug: current file" of
+// examples/.vscode/launch.json). It steps through examples/return-object.ts like a student with Step Into and Step
+// Over, and goes back through the step history, as the Left arrow key of the view does. Then it turns the switch
+// "Stop on entry" off, and runs examples/blocks.ts and examples/closures.ts to their breakpoints. After each action it
+// waits until the view shows the step, saves a screenshot of the whole screen with ffmpeg into the folder
+// MINDBUG_GIF_FRAMES, and writes the captions of the screenshot next to it: <name>.band.txt with the scene, and
+// <name>.key.txt with the pressed key. Then it closes VS Code.
 
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -29,33 +30,68 @@ const SCENES = [
   'A function call adds a scope with its parameters, and new adds an object to the heap',
   'The object stays after the return, until no variable points to it',
   'The step history shows the memory as it was at each earlier step',
+  'Each block { } gets its own part in the scope, and the same frame in the code',
+  'A closure: next still sees count and prefix after makeCounter has returned',
 ];
 const KEYS = {
   start: 'F5     Start Debugging',
+  continue: 'F5     Continue',
   stepInto: 'F11     Step Into',
   stepOver: 'F10     Step Over',
   earlier: 'Left arrow     Show the earlier step',
 };
 
 /**
- * The place of the check box "Show classes" on the screen. The check boxes are at the right end of the toolbar of the
- * view, so the place depends on the width and the zoom of the window, not on the split between the code and the view,
- * as long as the toolbar has one line. Check the GIF after a change: when the click misses, it shows the classes.
+ * A place for the mouse pointer where it shows no hover: the empty part of the tab bar of the code, right of the tab.
+ * ffmpeg leaves the pointer out of the screenshots.
  */
-const SHOW_CLASSES = { x: 1008, y: 101 };
+const POINTER = { x: 450, y: 62 };
 
-/** The line of the first pause. */
-const START = { line: 34, scene: 1 };
-/** The steps after the first pause: the command of the debugger, the line of the next pause, and the scene. */
-const STEPS = [
-  { command: 'stepInto', line: 30, scene: 2 },
-  { command: 'stepOver', line: 31, scene: 2 },
-  { command: 'stepOver', line: 35, scene: 3 },
-  { command: 'stepOver', line: 36, scene: 3 },
-  { command: 'stepOver', line: 37, scene: 3 },
-] as const;
-/** The steps that the step history shows again, from the newest to the oldest. */
-const REPLAY = { steps: [5, 4, 3, 2], scene: 4 };
+interface Run {
+  /** The file in the folder examples. */
+  file: string;
+  /** The first line that the editor shows. */
+  top: number;
+  /** The lines of the breakpoints, set before the start. */
+  breakpoints: number[];
+  /** The line of the first pause after F5, and its scene. */
+  start: { line: number; scene: number };
+  /** The steps after the first pause: the command of the debugger, the line of the next pause, and the scene. */
+  steps: { command: 'stepInto' | 'stepOver' | 'continue'; line: number; scene: number }[];
+  /** The steps that the step history shows again at the end, from the newest to the oldest. */
+  replay?: { steps: number[]; scene: number };
+}
+
+/**
+ * The runs of the examples. The switch "Stop on entry" is on for the first run, so that it starts at the first line.
+ * The driver turns it off after the first run, so that F5 runs the other examples to their first breakpoint.
+ */
+const RUNS: Run[] = [
+  {
+    file: 'return-object.ts',
+    top: 20,
+    breakpoints: [],
+    start: { line: 34, scene: 1 },
+    steps: [
+      { command: 'stepInto', line: 30, scene: 2 },
+      { command: 'stepOver', line: 31, scene: 2 },
+      { command: 'stepOver', line: 35, scene: 3 },
+      { command: 'stepOver', line: 36, scene: 3 },
+      { command: 'stepOver', line: 37, scene: 3 },
+    ],
+    replay: { steps: [5, 4, 3, 2], scene: 4 },
+  },
+  // The second turn of the loop: the Global scope, the block, the header of the for loop, its body, and the if block.
+  { file: 'blocks.ts', top: 21, breakpoints: [30], start: { line: 30, scene: 5 }, steps: [] },
+  // The two calls of ticketsA: count is 0 at the start of the first call, and 1 at the start of the second call.
+  {
+    file: 'closures.ts',
+    top: 25,
+    breakpoints: [29],
+    start: { line: 29, scene: 6 },
+    steps: [{ command: 'continue', line: 29, scene: 6 }],
+  },
+];
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -85,49 +121,63 @@ async function pausesAt(next: Promise<MemorySnapshot>, line: number): Promise<vo
 async function record(frames: string): Promise<void> {
   const folder = vscode.workspace.workspaceFolders?.[0];
   if (!folder) throw new Error('VS Code opened no folder');
-  const file = vscode.Uri.file(path.join(folder.uri.fsPath, 'return-object.ts'));
   const api = await vscode.extensions.getExtension<MindbugApi>('nimblescape.nimblescape-mindbug')?.activate();
   if (!api) throw new Error('the Mindbug extension is not installed');
 
+  // The switches of the view, as settings: the view shows a change of a setting. In the window of 1440 x 816 pixels,
+  // the heap has no room for the classes and the objects: without the classes, the heap shows the objects.
+  const config = () => vscode.workspace.getConfiguration('nimblescape.mindbug');
+  await config().update('showClasses', false, vscode.ConfigurationTarget.Global);
+  await config().update('stopOnEntry', true, vscode.ConfigurationTarget.Global);
   // Only the editor: no side bar and no panel.
-  await vscode.window.showTextDocument(file);
+  await vscode.window.showTextDocument(vscode.Uri.file(path.join(folder.uri.fsPath, RUNS[0].file)));
   await vscode.commands.executeCommand('workbench.action.closeSidebar');
   await vscode.commands.executeCommand('workbench.action.closePanel');
+  // The pointer goes where it shows no hover.
+  execFileSync('xdotool', ['mousemove', String(POINTER.x), String(POINTER.y)]);
   // The time for the TypeScript extension to color the code.
   await sleep(4000);
-  await screenshot(frames, '00-editor', START.scene);
+  await screenshot(frames, '00-editor', RUNS[0].start.scene);
 
-  // F5 starts the selected launch configuration: the first one of launch.json, "Mindbug: current file".
-  const first = api.nextSnapshot(TIMEOUT);
-  await vscode.commands.executeCommand('workbench.action.debug.start');
-  await pausesAt(first, START.line);
-  // The view opens beside the editor. It gets more of the width than the code, and the code keeps room for the lines
-  // that the GIF shows. With more width for the code, the toolbar of the view needs two lines.
-  await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: 0.47 }, { size: 0.53 }] });
-  // At 120 % in the window of 1440 x 816 pixels, the heap has no room for the classes and the objects. A click on the
-  // check box "Show classes" of the view (xdotool) turns the classes off, so that the heap shows the objects. Then the
-  // pointer goes below the last line of the code, where it shows no hover, and the code gets the focus again.
-  await sleep(1500);
-  const { x, y } = SHOW_CLASSES;
-  execFileSync('xdotool', ['mousemove', String(x), String(y), 'click', '1', 'mousemove', '300', '700']);
-  await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
   let frame = 1;
   const name = (action: string) => `${String(frame++).padStart(2, '0')}-${action}`;
-  await screenshot(frames, name('start'), START.scene, KEYS.start);
+  for (const [index, run] of RUNS.entries()) {
+    const file = vscode.Uri.file(path.join(folder.uri.fsPath, run.file));
+    if (index > 0) {
+      await config().update('stopOnEntry', false, vscode.ConfigurationTarget.Global);
+      await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
+      await vscode.window.showTextDocument(file, { viewColumn: vscode.ViewColumn.One });
+    }
+    vscode.window.activeTextEditor?.revealRange(new vscode.Range(run.top - 1, 0, run.top - 1, 0), vscode.TextEditorRevealType.AtTop);
+    vscode.debug.addBreakpoints(run.breakpoints.map((line) => new vscode.SourceBreakpoint(new vscode.Location(file, new vscode.Position(line - 1, 0)))));
 
-  for (const step of STEPS) {
-    const next = api.nextSnapshot(TIMEOUT);
-    await vscode.commands.executeCommand(`workbench.action.debug.${step.command}`);
-    await pausesAt(next, step.line);
-    await screenshot(frames, name(step.command), step.scene, KEYS[step.command]);
+    // F5 starts the selected launch configuration: the first one of launch.json, "Mindbug: current file".
+    const first = api.nextSnapshot(TIMEOUT);
+    await vscode.commands.executeCommand('workbench.action.debug.start');
+    await pausesAt(first, run.start.line);
+    if (index === 0) {
+      // The view opens beside the editor. It gets more of the width than the code, and the code keeps room for the
+      // lines that the GIF shows.
+      await vscode.commands.executeCommand('vscode.setEditorLayout', { orientation: 0, groups: [{ size: 0.47 }, { size: 0.53 }] });
+      await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
+    }
+    await screenshot(frames, name('start'), run.start.scene, KEYS.start);
+
+    for (const step of run.steps) {
+      const next = api.nextSnapshot(TIMEOUT);
+      await vscode.commands.executeCommand(`workbench.action.debug.${step.command}`);
+      await pausesAt(next, step.line);
+      await screenshot(frames, name(step.command), step.scene, KEYS[step.command]);
+    }
+    // The same function of the view as the Left arrow key, the button ‹ and the step list: the view and the editor
+    // show the step.
+    for (const step of run.replay?.steps ?? []) {
+      api.viewStep(step);
+      await screenshot(frames, name(`step-${step}`), run.replay!.scene, KEYS.earlier);
+    }
+    await vscode.debug.stopDebugging();
+    await sleep(1000);
   }
-  // The same function of the view as the Left arrow key, the button ‹ and the step list: the view and the editor show
-  // the step.
-  for (const step of REPLAY.steps) {
-    api.viewStep(step);
-    await screenshot(frames, name(`step-${step}`), REPLAY.scene, KEYS.earlier);
-  }
-  await vscode.debug.stopDebugging();
 }
 
 export async function activate(): Promise<void> {
