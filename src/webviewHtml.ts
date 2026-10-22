@@ -41,6 +41,7 @@ export function webviewHtml(o: WebviewHtmlInput): string {
   <label class="toggle" title="Show functions, and the variables that hold functions or classes"><input type="checkbox" id="showFunctions"> Show functions</label>
   <label class="toggle"><input type="checkbox" id="showIds"> Show ids</label>
   <label class="toggle" title="Show the variables whose line has not run yet: a let, const or class before its line"><input type="checkbox" id="showUninitialized"> Show uninitialized</label>
+  <label class="toggle" title="Draw a rectangle around each block scope in the editor, in the color of its part in this view"><input type="checkbox" id="showScopeFrames"> Show scope frames</label>
 </header>
 <nav id="history" class="history" aria-label="Step history" hidden>
   <div class="history-controls">

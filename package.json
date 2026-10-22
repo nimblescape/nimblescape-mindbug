@@ -159,6 +159,11 @@
           "default": false,
           "markdownDescription": "Show the variables whose line has not run yet in the Mindbug view: a `let`, `const` or `class` before its line, as \"uninitialized\". A click on the switch **Show uninitialized** of the view changes this setting in the user settings, unless the settings of the workspace set it."
         },
+        "nimblescape.mindbug.showScopeFrames": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "While the program is paused, draw a colored rectangle in the editor around each block scope of the line where the program is, in the color of its part in the Mindbug view. A click on the switch **Show scope frames** of the view changes this setting in the user settings, unless the settings of the workspace set it."
+        },
         "nimblescape.mindbug.maxHistorySteps": {
           "type": "number",
           "default": 500,

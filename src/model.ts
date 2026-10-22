@@ -145,8 +145,9 @@ export interface MemorySnapshot {
 }
 
 /**
- * The switches of the view. The settings `nimblescape.mindbug.showFunctions`, `showIds`, `showClasses` and
- * `showUninitialized` keep them, so that the view has them again after it was closed and after a restart of VS Code.
+ * The switches of the view. The settings `nimblescape.mindbug.showFunctions`, `showIds`, `showClasses`,
+ * `showUninitialized` and `showScopeFrames` keep them, so that the view has them again after it was closed and after a
+ * restart of VS Code.
  */
 export interface ViewOptions {
   showFunctions: boolean;
@@ -155,14 +156,17 @@ export interface ViewOptions {
   showClasses: boolean;
   /** Show the variables whose line has not run yet: a `let`, `const` or `class` before its line. */
   showUninitialized: boolean;
+  /** Draw a rectangle around each block scope in the editor, in the color of its part in the view. */
+  showScopeFrames: boolean;
 }
 
-/** The switches of the view when no setting changes them: the defaults of the three settings in package.json. */
+/** The switches of the view when no setting changes them: the defaults of their settings in package.json. */
 export const DEFAULT_VIEW_OPTIONS: ViewOptions = {
   showFunctions: false,
   showIds: true,
   showClasses: true,
   showUninitialized: false,
+  showScopeFrames: true,
 };
 
 /** The names of the switches of the view; each one is the setting `nimblescape.mindbug.<name>`. */
@@ -171,6 +175,7 @@ export const VIEW_OPTION_NAMES = [
   'showIds',
   'showClasses',
   'showUninitialized',
+  'showScopeFrames',
 ] as const satisfies readonly (keyof ViewOptions)[];
 
 /**

@@ -245,6 +245,7 @@ export class MemoryController implements vscode.Disposable {
     if (!force && VIEW_OPTION_NAMES.every((name) => opts[name] === this.shownOptions[name])) return;
     this.shownOptions = opts;
     this.post({ type: 'viewOptions', opts });
+    this.markBlocks();
   }
 
   /**
@@ -256,6 +257,7 @@ export class MemoryController implements vscode.Disposable {
     // The message comes from the page of the view: only the switches of the view, only true or false.
     if (!(VIEW_OPTION_NAMES as readonly string[]).includes(name) || typeof value !== 'boolean') return this.saving;
     this.shownOptions = { ...this.shownOptions, [name]: value };
+    if (name === 'showScopeFrames') this.markBlocks();
     this.pendingSaves++;
     this.saving = this.saving
       .then(() => this.writeViewOption(name, value))
@@ -382,7 +384,8 @@ export class MemoryController implements vscode.Disposable {
   }
 
   private showBlockMarks(): void {
-    const frame = this.shownFrame();
+    // The switch "Show scope frames" of the view hides the rectangles.
+    const frame = this.shownOptions.showScopeFrames ? this.shownFrame() : undefined;
     this.shownBlockMarks.clear();
     for (const editor of vscode.window.visibleTextEditors) {
       const doc = editor.document;

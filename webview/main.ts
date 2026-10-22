@@ -60,12 +60,14 @@ const showFunctions = $<HTMLInputElement>('showFunctions');
 const showIds = $<HTMLInputElement>('showIds');
 const showClasses = $<HTMLInputElement>('showClasses');
 const showUninitialized = $<HTMLInputElement>('showUninitialized');
+const showScopeFrames = $<HTMLInputElement>('showScopeFrames');
 
 function showOptions(): void {
   showFunctions.checked = state.opts.showFunctions;
   showIds.checked = state.opts.showIds;
   showClasses.checked = state.opts.showClasses;
   showUninitialized.checked = state.opts.showUninitialized;
+  showScopeFrames.checked = state.opts.showScopeFrames;
 }
 showOptions();
 
@@ -279,6 +281,11 @@ showUninitialized.addEventListener('change', () => {
   state.opts = { ...state.opts, showUninitialized: showUninitialized.checked };
   saveOption('showUninitialized');
   render();
+});
+// The rectangles are in the editor: the view itself does not change.
+showScopeFrames.addEventListener('change', () => {
+  state.opts = { ...state.opts, showScopeFrames: showScopeFrames.checked };
+  saveOption('showScopeFrames');
 });
 
 framesEl.addEventListener('click', (e) => {
