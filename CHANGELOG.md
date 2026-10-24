@@ -3,6 +3,19 @@
 Each section lists the changes of one released version. The release workflow
 takes the section of a version as the notes of its GitHub release.
 
+## Unreleased
+
+**Node.js 26 and tsx.** Node.js 26 removed the option
+`--experimental-transform-types`, so Mindbug could not start a program with
+Node.js 26 ("bad option"). Now Mindbug runs a program with Node.js and
+`--import tsx` when the project has the npm package tsx in `node_modules`
+(all of TypeScript, also enums and constructor parameter properties, as
+`npx tsx` in the terminal). The runtime `auto` takes Node.js with tsx first
+in such a project, also when Deno is installed. Without tsx, Node.js 22.7 to
+25 keep `--experimental-transform-types`, and Node.js 26 and newer run the
+file with their type stripping. Step Into does not go into the loader of
+tsx.
+
 ## 0.1.6
 
 **Block scopes.** A block `{ … }` that declares a `let`, `const` or

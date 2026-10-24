@@ -9,7 +9,7 @@ The complete guide to Mindbug. The short overview is the [README](../README.md);
 - Visual Studio Code 1.125 or later. Mindbug uses the JavaScript debugger that is part of VS Code (`ms-vscode.js-debug`); it needs no other extension.
 - One of these runtimes:
   - [Deno 2](https://docs.deno.com/runtime/getting_started/installation/), on the `PATH` or at the path of the setting `nimblescape.mindbug.denoPath`.
-  - [Node.js](https://nodejs.org) 22.7 or newer, on the `PATH` or at the path of the setting `nimblescape.mindbug.nodePath`. Node.js runs a TypeScript file from version 22.7 on, with the option `--experimental-transform-types`.
+  - [Node.js](https://nodejs.org) 22.7 or newer, on the `PATH` or at the path of the setting `nimblescape.mindbug.nodePath`. Node.js runs a TypeScript file from version 22.7 on: with the npm package [tsx](https://tsx.is) of the project all of TypeScript, without tsx with the option `--experimental-transform-types` up to Node.js 25, and from Node.js 26 on only the code that has no enums and no constructor parameter properties (Node.js 26 only strips the types).
 - A trusted workspace. VS Code debugs a program only in a workspace that you trust, so Mindbug does not run in Restricted Mode.
 
 ## Install
@@ -131,12 +131,14 @@ When an own launch configuration of type `node` starts Deno (`"runtimeExecutable
 
 ## Runtimes
 
-With the runtime `auto` (the default), Mindbug takes Deno when `deno --version` runs, else Node.js when `node --version` shows version 22.7 or newer. With `deno` or `node`, it takes only that runtime. When it finds no runtime, a message says what is missing, and the program does not start.
+With the runtime `auto` (the default), Mindbug takes Node.js with tsx when the workspace folder or a folder above it has `node_modules/tsx` (a project that runs its programs with `npx tsx`), else Deno when `deno --version` runs, else Node.js when `node --version` shows version 22.7 or newer. With `deno` or `node`, it takes only that runtime. When it finds no runtime, a message says what is missing, and the program does not start.
 
 | Runtime | Command that the debugger runs |
 | --- | --- |
 | Deno | `deno run --inspect-brk=127.0.0.1:<port> --allow-all <file>` |
-| Node.js | `node --inspect-brk=127.0.0.1:<port> --experimental-transform-types --disable-warning=ExperimentalWarning <file>` |
+| Node.js with tsx (the project has the npm package tsx) | `node --inspect-brk=127.0.0.1:<port> --import tsx <file>` |
+| Node.js 22.7 to 25 without tsx | `node --inspect-brk=127.0.0.1:<port> --experimental-transform-types --disable-warning=ExperimentalWarning <file>` |
+| Node.js 26 and newer without tsx | `node --inspect-brk=127.0.0.1:<port> <file>` (Node.js 26 removed `--experimental-transform-types`; enums and constructor parameter properties stop the program) |
 
 `<port>` is the setting `nimblescape.mindbug.inspectPort` (9229). With `stopOnEntry` off, the option is `--inspect-wait` instead of `--inspect-brk`: the program waits for the debugger, but does not pause at its first line. The runtime waits for the debugger on `127.0.0.1` only, so no other computer can connect to it. The JavaScript debugger reads the source map of the runtime, so the debugger and the view show the lines of your TypeScript file.
 
@@ -146,7 +148,7 @@ With `--allow-all`, Deno gives the program all the rights of your user, as Node.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `nimblescape.mindbug.runtime` | `auto` | The runtime of **Run with Mindbug** and of a launch configuration of type `mindbug`: `auto` (Deno when it is installed, else Node.js), `deno` or `node`. The attribute `runtime` of a launch configuration wins over this setting. |
+| `nimblescape.mindbug.runtime` | `auto` | The runtime of **Run with Mindbug** and of a launch configuration of type `mindbug`: `auto` (Node.js with tsx when the project has the npm package tsx, else Deno when it is installed, else Node.js), `deno` or `node`. The attribute `runtime` of a launch configuration wins over this setting. |
 | `nimblescape.mindbug.denoPath` | `deno` | Path to the Deno program. The default works when Deno is on the `PATH`. |
 | `nimblescape.mindbug.nodePath` | `node` | Path to Node.js 22.7 or newer. The default works when Node.js is on the `PATH`. |
 | `nimblescape.mindbug.inspectPort` | `9229` | Port on which Deno or Node.js waits for the debugger. Change it when another program uses port 9229. |

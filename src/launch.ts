@@ -7,8 +7,8 @@
 // adapter of its own: MindbugConfigurationProvider turns the configuration into one of VS Code's built-in JavaScript
 // debugger for Deno or Node.js (runtime.ts), and VS Code starts that debugger. The command "Run with Mindbug" starts a
 // configuration of type "mindbug" for one file, so students do not need a launch.json file. The attribute "runtime" or
-// the setting "nimblescape.mindbug.runtime" chooses the runtime; with "auto" Mindbug takes Deno when it is installed,
-// else Node.js.
+// the setting "nimblescape.mindbug.runtime" chooses the runtime; with "auto" Mindbug takes Node.js with tsx when the
+// project has the npm package tsx, else Deno when it is installed, else Node.js.
 
 import * as path from 'node:path';
 import * as vscode from 'vscode';
@@ -81,13 +81,17 @@ export class MindbugConfigurationProvider implements vscode.DebugConfigurationPr
       settings.runtime = c.runtime;
     }
     if (typeof c.stopOnEntry === 'boolean') settings.stopOnEntry = c.stopOnEntry;
-    const choice = await chooseRuntime(settings);
+    const cwd = c.cwd ?? folder?.uri.fsPath ?? '${fileDirname}';
+    const choice = await chooseRuntime(settings, cwd);
     if ('problem' in choice) {
       void vscode.window.showErrorMessage(choice.problem);
       return undefined;
     }
-    const cwd = c.cwd ?? folder?.uri.fsPath ?? '${fileDirname}';
-    return { ...debugConfiguration(c.program ?? '${file}', cwd, choice.runtime, settings), name: c.name || 'Mindbug' };
+    const nodeArgs = choice.runtime === 'node' ? choice.nodeArgs : undefined;
+    return {
+      ...debugConfiguration(c.program ?? '${file}', cwd, choice.runtime, settings, nodeArgs),
+      name: c.name || 'Mindbug',
+    };
   }
 }
 
