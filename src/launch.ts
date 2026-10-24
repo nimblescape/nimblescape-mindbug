@@ -7,12 +7,19 @@
 // adapter of its own: MindbugConfigurationProvider turns the configuration into one of VS Code's built-in JavaScript
 // debugger for Deno or Node.js (runtime.ts), and VS Code starts that debugger. The command "Run with Mindbug" starts a
 // configuration of type "mindbug" for one file, so students do not need a launch.json file. The attribute "runtime" or
-// the setting "nimblescape.mindbug.runtime" chooses the runtime; with "auto" Mindbug takes Deno when it is installed,
-// else Node.js.
+// the setting "nimblescape.mindbug.runtime" chooses the runtime; with "auto" Mindbug takes Node.js, else Deno, and
+// Deno first for a program of a Deno project (a folder with deno.json or deno.jsonc).
 
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { chooseRuntime, debugConfiguration, type LaunchSettings } from './runtime.ts';
+import {
+  chooseRuntime,
+  debugConfiguration,
+  isDenoProject,
+  nodeTypeScript,
+  typeScriptCompiler,
+  type LaunchSettings,
+} from './runtime.ts';
 
 export const DEBUG_TYPE = 'mindbug';
 
@@ -41,11 +48,41 @@ function currentFile(): MindbugConfiguration {
   return { type: DEBUG_TYPE, request: 'launch', name: 'Mindbug: current file', program: '${file}' };
 }
 
+/**
+ * The folder of the program, where the search for a Deno project (isDenoProject) starts. VS Code replaces the variables
+ * of the configuration only after this provider, so this function replaces ${workspaceFolder}, and ${file} with the
+ * file of the active editor, as VS Code does. A program with another variable gives the folder `cwd`, or the workspace
+ * folder.
+ */
+function programFolder(program: string, cwd: string, folder: vscode.WorkspaceFolder | undefined): string | undefined {
+  const replace = (text: string) => (folder ? text.replaceAll('${workspaceFolder}', folder.uri.fsPath) : text);
+  const [file, dir] = [replace(program), replace(cwd)];
+  const base = dir.includes('${') ? folder?.uri.fsPath : dir;
+  if (file === '${file}') {
+    const uri = vscode.window.activeTextEditor?.document.uri;
+    return uri?.scheme === 'file' ? path.dirname(uri.fsPath) : base;
+  }
+  return file.includes('${') || base === undefined ? base : path.dirname(path.resolve(base, file));
+}
+
+/**
+ * The TypeScript compiler that VS Code uses (typeScriptCompiler): the settings js/ts.tsdk.path and typescript.tsdk (an
+ * older name of the same setting) of the workspace folder `folder`, else the TypeScript that VS Code ships.
+ */
+function vscodeTypeScript(folder: vscode.WorkspaceFolder | undefined): string | undefined {
+  const c = vscode.workspace.getConfiguration(undefined, folder?.uri);
+  const folders = [folder, ...(vscode.workspace.workspaceFolders ?? [])].flatMap((f) => (f ? [f.uri.fsPath] : []));
+  return typeScriptCompiler([c.get<string>('js/ts.tsdk.path'), c.get<string>('typescript.tsdk')], folders, vscode.env.appRoot);
+}
+
 export class MindbugConfigurationProvider implements vscode.DebugConfigurationProvider {
+  /** The file of the hooks with which Node.js runs TypeScript (dist/typeScriptHooks.js, see nodeTypeScript). */
+  private readonly hooks: string;
   /** The switch "Stop on entry" of the view; without it, the setting decides. */
   private readonly stopOnEntry: (() => boolean) | undefined;
 
-  constructor(stopOnEntry?: () => boolean) {
+  constructor(hooks: string, stopOnEntry?: () => boolean) {
+    this.hooks = hooks;
     this.stopOnEntry = stopOnEntry;
   }
 
@@ -81,13 +118,16 @@ export class MindbugConfigurationProvider implements vscode.DebugConfigurationPr
       settings.runtime = c.runtime;
     }
     if (typeof c.stopOnEntry === 'boolean') settings.stopOnEntry = c.stopOnEntry;
-    const choice = await chooseRuntime(settings);
+    const program = c.program ?? '${file}';
+    const cwd = c.cwd ?? folder?.uri.fsPath ?? '${fileDirname}';
+    const dir = programFolder(program, cwd, folder);
+    const choice = await chooseRuntime(settings, dir !== undefined && isDenoProject(dir));
     if ('problem' in choice) {
       void vscode.window.showErrorMessage(choice.problem);
       return undefined;
     }
-    const cwd = c.cwd ?? folder?.uri.fsPath ?? '${fileDirname}';
-    return { ...debugConfiguration(c.program ?? '${file}', cwd, choice.runtime, settings), name: c.name || 'Mindbug' };
+    const typeScript = choice.runtime === 'node' ? nodeTypeScript(choice.version, vscodeTypeScript(folder), this.hooks) : undefined;
+    return { ...debugConfiguration(program, cwd, choice.runtime, settings, typeScript), name: c.name || 'Mindbug' };
   }
 }
 

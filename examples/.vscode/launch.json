@@ -6,7 +6,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      // Mindbug starts the file of the active editor with Deno, or with Node.js when Deno is not installed.
+      // Mindbug starts the file of the active editor with Node.js, or with Deno when Node.js is not installed.
       "name": "Mindbug: current file",
       "type": "mindbug",
       "request": "launch",

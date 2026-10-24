@@ -3,6 +3,29 @@
 Each section lists the changes of one released version. The release workflow
 takes the section of a version as the notes of its GitHub release.
 
+## 0.1.7
+
+**Enums and parameter properties with Node.js 26.** Node.js 26 removed the
+option `--experimental-transform-types`, with which Mindbug ran a
+TypeScript file in Node.js. Node.js 26 only strips the types, so a program
+with an `enum` or a constructor parameter property such as
+`constructor(private name: string)` stopped with the error
+`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`. Mindbug now starts Node.js 22.18 and
+newer with its own hooks for the module loader of Node.js. The hooks turn
+each TypeScript file into JavaScript in memory, with the TypeScript
+compiler that VS Code uses and with the options of the `tsconfig.json` of
+the project. The compiler is the one of the setting `js/ts.tsdk.path`,
+then of the older setting `typescript.tsdk`, else the TypeScript that
+VS Code ships. So the program needs no other package, and all of
+TypeScript runs. Node.js 22.7 to 22.17 run the program with
+`--experimental-transform-types`, as before.
+
+**The runtime `auto` prefers Node.js.** With the runtime `auto` (the
+default), Mindbug now takes Node.js when it is installed, and Deno only
+when Node.js is not. A program in a folder with a `deno.json` or
+`deno.jsonc` file, or in a folder below it, is a Deno project: there Mindbug
+takes Deno first. Before, `auto` took Deno whenever it was installed.
+
 ## 0.1.6
 
 **Block scopes.** A block `{ … }` that declares a `let`, `const` or

@@ -32,7 +32,9 @@ export function activate(context: vscode.ExtensionContext): MindbugApi {
     // Dynamic: the configuration of the current file is in the list of "Run and Debug", also without launch.json.
     vscode.debug.registerDebugConfigurationProvider(
       DEBUG_TYPE,
-      new MindbugConfigurationProvider(() => controller.stopOnEntry()),
+      new MindbugConfigurationProvider(vscode.Uri.joinPath(context.extensionUri, 'dist', 'typeScriptHooks.js').fsPath, () =>
+        controller.stopOnEntry(),
+      ),
       vscode.DebugConfigurationProviderTriggerKind.Dynamic,
     ),
     vscode.commands.registerCommand('nimblescape.mindbug.open', () => controller.open()),

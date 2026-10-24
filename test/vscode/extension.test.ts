@@ -131,6 +131,14 @@ async function debug(api: MindbugApi, start: Start, file: string, breakpointLine
       assert.equal(sessions[0]?.type, 'pwa-node');
       assert.equal(config?.runtimeExecutable, start.runtime);
       assert.equal(config?.program, file);
+      if (start.runtime === 'node') {
+        // Node.js runs the TypeScript file with the hooks of Mindbug and the TypeScript compiler of VS Code: the
+        // examples set no js/ts.tsdk.path.
+        const extension = vscode.extensions.getExtension('nimblescape.nimblescape-mindbug')!.extensionPath;
+        const typescript = path.join(vscode.env.appRoot, 'extensions', 'node_modules', 'typescript', 'lib', 'typescript.js');
+        assert.deepEqual(config?.runtimeArgs?.slice(1), ['--require', path.join(extension, 'dist', 'typeScriptHooks.js')]);
+        assert.deepEqual(config?.env, { NIMBLESCAPE_MINDBUG_TYPESCRIPT: typescript });
+      }
     }
     return snapshot;
   } finally {
@@ -722,6 +730,71 @@ async function exportsBeforeDeclaration(api: MindbugApi, start: Start): Promise<
 }
 
 /**
+ * A program with an enum and a class with constructor parameter properties: TypeScript syntax that is not only types.
+ * Node.js 26 only strips types, so Mindbug runs the program with its hooks and the TypeScript compiler of VS Code; Deno
+ * runs it as it is.
+ */
+const ENUM_PROGRAM = `// SPDX-License-Identifier: MIT
+// © 2026 Hannes Stauss (scalarion@nimblescape.com)
+// Licensed under the MIT License. See LICENSE in the repository root for details.
+
+enum Size {
+  Small,
+  Large,
+}
+
+class Pizza {
+  constructor(
+    public name: string,
+    private size: Size,
+  ) {}
+
+  isLarge(): boolean {
+    return this.size === Size.Large;
+  }
+}
+
+const pizza = new Pizza('Margherita', Size.Large);
+debugger;
+console.log(pizza.isLarge());
+`;
+
+/**
+ * Runs ENUM_PROGRAM in the folder of the examples, as a CommonJS module, and in a folder whose package.json has
+ * "type": "module", as an ES module, like the programs of a course.
+ */
+async function enumsAndParameterProperties(api: MindbugApi, start: Start): Promise<void> {
+  const module = path.join(examples(), 'module-test');
+  fs.mkdirSync(module, { recursive: true });
+  fs.writeFileSync(path.join(module, 'package.json'), '{ "type": "module" }\n');
+  try {
+    for (const file of [path.join(examples(), 'enum-test.ts'), path.join(module, 'enum-test.ts')]) {
+      fs.writeFileSync(file, ENUM_PROGRAM);
+      await debug(api, start, file, []);
+      const s = await runToLine(api, file, 22);
+      const size = s.objects[idOf(variable(s, 'Global scope', 'Size'))];
+      assert.deepEqual(size.fields?.find((f) => f.name === 'Large')?.value, { k: 'num', v: '1' });
+      // The constructor parameter properties are fields of the new object.
+      const pizza = s.objects[idOf(variable(s, 'Global scope', 'pizza'))];
+      assert.equal(pizza.type, 'Pizza');
+      assert.deepEqual(
+        pizza.fields?.map((f) => [f.name, f.value]),
+        [
+          ['name', { k: 'str', v: 'Margherita' }],
+          ['size', { k: 'num', v: '1' }],
+        ],
+      );
+      await stop();
+      await closeTextEditors();
+    }
+  } finally {
+    await closeTextEditors();
+    fs.rmSync(path.join(examples(), 'enum-test.ts'), { force: true });
+    fs.rmSync(module, { recursive: true, force: true });
+  }
+}
+
+/**
  * A program whose last line calls console.log. Deno runs its own code after the last line of the program
  * (ext:runtime_main/js/99_main.js), and console.log is code of Deno too (ext:deno_web/01_console.js). A step stopped
  * there, and VS Code opened the file of Deno.
@@ -877,6 +950,48 @@ describe('the Mindbug view in VS Code', () => {
     }
   });
 
+  it('runs Node.js with the TypeScript compiler of js/ts.tsdk.path, else of typescript.tsdk', async () => {
+    const config = () => vscode.workspace.getConfiguration();
+    // A copy of the TypeScript of VS Code, as the folder lib of a TypeScript package of the project.
+    const folder = path.join(examples(), 'tsdk-test');
+    const lib = path.join(folder, 'lib');
+    fs.mkdirSync(lib, { recursive: true });
+    const shipped = path.join(vscode.env.appRoot, 'extensions', 'node_modules', 'typescript', 'lib', 'typescript.js');
+    fs.copyFileSync(shipped, path.join(lib, 'typescript.js'));
+    const file = path.join(examples(), 'people.ts');
+    // The compiler of the debug session of Mindbug, after the first pause of the program.
+    const compiler = async (): Promise<unknown> => {
+      const sessions: vscode.DebugSession[] = [];
+      const started = vscode.debug.onDidStartDebugSession((s) => sessions.push(s));
+      try {
+        vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+        await vscode.window.showTextDocument(vscode.Uri.file(file));
+        const first = api.nextSnapshot(TIMEOUT);
+        assert.ok(await runWithMindbug('node', file), 'the debug session starts');
+        await first;
+        return sessions.find((x) => x.type === 'pwa-node')?.configuration.env?.NIMBLESCAPE_MINDBUG_TYPESCRIPT;
+      } finally {
+        started.dispose();
+        await stop();
+      }
+    };
+    try {
+      // A relative folder is relative to the workspace folder.
+      await config().update('js/ts.tsdk.path', 'tsdk-test/lib', vscode.ConfigurationTarget.Global);
+      await config().update('typescript.tsdk', path.join(examples(), 'missing', 'lib'), vscode.ConfigurationTarget.Global);
+      assert.equal(await compiler(), path.join(lib, 'typescript.js'));
+      // The deprecated setting, when js/ts.tsdk.path is not set.
+      await config().update('js/ts.tsdk.path', undefined, vscode.ConfigurationTarget.Global);
+      await config().update('typescript.tsdk', lib, vscode.ConfigurationTarget.Global);
+      assert.equal(await compiler(), path.join(lib, 'typescript.js'));
+    } finally {
+      await config().update('js/ts.tsdk.path', undefined, vscode.ConfigurationTarget.Global);
+      await config().update('typescript.tsdk', undefined, vscode.ConfigurationTarget.Global);
+      await closeTextEditors();
+      fs.rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
   it('does not change the settings of the workspace when they set a switch', async () => {
     const config = () => vscode.workspace.getConfiguration('nimblescape.mindbug');
     const settings = vscode.Uri.file(path.join(examples(), '.vscode', 'settings.json'));
@@ -909,6 +1024,11 @@ describe('the Mindbug view in VS Code', () => {
       it('shows the variables of each block, also a variable that hides one of the same name', () => blocks(api, start));
       it('does not stop in the code of the runtime: a step after the last line ends the program', () =>
         stepsToTheEnd(api, start));
+      // An own launch configuration of type "node" runs Node.js without the hooks of Mindbug, and Node.js 26 only strips
+      // the types.
+      if (start.runtime) {
+        it('runs enums and constructor parameter properties', () => enumsAndParameterProperties(api, start));
+      }
     });
   }
 });

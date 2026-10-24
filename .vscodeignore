@@ -6,6 +6,7 @@
 # everything, then keep the listed files.
 **
 !dist/extension.js
+!dist/typeScriptHooks.js
 !dist/webview.js
 !dist/webview.css
 !media/memory-dark.svg
