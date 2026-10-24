@@ -9,7 +9,8 @@
 # types, runs the unit tests, the screenshot tests, the tests in a real VS Code
 # (stable) and the tests against real Node.js programs, which run with the
 # TypeScript compiler of that VS Code, and packages the VSIX with vsce, which
-# also validates the manifest and the README. The VSIX and the screenshots stay workflow artifacts for inspection.
+# also validates the manifest and the README. The VSIX and the screenshots
+# stay workflow artifacts for inspection.
 # This workflow publishes nothing: the release workflow calls it for the commit
 # of a version and publishes the VSIX of that call. A change of this file
 # changes the release process: its pull request needs a dry run (rule 4). The
