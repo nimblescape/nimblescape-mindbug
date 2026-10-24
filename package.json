@@ -1,7 +1,7 @@
 {
   "name": "nimblescape-mindbug",
   "displayName": "nimblescape Mindbug",
-  "description": "Shows the stack (one scope for each function call) and the heap of a paused TypeScript program as a diagram, to help students learn how memory works. Starts the program with Deno or Node.js in the JavaScript debugger of VS Code, and at each pause runs a small helper in the program that reads its objects and changes nothing.",
+  "description": "Shows the stack (one scope for each function call) and the heap of a paused TypeScript program as a diagram, to help students learn how memory works. Starts the program with Node.js in the JavaScript debugger of VS Code, and at each pause runs a small helper in the program that reads its objects and changes nothing.",
   "version": "0.1.6",
   "publisher": "nimblescape",
   "license": "MIT",
@@ -28,7 +28,6 @@
   ],
   "keywords": [
     "node",
-    "deno",
     "typescript",
     "heap",
     "stack",
@@ -53,11 +52,11 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false,
-      "description": "Mindbug starts the TypeScript program of the workspace with Deno or Node.js and runs code in it, and VS Code debugs a program only in a trusted workspace."
+      "description": "Mindbug starts the TypeScript program of the workspace with Node.js and runs code in it, and VS Code debugs a program only in a trusted workspace."
     },
     "virtualWorkspaces": {
       "supported": false,
-      "description": "Deno and Node.js run a file on the disk, which a virtual workspace does not have."
+      "description": "Node.js runs a file on the disk, which a virtual workspace does not have."
     }
   },
   "contributes": {
@@ -99,35 +98,15 @@
     "configuration": {
       "title": "nimblescape Mindbug",
       "properties": {
-        "nimblescape.mindbug.runtime": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "deno",
-            "node"
-          ],
-          "enumDescriptions": [
-            "Node.js 22.7 or newer when it is installed, else Deno. For a program in a folder with deno.json or deno.jsonc: Deno when it is installed, else Node.js.",
-            "Deno, the program of the setting nimblescape.mindbug.denoPath.",
-            "Node.js 22.7 or newer, the program of the setting nimblescape.mindbug.nodePath, with the TypeScript compiler of VS Code."
-          ],
-          "default": "auto",
-          "markdownDescription": "The runtime that **Run with Mindbug** and a launch configuration of type `mindbug` start the program with (the attribute `runtime` of the launch configuration wins over this setting). The Mindbug view works with every runtime that VS Code's JavaScript debugger runs, also when you start the program with a launch configuration of another type."
-        },
         "nimblescape.mindbug.nodePath": {
           "type": "string",
           "default": "node",
-          "markdownDescription": "Path to Node.js 22.7 or newer, used when the runtime is `node` or `auto`. The default `node` works when Node.js is on the `PATH`."
-        },
-        "nimblescape.mindbug.denoPath": {
-          "type": "string",
-          "default": "deno",
-          "markdownDescription": "Path to the Deno program, used when the runtime is `deno`, or `auto` without Node.js or for a program in a folder with `deno.json` or `deno.jsonc`. The default `deno` works when Deno is on the `PATH`."
+          "markdownDescription": "Path to Node.js 22.7 or newer, with which **Run with Mindbug** and a launch configuration of type `mindbug` start the program. The default `node` works when Node.js is on the `PATH`. The Mindbug view works with every program that VS Code's JavaScript debugger runs, also when you start it with a launch configuration of another type."
         },
         "nimblescape.mindbug.inspectPort": {
           "type": "number",
           "default": 9229,
-          "markdownDescription": "Port on which Deno or Node.js waits for the debugger when **Run with Mindbug** or a launch configuration of type `mindbug` starts the program. Change it when another program uses port 9229."
+          "markdownDescription": "Port on which Node.js waits for the debugger when **Run with Mindbug** or a launch configuration of type `mindbug` starts the program. Change it when another program uses port 9229."
         },
         "nimblescape.mindbug.stopOnEntry": {
           "type": "boolean",
@@ -251,20 +230,6 @@
                 "description": "The TypeScript file to run. The default is the file of the active editor.",
                 "default": "${file}"
               },
-              "runtime": {
-                "type": "string",
-                "enum": [
-                  "auto",
-                  "deno",
-                  "node"
-                ],
-                "enumDescriptions": [
-                  "Node.js 22.7 or newer when it is installed, else Deno; Deno first for a program in a folder with deno.json or deno.jsonc.",
-                  "Deno (setting nimblescape.mindbug.denoPath).",
-                  "Node.js 22.7 or newer (setting nimblescape.mindbug.nodePath), with the TypeScript compiler of VS Code."
-                ],
-                "description": "The runtime that runs the program. The default is the setting nimblescape.mindbug.runtime."
-              },
               "cwd": {
                 "type": "string",
                 "description": "The folder in which the program runs. The default is the workspace folder.",
@@ -289,7 +254,7 @@
         "configurationSnippets": [
           {
             "label": "Mindbug: Run a TypeScript file",
-            "description": "Runs a TypeScript file with Deno or Node.js and shows its memory in the Mindbug view.",
+            "description": "Runs a TypeScript file with Node.js and shows its memory in the Mindbug view.",
             "body": {
               "type": "mindbug",
               "request": "launch",
@@ -306,7 +271,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:deno": "vitest run --config vitest.deno.config.mts",
+    "test:node": "vitest run --config vitest.node.config.mts",
     "test:render": "node esbuild.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/render/screenshots.ts",
     "test:vscode": "node esbuild.mjs && node scripts/build-vscode-tests.mjs && vscode-test --label vscode",
     "vscode:prepublish": "node esbuild.mjs --production",

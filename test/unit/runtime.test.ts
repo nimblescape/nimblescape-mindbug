@@ -6,9 +6,8 @@ import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import * as path from 'node:path';
 import {
-  chooseRuntime,
   debugConfiguration,
-  isDenoProject,
+  findNode,
   nodeRunsHooks,
   nodeRunsTypeScript,
   nodeTypeScript,
@@ -18,7 +17,7 @@ import {
 } from '../../src/runtime.ts';
 import { TYPESCRIPT_VARIABLE as HOOKS_VARIABLE } from '../../src/typeScriptHooks.ts';
 
-const settings: LaunchSettings = { runtime: 'auto', denoPath: 'deno', nodePath: 'node', port: 9229, stopOnEntry: true };
+const settings: LaunchSettings = { nodePath: 'node', port: 9229, stopOnEntry: true };
 
 test('Node.js runs TypeScript files from version 22.7 on', () => {
   assert.ok(nodeRunsTypeScript('v24.20.0'));
@@ -29,39 +28,14 @@ test('Node.js runs TypeScript files from version 22.7 on', () => {
   assert.ok(!nodeRunsTypeScript('deno 2.9.7'));
 });
 
-test('"auto" takes Node.js when it runs TypeScript, else Deno', async () => {
+test('Mindbug takes the Node.js of the settings when it runs TypeScript', async () => {
   const versions = (found: Record<string, string>) => async (program: string) => found[program];
-  assert.deepEqual(await chooseRuntime(settings, false, versions({ deno: 'deno 2.9.7', node: 'v26.1.0' })), {
-    runtime: 'node',
-    version: 'v26.1.0',
-  });
-  assert.deepEqual(await chooseRuntime(settings, false, versions({ deno: 'deno 2.9.7', node: 'v20.19.1' })), { runtime: 'deno' });
-  assert.deepEqual(await chooseRuntime(settings, false, versions({ deno: 'deno 2.9.7' })), { runtime: 'deno' });
-  const old = await chooseRuntime(settings, false, versions({ node: 'v20.19.1' }));
+  assert.deepEqual(await findNode(settings, versions({ node: 'v26.1.0' })), { version: 'v26.1.0' });
+  assert.deepEqual(await findNode({ ...settings, nodePath: '/opt/node' }, versions({ '/opt/node': 'v22.7.0' })), { version: 'v22.7.0' });
+  const old = await findNode(settings, versions({ node: 'v20.19.1' }));
   assert.ok('problem' in old && old.problem.includes('Node.js v20.19.1'), 'Node.js 20 cannot run TypeScript');
-  const none = await chooseRuntime(settings, false, versions({}));
-  assert.ok('problem' in none && none.problem.includes('found neither'));
-});
-
-test('"auto" takes Deno first for a Deno project', async () => {
-  const versions = (found: Record<string, string>) => async (program: string) => found[program];
-  assert.deepEqual(await chooseRuntime(settings, true, versions({ deno: 'deno 2.9.7', node: 'v26.1.0' })), { runtime: 'deno' });
-  assert.deepEqual(await chooseRuntime(settings, true, versions({ node: 'v26.1.0' })), { runtime: 'node', version: 'v26.1.0' });
-});
-
-test('a runtime that is set must run', async () => {
-  const versions = (found: Record<string, string>) => async (program: string) => found[program];
-  const node = { ...settings, runtime: 'node' as const };
-  assert.deepEqual(await chooseRuntime(node, true, versions({ deno: 'deno 2.9.7', node: 'v22.7.0' })), {
-    runtime: 'node',
-    version: 'v22.7.0',
-  });
-  const deno = { ...settings, runtime: 'deno' as const };
-  assert.deepEqual(await chooseRuntime(deno, false, versions({ deno: 'deno 2.9.7', node: 'v26.1.0' })), { runtime: 'deno' });
-  const noDeno = await chooseRuntime(deno, false, versions({ node: 'v24.20.0' }));
-  assert.ok('problem' in noDeno && noDeno.problem.includes('did not find Deno'));
-  const noNode = await chooseRuntime({ ...node, nodePath: '/opt/node' }, false, versions({ deno: 'deno 2.9.7' }));
-  assert.ok('problem' in noNode && noNode.problem.includes('did not find "/opt/node"'));
+  const none = await findNode({ ...settings, nodePath: '/opt/node' }, versions({}));
+  assert.ok('problem' in none && none.problem.includes('did not find "/opt/node"'));
 });
 
 test('Node.js runs the hooks of Mindbug from version 22.18, 23.6 and 24 on', () => {
@@ -110,36 +84,23 @@ test('the TypeScript compiler of VS Code: the setting js/ts.tsdk.path, then type
   assert.equal(typeScriptCompiler([], [], appRoot, files()), undefined);
 });
 
-test('a Deno project: a folder with deno.json or deno.jsonc, or a folder above it', () => {
-  const root = path.resolve('/course');
-  const files = (...list: string[]) => (file: string) => list.map((f) => path.join(root, f)).includes(file);
-  for (const config of ['deno.json', 'deno.jsonc']) {
-    assert.ok(isDenoProject(path.join(root, 'old', 'src'), files(`old/${config}`)));
-    assert.ok(isDenoProject(path.join(root, 'old'), files(`old/${config}`)));
-  }
-  assert.ok(!isDenoProject(path.join(root, 'src'), files('package.json', 'old/deno.json')));
-});
-
-test('the debug configuration: the runtime waits for the debugger on the port, for Deno and Node.js', () => {
-  const deno = debugConfiguration('/w/a.ts', '/w', 'deno', settings);
-  assert.equal(deno.type, 'pwa-node');
-  assert.equal(deno.runtimeExecutable, 'deno');
-  assert.deepEqual(deno.runtimeArgs, ['run', '--inspect-brk=127.0.0.1:9229', '--allow-all']);
-  assert.equal(deno.attachSimplePort, 9229);
-  assert.equal(deno.env, undefined);
+test('the debug configuration: Node.js waits for the debugger on the port', () => {
+  const plain = debugConfiguration('/w/a.ts', '/w', settings);
+  assert.equal(plain.type, 'pwa-node');
+  assert.equal(plain.runtimeExecutable, 'node');
+  assert.deepEqual(plain.runtimeArgs, ['--inspect-brk=127.0.0.1:9229']);
+  assert.equal(plain.attachSimplePort, 9229);
+  // Without environment variables, the configuration has none.
+  assert.equal(plain.env, undefined);
   const typescript = '/vscode/extensions/node_modules/typescript/lib/typescript.js';
   const typeScript = { args: ['--require', '/ext/dist/typeScriptHooks.js'], env: { [TYPESCRIPT_VARIABLE]: typescript } };
-  const node = debugConfiguration('/w/a.ts', '/w', 'node', { ...settings, stopOnEntry: false, nodePath: '/opt/node' }, typeScript);
+  const node = debugConfiguration('/w/a.ts', '/w', { ...settings, stopOnEntry: false, nodePath: '/opt/node' }, typeScript);
   assert.equal(node.runtimeExecutable, '/opt/node');
   assert.deepEqual(node.runtimeArgs, ['--inspect-wait=127.0.0.1:9229', ...typeScript.args]);
   assert.deepEqual(node.env, typeScript.env);
   assert.equal(node.program, '/w/a.ts');
-  // Without environment variables, the configuration has none.
-  assert.equal(debugConfiguration('/w/a.ts', '/w', 'node', settings, { args: [], env: {} }).env, undefined);
 });
 
-test('the debug configuration skips the code of Node.js and of Deno', () => {
-  for (const runtime of ['deno', 'node'] as const) {
-    assert.deepEqual(debugConfiguration('/w/a.ts', '/w', runtime, settings).skipFiles, ['<node_internals>/**', 'ext:*/**']);
-  }
+test('the debug configuration skips the code of Node.js', () => {
+  assert.deepEqual(debugConfiguration('/w/a.ts', '/w', settings).skipFiles, ['<node_internals>/**']);
 });

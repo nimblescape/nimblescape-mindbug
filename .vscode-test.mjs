@@ -5,8 +5,8 @@
 // The tests in a real VS Code (npm run test:vscode): @vscode/test-cli downloads VS Code to .vscode-test/, starts it
 // with the extension of the development build in dist/ and the folder examples/, and runs the bundled tests of
 // out/test/vscode/ (scripts/build-vscode-tests.mjs) with mocha in its extension host. The tests debug the examples
-// with Deno and with Node.js, so Deno and Node.js 22.18 or newer must be on the PATH: Node.js runs them with the hooks
-// of Mindbug and the TypeScript compiler of the downloaded VS Code. VSCODE_TEST_VERSION selects the VS Code version:
+// with Node.js, so Node.js 22.18 or newer must be on the PATH: Node.js runs them with the hooks of Mindbug and the
+// TypeScript compiler of the downloaded VS Code. VSCODE_TEST_VERSION selects the VS Code version:
 // "stable" (the default), "insiders" or a version such as 1.125.0. On Linux without a display, run it under xvfb-run.
 import { defineConfig } from '@vscode/test-cli';
 

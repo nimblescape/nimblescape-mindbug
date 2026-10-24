@@ -3,23 +3,14 @@
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
 // The debug type "mindbug" and the command "Run with Mindbug".
-// A launch configuration of type "mindbug" names the TypeScript file and, if wanted, the runtime. Mindbug has no debug
-// adapter of its own: MindbugConfigurationProvider turns the configuration into one of VS Code's built-in JavaScript
-// debugger for Deno or Node.js (runtime.ts), and VS Code starts that debugger. The command "Run with Mindbug" starts a
-// configuration of type "mindbug" for one file, so students do not need a launch.json file. The attribute "runtime" or
-// the setting "nimblescape.mindbug.runtime" chooses the runtime; with "auto" Mindbug takes Node.js, else Deno, and
-// Deno first for a program of a Deno project (a folder with deno.json or deno.jsonc).
+// A launch configuration of type "mindbug" names the TypeScript file. Mindbug has no debug adapter of its own:
+// MindbugConfigurationProvider turns the configuration into one of VS Code's built-in JavaScript debugger for Node.js
+// (runtime.ts), and VS Code starts that debugger. The command "Run with Mindbug" starts a configuration of type
+// "mindbug" for one file, so students do not need a launch.json file.
 
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import {
-  chooseRuntime,
-  debugConfiguration,
-  isDenoProject,
-  nodeTypeScript,
-  typeScriptCompiler,
-  type LaunchSettings,
-} from './runtime.ts';
+import { debugConfiguration, findNode, nodeTypeScript, typeScriptCompiler, type LaunchSettings } from './runtime.ts';
 
 export const DEBUG_TYPE = 'mindbug';
 
@@ -27,16 +18,14 @@ export const DEBUG_TYPE = 'mindbug';
 interface MindbugConfiguration extends vscode.DebugConfiguration {
   program?: string;
   cwd?: string;
+  /** The attribute of Mindbug 0.1, which could choose Deno. */
   runtime?: string;
   stopOnEntry?: boolean;
 }
 
 export function readLaunchSettings(): LaunchSettings {
   const c = vscode.workspace.getConfiguration('nimblescape.mindbug');
-  const runtime = c.get<string>('runtime', 'auto');
   return {
-    runtime: runtime === 'deno' || runtime === 'node' ? runtime : 'auto',
-    denoPath: c.get<string>('denoPath', 'deno') || 'deno',
     nodePath: c.get<string>('nodePath', 'node') || 'node',
     port: c.get<number>('inspectPort', 9229),
     stopOnEntry: c.get<boolean>('stopOnEntry', true),
@@ -46,23 +35,6 @@ export function readLaunchSettings(): LaunchSettings {
 /** The configuration for the file of the active editor: F5 without launch.json starts it. */
 function currentFile(): MindbugConfiguration {
   return { type: DEBUG_TYPE, request: 'launch', name: 'Mindbug: current file', program: '${file}' };
-}
-
-/**
- * The folder of the program, where the search for a Deno project (isDenoProject) starts. VS Code replaces the variables
- * of the configuration only after this provider, so this function replaces ${workspaceFolder}, and ${file} with the
- * file of the active editor, as VS Code does. A program with another variable gives the folder `cwd`, or the workspace
- * folder.
- */
-function programFolder(program: string, cwd: string, folder: vscode.WorkspaceFolder | undefined): string | undefined {
-  const replace = (text: string) => (folder ? text.replaceAll('${workspaceFolder}', folder.uri.fsPath) : text);
-  const [file, dir] = [replace(program), replace(cwd)];
-  const base = dir.includes('${') ? folder?.uri.fsPath : dir;
-  if (file === '${file}') {
-    const uri = vscode.window.activeTextEditor?.document.uri;
-    return uri?.scheme === 'file' ? path.dirname(uri.fsPath) : base;
-  }
-  return file.includes('${') || base === undefined ? base : path.dirname(path.resolve(base, file));
 }
 
 /**
@@ -108,26 +80,25 @@ export class MindbugConfigurationProvider implements vscode.DebugConfigurationPr
     }
     const settings = readLaunchSettings();
     if (this.stopOnEntry) settings.stopOnEntry = this.stopOnEntry();
-    if (c.runtime !== undefined) {
-      if (c.runtime !== 'auto' && c.runtime !== 'deno' && c.runtime !== 'node') {
-        void vscode.window.showErrorMessage(
-          `The launch configuration "${c.name}" has "runtime": "${c.runtime}". Use "auto", "deno" or "node".`,
-        );
-        return undefined;
-      }
-      settings.runtime = c.runtime;
-    }
-    if (typeof c.stopOnEntry === 'boolean') settings.stopOnEntry = c.stopOnEntry;
-    const program = c.program ?? '${file}';
-    const cwd = c.cwd ?? folder?.uri.fsPath ?? '${fileDirname}';
-    const dir = programFolder(program, cwd, folder);
-    const choice = await chooseRuntime(settings, dir !== undefined && isDenoProject(dir));
-    if ('problem' in choice) {
-      void vscode.window.showErrorMessage(choice.problem);
+    // Mindbug 0.1 could run the program with Deno. "auto" and "node" now both mean Node.js.
+    if (c.runtime === 'deno') {
+      void vscode.window.showErrorMessage(
+        `Mindbug runs programs with Node.js only. Remove "runtime": "deno" from the launch configuration "${c.name}". ` +
+          'To debug with Deno, use a launch configuration of type "node" with "runtimeExecutable": "deno": ' +
+          'the Mindbug view also shows it.',
+      );
       return undefined;
     }
-    const typeScript = choice.runtime === 'node' ? nodeTypeScript(choice.version, vscodeTypeScript(folder), this.hooks) : undefined;
-    return { ...debugConfiguration(program, cwd, choice.runtime, settings, typeScript), name: c.name || 'Mindbug' };
+    if (typeof c.stopOnEntry === 'boolean') settings.stopOnEntry = c.stopOnEntry;
+    const node = await findNode(settings);
+    if ('problem' in node) {
+      void vscode.window.showErrorMessage(node.problem);
+      return undefined;
+    }
+    const program = c.program ?? '${file}';
+    const cwd = c.cwd ?? folder?.uri.fsPath ?? '${fileDirname}';
+    const typeScript = nodeTypeScript(node.version, vscodeTypeScript(folder), this.hooks);
+    return { ...debugConfiguration(program, cwd, settings, typeScript), name: c.name || 'Mindbug' };
   }
 }
 

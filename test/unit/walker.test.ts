@@ -2,8 +2,8 @@
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
-// The heap walker runs inside the debugged program. Node uses the same V8 engine as Deno,
-// so these tests install the walker in this Node process and give it values, as Runtime.callFunctionOn does.
+// The heap walker runs inside the debugged program, a Node.js process, so these tests install the walker in this
+// Node.js process and give it values, as Runtime.callFunctionOn does.
 
 import { test } from 'vitest';
 import assert from 'node:assert/strict';

@@ -4,8 +4,8 @@
 
 // Where the block scopes of a frame are in the TypeScript file, for their marks in the editor. V8 gives the block
 // scopes of the paused frame with their statements (Frame.blocks), but its positions are positions in the code that
-// the runtime runs, which for Deno is JavaScript that Deno made from the TypeScript file. The debugger gives the paused
-// position in the TypeScript file. So this file finds the brackets of the TypeScript file around that position, and
+// the runtime runs, which is JavaScript that the TypeScript compiler made from the TypeScript file. The debugger gives
+// the paused position in the TypeScript file. So this file finds the brackets of the TypeScript file around that position, and
 // matches them from the inside out with the block scopes of V8: a block without a scope (it declares no `let`,
 // `const` or `class`) is skipped, and the body of the function ends the search.
 // This file does not import 'vscode'.

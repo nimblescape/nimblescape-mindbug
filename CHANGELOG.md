@@ -3,6 +3,18 @@
 Each section lists the changes of one released version. The release workflow
 takes the section of a version as the notes of its GitHub release.
 
+## 0.2.0
+
+**Node.js only.** **Run with Mindbug** and a launch configuration of type
+`mindbug` now run every program with Node.js 22.7 or newer, with the
+TypeScript compiler that VS Code uses. Mindbug no longer starts Deno. The
+settings `nimblescape.mindbug.runtime` and `nimblescape.mindbug.denoPath`
+are gone. A launch configuration with `"runtime": "deno"` does not start,
+and a message says to remove the attribute; Mindbug ignores the values
+`auto` and `node`. The Mindbug view still shows every debug session of the
+JavaScript debugger of VS Code, also one of a launch configuration of type
+`node` that starts Deno (`"runtimeExecutable": "deno"`).
+
 ## 0.1.7
 
 **Enums and parameter properties with Node.js 26.** Node.js 26 removed the

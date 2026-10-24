@@ -53,52 +53,43 @@ async function runToLine(api: MindbugApi, file: string, line: number): Promise<M
 }
 
 /**
- * A way to start a program: the command "Run with Mindbug" with a runtime, a launch configuration of type "mindbug",
- * or an own launch configuration of VS Code's JavaScript debugger.
+ * A way to start a program: the command "Run with Mindbug", a launch configuration of type "mindbug", or an own launch
+ * configuration of VS Code's JavaScript debugger.
  */
 interface Start {
   title: string;
   run(file: string): Thenable<unknown>;
   /** True when the first pause is at the first statement of the program. */
   pausesAtFirstStatement: boolean;
-  /** The runtime that Mindbug must start, for the starts through the debug type "mindbug". */
-  runtime?: 'node' | 'deno';
+  /** True for the starts through the debug type "mindbug", which Mindbug turns into a configuration for Node.js. */
+  mindbug: boolean;
 }
 
-async function setRuntime(runtime: 'node' | 'deno'): Promise<void> {
-  await vscode.workspace.getConfiguration('nimblescape.mindbug').update('runtime', runtime, vscode.ConfigurationTarget.Global);
-}
-
-async function runWithMindbug(runtime: 'node' | 'deno', file: string): Promise<boolean | undefined> {
-  await setRuntime(runtime);
+function runWithMindbug(file: string): Thenable<boolean | undefined> {
   return vscode.commands.executeCommand<boolean>('nimblescape.mindbug.run', vscode.Uri.file(file));
 }
 
 const STARTS: Start[] = [
-  { title: 'Run with Mindbug, Deno', run: (file) => runWithMindbug('deno', file), pausesAtFirstStatement: true, runtime: 'deno' },
-  { title: 'Run with Mindbug, Node.js', run: (file) => runWithMindbug('node', file), pausesAtFirstStatement: true, runtime: 'node' },
+  { title: 'Run with Mindbug', run: runWithMindbug, pausesAtFirstStatement: true, mindbug: true },
   {
-    // A launch.json configuration of type "mindbug" for the file of the active editor. Its attribute "runtime" wins
-    // over the setting.
-    title: 'launch configuration of type "mindbug", Deno',
+    // A launch.json configuration of type "mindbug" for the file of the active editor.
+    title: 'launch configuration of type "mindbug"',
     pausesAtFirstStatement: true,
-    runtime: 'deno',
-    run: async () => {
-      await setRuntime('node');
-      return vscode.debug.startDebugging(vscode.workspace.workspaceFolders?.[0], {
+    mindbug: true,
+    run: () =>
+      vscode.debug.startDebugging(vscode.workspace.workspaceFolders?.[0], {
         type: 'mindbug',
         request: 'launch',
         name: 'Mindbug: current file',
         program: '${file}',
-        runtime: 'deno',
-      });
-    },
+      }),
   },
   {
     // What a student writes in launch.json: nothing in it is about Mindbug. Node.js comes from the PATH.
     // With stopOnEntry, the debugger stops at the first line of the file that can stop, which can be inside a function.
     title: 'own launch configuration, Node.js',
     pausesAtFirstStatement: false,
+    mindbug: false,
     run: (file) =>
       vscode.debug.startDebugging(vscode.workspace.workspaceFolders?.[0], {
         type: 'node',
@@ -125,20 +116,18 @@ async function debug(api: MindbugApi, start: Start, file: string, breakpointLine
   try {
     assert.ok(await start.run(file), 'the debug session starts');
     const snapshot = await first;
-    if (start.runtime) {
-      // The debug type "mindbug" becomes a configuration of VS Code's JavaScript debugger for the runtime.
+    if (start.mindbug) {
+      // The debug type "mindbug" becomes a configuration of VS Code's JavaScript debugger for Node.js, which runs the
+      // TypeScript file with the hooks of Mindbug and the TypeScript compiler of VS Code: the examples set no
+      // js/ts.tsdk.path.
       const config = sessions[0]?.configuration;
       assert.equal(sessions[0]?.type, 'pwa-node');
-      assert.equal(config?.runtimeExecutable, start.runtime);
+      assert.equal(config?.runtimeExecutable, 'node');
       assert.equal(config?.program, file);
-      if (start.runtime === 'node') {
-        // Node.js runs the TypeScript file with the hooks of Mindbug and the TypeScript compiler of VS Code: the
-        // examples set no js/ts.tsdk.path.
-        const extension = vscode.extensions.getExtension('nimblescape.nimblescape-mindbug')!.extensionPath;
-        const typescript = path.join(vscode.env.appRoot, 'extensions', 'node_modules', 'typescript', 'lib', 'typescript.js');
-        assert.deepEqual(config?.runtimeArgs?.slice(1), ['--require', path.join(extension, 'dist', 'typeScriptHooks.js')]);
-        assert.deepEqual(config?.env, { NIMBLESCAPE_MINDBUG_TYPESCRIPT: typescript });
-      }
+      const extension = vscode.extensions.getExtension('nimblescape.nimblescape-mindbug')!.extensionPath;
+      const typescript = path.join(vscode.env.appRoot, 'extensions', 'node_modules', 'typescript', 'lib', 'typescript.js');
+      assert.deepEqual(config?.runtimeArgs?.slice(1), ['--require', path.join(extension, 'dist', 'typeScriptHooks.js')]);
+      assert.deepEqual(config?.env, { NIMBLESCAPE_MINDBUG_TYPESCRIPT: typescript });
     }
     return snapshot;
   } finally {
@@ -239,7 +228,7 @@ async function variableOrder(api: MindbugApi, start: Start): Promise<void> {
 
 async function varAndLet(api: MindbugApi, start: Start): Promise<void> {
   const file = path.join(examples(), 'var-and-let.ts');
-  // No breakpoint before the first pause: with Deno, a breakpoint can hide the pause at the first statement.
+  // No breakpoint before the first pause: a breakpoint can hide the pause at the first statement (see insertionSort).
   let s = await debug(api, start, file, []);
   if (start.pausesAtFirstStatement) {
     // At the first line, the Global scope already has all its variables.
@@ -625,7 +614,7 @@ async function restart(api: MindbugApi, start: Start): Promise<void> {
  * A program with variables named t, e, r, n, i and o. VS Code's JavaScript debugger has variables with these names in
  * the function that it builds for an evaluate with the context "clipboard", which hid the variables of the program.
  * The test writes it into the folder of the examples: the JavaScript debugger uses the source maps of the TypeScript
- * files only in the workspace folder, so a breakpoint in a file elsewhere does not stop Deno or Node.js.
+ * files only in the workspace folder, so a breakpoint in a file elsewhere does not stop Node.js.
  */
 const NAMES_PROGRAM = `// SPDX-License-Identifier: MIT
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
@@ -674,9 +663,9 @@ async function names(api: MindbugApi, start: Start): Promise<void> {
 
 /**
  * A module that exports a class with a static variable. While JavaScript sets up the static variable (line 8), the
- * class `Car` is not initialized yet. Deno lists the name `Car` there, and V8 gives the debugger an internal empty
- * value for an exported name before its declaration, not a ReferenceError: `typeof` on that value stopped Deno with
- * "abort: Unexpected instance type encountered".
+ * class `Car` is not initialized yet. V8 can give the debugger an internal empty value for an exported name before its
+ * declaration, not a ReferenceError: `typeof` on that value stopped Deno 2.5 with "abort: Unexpected instance type
+ * encountered", when Mindbug still ran Deno.
  */
 const EXPORTS_PROGRAM = `// SPDX-License-Identifier: MIT
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
@@ -703,8 +692,8 @@ async function exportsBeforeDeclaration(api: MindbugApi, start: Start): Promise<
   const file = path.join(examples(), 'exports-test.ts');
   fs.writeFileSync(file, EXPORTS_PROGRAM);
   try {
-    // No breakpoint: with Deno, a breakpoint hid the pause at the first statement (see insertionSort). Step Into
-    // leads to the set-up of the static variable, and the program pauses again at its `debugger` statement.
+    // No breakpoint: a breakpoint can hide the pause at the first statement (see insertionSort). Step Into leads to
+    // the set-up of the static variable, and the program pauses again at its `debugger` statement.
     let s = await debug(api, start, file, []);
     for (let i = 0; i < 10 && top(s).name !== 'Car (set up static variables)'; i++) s = await step(api, 'stepInto');
     assert.deepEqual(
@@ -713,8 +702,7 @@ async function exportsBeforeDeclaration(api: MindbugApi, start: Start): Promise<
     );
     assert.equal(top(s).line, 8);
     assert.deepEqual(variable(s, 'Global scope', 'LIMIT'), { k: 'num', v: '3' });
-    // V8 lists Car in the Global scope here. Deno 2.5 and newer (CI: 2.9.7) give the internal empty value for it, and
-    // reading it stopped Deno. Deno 2.0 to 2.4 and Node.js read the class itself.
+    // V8 lists Car in the Global scope here, with the class itself or with the internal empty value.
     const cls = variable(s, 'Global scope', 'Car');
     if (cls.k !== 'uninit') assert.equal(idOf(cls), idOf(variable(s, 'Car (set up static variables)', 'this')));
     // The program still runs, and the class has its static variable.
@@ -731,8 +719,7 @@ async function exportsBeforeDeclaration(api: MindbugApi, start: Start): Promise<
 
 /**
  * A program with an enum and a class with constructor parameter properties: TypeScript syntax that is not only types.
- * Node.js 26 only strips types, so Mindbug runs the program with its hooks and the TypeScript compiler of VS Code; Deno
- * runs it as it is.
+ * Node.js 26 only strips types, so Mindbug runs the program with its hooks and the TypeScript compiler of VS Code.
  */
 const ENUM_PROGRAM = `// SPDX-License-Identifier: MIT
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
@@ -795,9 +782,9 @@ async function enumsAndParameterProperties(api: MindbugApi, start: Start): Promi
 }
 
 /**
- * A program whose last line calls console.log. Deno runs its own code after the last line of the program
- * (ext:runtime_main/js/99_main.js), and console.log is code of Deno too (ext:deno_web/01_console.js). A step stopped
- * there, and VS Code opened the file of Deno.
+ * A program whose last line calls console.log, which is code of Node.js. A step must not stop in the code of the
+ * runtime, and VS Code must open no file of it (with Deno, a step stopped in ext:runtime_main/js/99_main.js after the
+ * last line, when Mindbug still ran Deno).
  */
 const END_PROGRAM = `// SPDX-License-Identifier: MIT
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
@@ -937,11 +924,11 @@ describe('the Mindbug view in VS Code', () => {
       vscode.debug.addBreakpoints([new vscode.SourceBreakpoint(new vscode.Location(uri, new vscode.Position(29, 0)))]);
       await vscode.window.showTextDocument(uri);
       const first = api.nextSnapshot(TIMEOUT);
-      assert.ok(await runWithMindbug('deno', file), 'the debug session starts');
+      assert.ok(await runWithMindbug(file), 'the debug session starts');
       const s = await first;
       const launched = sessions.find((x) => x.type === 'pwa-node')?.configuration;
       assert.equal(launched?.stopOnEntry, false);
-      assert.ok(launched?.runtimeArgs?.some((a: string) => a.startsWith('--inspect-wait=')), 'Deno waits for the debugger without a pause');
+      assert.ok(launched?.runtimeArgs?.some((a: string) => a.startsWith('--inspect-wait=')), 'Node.js waits for the debugger without a pause');
       assert.equal(top(s)?.line, 30, 'the first pause is the breakpoint');
     } finally {
       started.dispose();
@@ -967,7 +954,7 @@ describe('the Mindbug view in VS Code', () => {
         vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
         await vscode.window.showTextDocument(vscode.Uri.file(file));
         const first = api.nextSnapshot(TIMEOUT);
-        assert.ok(await runWithMindbug('node', file), 'the debug session starts');
+        assert.ok(await runWithMindbug(file), 'the debug session starts');
         await first;
         return sessions.find((x) => x.type === 'pwa-node')?.configuration.env?.NIMBLESCAPE_MINDBUG_TYPESCRIPT;
       } finally {
@@ -989,6 +976,26 @@ describe('the Mindbug view in VS Code', () => {
       await config().update('typescript.tsdk', undefined, vscode.ConfigurationTarget.Global);
       await closeTextEditors();
       fs.rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
+  it('does not start a launch configuration with "runtime": "deno" of Mindbug 0.1', async () => {
+    const sessions: vscode.DebugSession[] = [];
+    const started = vscode.debug.onDidStartDebugSession((s) => sessions.push(s));
+    try {
+      await vscode.window.showTextDocument(vscode.Uri.file(path.join(examples(), 'people.ts')));
+      const ok = await vscode.debug.startDebugging(vscode.workspace.workspaceFolders?.[0], {
+        type: 'mindbug',
+        request: 'launch',
+        name: 'Mindbug: Deno',
+        program: '${file}',
+        runtime: 'deno',
+      });
+      assert.equal(ok, false);
+      assert.deepEqual(sessions, []);
+    } finally {
+      started.dispose();
+      await closeTextEditors();
     }
   });
 
@@ -1026,7 +1033,7 @@ describe('the Mindbug view in VS Code', () => {
         stepsToTheEnd(api, start));
       // An own launch configuration of type "node" runs Node.js without the hooks of Mindbug, and Node.js 26 only strips
       // the types.
-      if (start.runtime) {
+      if (start.mindbug) {
         it('runs enums and constructor parameter properties', () => enumsAndParameterProperties(api, start));
       }
     });

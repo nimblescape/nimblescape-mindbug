@@ -6,7 +6,7 @@ Mindbug is free and open source. Ask questions and report problems in the [issue
 
 - The version of Mindbug (the Extensions view shows it) and of VS Code (command **Help: About**).
 - Your operating system and its version, for example Windows 11, macOS 15 or Ubuntu 24.04.
-- The runtime and its version: the output of `deno --version` or `node --version`, and how you started the program (**Run with Mindbug**, a launch configuration of type `mindbug`, or a launch configuration of another type).
+- The runtime and its version: the output of `node --version`, and how you started the program (**Run with Mindbug**, a launch configuration of type `mindbug`, or a launch configuration of another type).
 - A small program that shows the problem, the line where the program paused, and what the view showed. A screenshot of the view helps.
 - What you did, what you expected, and what happened, with the exact text of each message.
 - The output of the program and of the debugger: the Debug Console of VS Code shows it.

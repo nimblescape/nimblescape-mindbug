@@ -2,7 +2,7 @@
 
 See the memory of your TypeScript program while you debug it: the stack and the heap, as a diagram next to the code.
 
-Mindbug is a VS Code extension for teaching. It shows the **stack**, with one scope for each function call and its local variables, and the **heap**, with the objects and arrays that the variables point to. Arrows go from the variables to the objects. Mindbug works like [Python Tutor](https://pythontutor.com), but inside VS Code, with its normal debugger. It runs the program with [Node.js](https://nodejs.org) or [Deno](https://deno.com).
+Mindbug is a VS Code extension for teaching. It shows the **stack**, with one scope for each function call and its local variables, and the **heap**, with the objects and arrays that the variables point to. Arrows go from the variables to the objects. Mindbug works like [Python Tutor](https://pythontutor.com), but inside VS Code, with its normal debugger. It runs the program with [Node.js](https://nodejs.org).
 
 ![Mindbug in VS Code, step by step: F5 starts the program, the call of createBook adds a scope with the parameters title and pages to the stack, new Book creates an object on the heap, after the return the variable myBook of the Global scope points to the object, and after myBook = null the object is gone; then the step history shows the steps 5 to 2 again; in blocks.ts, the block, the for loop, the body of the loop and the if block each get their own part in the Global scope, and a frame of the same color around their lines in the code; in closures.ts, the inner function next still sees count and prefix after makeCounter has returned, and count is 0 in the first call and 1 in the second call; a blue band above the window names each scene, and a label at the bottom names each pressed key and its command](https://raw.githubusercontent.com/nimblescape/nimblescape-mindbug/main/docs/images/mindbug-run.gif)
 
@@ -11,11 +11,11 @@ The animation steps through the example [return-object.ts](https://github.com/ni
 ## What the extension does on your computer
 
 - **When it works.** Mindbug starts when a debug session starts in VS Code, or when you run one of its commands. Before that, it does nothing. It does not run in VS Code for the Web.
-- **Runtimes.** **Run with Mindbug** and a launch configuration of type `mindbug` first run `node --version` or `deno --version` (the programs of the settings `nimblescape.mindbug.nodePath` and `nimblescape.mindbug.denoPath`) to find a runtime. Then the JavaScript debugger of VS Code starts your TypeScript file with Node.js 22.7 or newer (`node --inspect-brk=127.0.0.1:9229 --require <hooks>`) or with Deno (`deno run --inspect-brk=127.0.0.1:9229 --allow-all`), in the workspace folder, and connects to it on your computer only (`127.0.0.1`, port of the setting `nimblescape.mindbug.inspectPort`). With Node.js, the hooks of Mindbug (`<hooks>`, the file `dist/typeScriptHooks.js` of the extension) run in your program before its first line. They turn each TypeScript file into JavaScript in memory, with the TypeScript compiler that VS Code uses (the setting `js/ts.tsdk.path` or `typescript.tsdk`, else the TypeScript of VS Code) and the `tsconfig.json` of your project. Node.js 22.7 to 22.17 run the file with `--experimental-transform-types` instead. With `--allow-all`, Deno gives your program all the rights of your user, as Node.js does: a program that you run with Mindbug is code that you run, so run only programs that you trust. **Run with Mindbug** saves the file before it starts it.
+- **Node.js.** **Run with Mindbug** and a launch configuration of type `mindbug` first run `node --version` (the program of the setting `nimblescape.mindbug.nodePath`) to check Node.js. Then the JavaScript debugger of VS Code starts your TypeScript file with Node.js 22.7 or newer (`node --inspect-brk=127.0.0.1:9229 --require <hooks>`), in the workspace folder, and connects to it on your computer only (`127.0.0.1`, port of the setting `nimblescape.mindbug.inspectPort`). With Node.js, the hooks of Mindbug (`<hooks>`, the file `dist/typeScriptHooks.js` of the extension) run in your program before its first line. They turn each TypeScript file into JavaScript in memory, with the TypeScript compiler that VS Code uses (the setting `js/ts.tsdk.path` or `typescript.tsdk`, else the TypeScript of VS Code) and the `tsconfig.json` of your project. Node.js 22.7 to 22.17 run the file with `--experimental-transform-types` instead. Your program has all the rights of your user: a program that you run with Mindbug is code that you run, so run only programs that you trust. **Run with Mindbug** saves the file before it starts it.
 - **Code in your program.** At each pause of a debug session of the JavaScript debugger, also of one that Mindbug did not start, Mindbug reads the variables of the scopes from the JavaScript engine (V8), through the connection that the debugger gives, and runs a small helper in the paused program with their values. The helper reads the objects that the values reach, and gives each object a number that stays the same from step to step. It adds one hidden global variable, `__mindbug`, to the program, calls no getter, and changes no variable and no object of the program. Only an object that is a `Proxy` runs code of the program when the helper reads it.
 - **Files and data.** Mindbug changes no file of your workspace, except the save of **Run with Mindbug**. It keeps the steps of the step history in the memory of VS Code, until the next debug session starts or the debug session restarts. The six switches of the view are settings: a click on a switch changes its setting, and VS Code saves it in your user settings. Mindbug writes nothing else to the disk, so an uninstall leaves only your settings of Mindbug and a `launch.json` file with a configuration of type `mindbug`; VS Code then shows that it does not know the type.
-- **Network.** Mindbug connects only to the JavaScript debugger of VS Code, at the local address (`127.0.0.1`) that the debugger gives it. The debugger connects to the runtime on your computer. Deno downloads the modules that your program imports from the web (for example `npm:` and `jsr:` imports), as `deno run` always does. Mindbug collects no telemetry.
-- **Restricted Mode and virtual workspaces.** Mindbug does not run in Restricted Mode, because VS Code debugs a program only in a trusted workspace, and not in virtual workspaces, because Deno and Node.js run a file on the disk.
+- **Network.** Mindbug connects only to the JavaScript debugger of VS Code, at the local address (`127.0.0.1`) that the debugger gives it. The debugger connects to Node.js on your computer. Mindbug collects no telemetry.
+- **Restricted Mode and virtual workspaces.** Mindbug does not run in Restricted Mode, because VS Code debugs a program only in a trusted workspace, and not in virtual workspaces, because Node.js runs a file on the disk.
 
 [Security](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/security.md#what-mindbug-does-on-your-computer) describes each step and where its protection ends.
 
@@ -34,7 +34,7 @@ The animation steps through the example [return-object.ts](https://github.com/ni
 ## Requirements
 
 - VS Code 1.125 or later. Mindbug uses the JavaScript debugger that is part of VS Code.
-- [Node.js](https://nodejs.org) 22.7 or newer, or [Deno 2](https://docs.deno.com/runtime/getting_started/installation/). Mindbug takes Node.js, and Deno when Node.js is not installed or the program is in a folder with a `deno.json` or `deno.jsonc` file.
+- [Node.js](https://nodejs.org) 22.7 or newer. Mindbug runs the TypeScript file with the TypeScript compiler of VS Code, so your project needs no other package.
 
 ## Usage
 
@@ -49,10 +49,8 @@ Without a `launch.json` file, F5 in a TypeScript file also offers **Mindbug**. T
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| `nimblescape.mindbug.runtime` | `auto` | The runtime: `auto` (Node.js, else Deno; Deno first in a folder with `deno.json`), `deno` or `node`. |
-| `nimblescape.mindbug.denoPath` | `deno` | Path to the Deno program. |
 | `nimblescape.mindbug.nodePath` | `node` | Path to Node.js 22.7 or newer. |
-| `nimblescape.mindbug.inspectPort` | `9229` | Port on which Deno or Node.js waits for the debugger. |
+| `nimblescape.mindbug.inspectPort` | `9229` | Port on which Node.js waits for the debugger. |
 | `nimblescape.mindbug.stopOnEntry` | `true` | Pause at the first line of the program (the switch **Stop on entry** of the view). |
 | `nimblescape.mindbug.openAutomatically` | `true` | Open the Mindbug view at the first pause of a debug session. |
 | `nimblescape.mindbug.showClasses` | `true` | Show the classes at the top of the heap (the switch **Show classes** of the view). |

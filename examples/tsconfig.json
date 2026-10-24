@@ -3,8 +3,8 @@
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
 {
-  // Rules for VS Code's built-in TypeScript checker, the same as Deno uses (strict mode).
-  // Deno itself does not need this file.
+  // Rules for VS Code's built-in TypeScript checker (strict mode). Mindbug runs the examples with the options of this
+  // file.
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM"],

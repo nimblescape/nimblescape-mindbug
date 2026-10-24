@@ -2,10 +2,11 @@
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
-// Records the memory snapshots of the example programs, step by step, with a real Deno.
-// The screenshot test (screenshots.ts) draws these snapshots, so it does not need Deno.
+// Records the memory snapshots of the example programs, step by step, with a real Node.js, as Mindbug runs it
+// (test/node/typeScript.ts: with the TypeScript compiler of the VS Code that `npm run test:vscode` downloads). The
+// screenshot test (screenshots.ts) draws these snapshots, so it does not need Node.js to run the examples.
 //
-//   DENO_PATH=/path/to/deno node test/render/record.ts
+//   npm run record
 //
 // Writes test/render/snapshots/<example>.json: an array with one snapshot for each step.
 
@@ -14,24 +15,23 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectSnapshot } from '../../src/snapshot.ts';
 import type { MemorySnapshot } from '../../src/model.ts';
-import { FakeDap, inspectorV8 } from '../deno/fakeDap.ts';
-import { DenoInspector } from '../deno/inspector.ts';
+import { FakeDap, inspectorV8 } from '../node/fakeDap.ts';
+import { NodeInspector } from '../node/inspector.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
-const deno = process.env.DENO_PATH ?? 'deno';
 const MAX_STEPS = 120;
 
 /** Steps through the program like a student who presses "Step Into" again and again. */
 export async function record(file: string, port: number): Promise<MemorySnapshot[]> {
-  const insp = await DenoInspector.start(deno, file, port, true);
+  const insp = await NodeInspector.start(file, port, true);
   const steps: MemorySnapshot[] = [];
   try {
     let ev = await insp.waitForPause();
     while (ev && steps.length < MAX_STEPS) {
       const top = ev.callFrames[0];
       if (!top.url.endsWith(file.split(/[\\/]/).pop()!)) {
-        // Inside Deno's own code (for example console.log): leave it.
+        // Inside the code of Node.js (for example console.log): leave it.
         const next = await insp.step('stepOut');
         if (!next) break;
         ev = next;

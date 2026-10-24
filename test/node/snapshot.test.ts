@@ -2,26 +2,26 @@
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
-// End-to-end test of the snapshot collector against a real Deno program, through Deno's V8 inspector.
-// FakeDap answers the Debug Adapter Protocol request stackTrace the way VS Code's JavaScript debugger does, and the
-// collector sends its requests to V8 directly, as through the CDP proxy of the debugger.
+// End-to-end test of the snapshot collector against a real Node.js program, through the V8 inspector of Node.js.
+// Node.js runs the program as Mindbug runs it (typeScript.ts). FakeDap answers the Debug Adapter Protocol request
+// stackTrace the way VS Code's JavaScript debugger does, and the collector sends its requests to V8 directly, as
+// through the CDP proxy of the debugger. The fixtures are ES modules (fixtures/package.json), as in a course.
 //
-// Needs Deno: set DENO_PATH, or have `deno` on the PATH. Without Deno the tests are skipped.
-// npm run test:deno (vitest.deno.config.mts); `npm test` does not run them.
+// npm run test:node (vitest.node.config.mts); `npm test` does not run them. Without the TypeScript of the VS Code in
+// .vscode-test/, Node.js 26 cannot run the fixtures, and the tests are skipped.
 
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectSnapshot } from '../../src/snapshot.ts';
 import type { MemorySnapshot, Value, Variable } from '../../src/model.ts';
 import { DEFAULT_LIMITS } from '../../src/heapWalker.ts';
 import { FakeDap, inspectorV8, RoundCounter } from './fakeDap.ts';
-import { DenoInspector } from './inspector.ts';
+import { NodeInspector } from './inspector.ts';
+import { runsAllOfTypeScript } from './typeScript.ts';
 
-const deno = process.env.DENO_PATH ?? 'deno';
-const hasDeno = spawnSync(deno, ['--version']).status === 0;
+const skip = !runsAllOfTypeScript();
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 let port = 9400;
 
@@ -42,7 +42,7 @@ async function pausesWithRounds(
   count: number,
   options: { steps?: number[]; limits?: typeof DEFAULT_LIMITS } = {},
 ): Promise<Pause[]> {
-  const insp = await DenoInspector.start(deno, join(fixtures, name), port++);
+  const insp = await NodeInspector.start(join(fixtures, name), port++);
   const out: Pause[] = [];
   try {
     for (let i = 0; i < count; i++) {
@@ -78,7 +78,7 @@ const idOf = (v: Value) => {
   return (v as { id: number }).id;
 };
 
-test.skipIf(!hasDeno)('insertion sort: frames, aliasing and stable ids', async () => {
+test.skipIf(skip)('insertion sort: frames, aliasing and stable ids', async () => {
   const [inLoop, atEnd] = await pauses('sort.ts', 2);
   assert.deepEqual(
     inLoop.frames.map((f) => f.name),
@@ -96,7 +96,7 @@ test.skipIf(!hasDeno)('insertion sort: frames, aliasing and stable ids', async (
   );
 });
 
-test.skipIf(!hasDeno)('the variables of each scope are in the order of the program, not of their names', async () => {
+test.skipIf(skip)('the variables of each scope are in the order of the program, not of their names', async () => {
   // VS Code's JavaScript debugger sorts the variables of a scope by name; V8 gives them in the order of the program.
   const [s] = await pauses('order.ts', 1);
   const names = (frame: string) => s.frames.find((f) => f.name === frame)?.vars.map((v) => v.name);
@@ -104,7 +104,7 @@ test.skipIf(!hasDeno)('the variables of each scope are in the order of the progr
   assert.deepEqual(names('swap'), ['values', 'second', 'first', 'kept']);
 });
 
-test.skipIf(!hasDeno)('var and let: before their lines, and in blocks', async () => {
+test.skipIf(skip)('var and let: before their lines, and in blocks', async () => {
   const [start, inShop, inBlock] = await pauses('hoisting.ts', 3);
   const vars = (s: MemorySnapshot, frame: string) =>
     s.frames.find((f) => f.name === frame)?.vars.map((v) => [v.name, v.scope, v.block, v.value.k === 'ref' ? 'ref' : v.value]);
@@ -133,7 +133,7 @@ test.skipIf(!hasDeno)('var and let: before their lines, and in blocks', async ()
   assert.deepEqual(inBlock.frames.find((f) => f.name === 'shop')?.blocks, ['for', 'for body']);
 });
 
-test.skipIf(!hasDeno)('each block scope is named after its statement', async () => {
+test.skipIf(skip)('each block scope is named after its statement', async () => {
   const steps = await pauses('statements.ts', 6);
   assert.deepEqual(
     steps.map((s) => s.frames.find((f) => f.name === 'Global scope')?.blocks),
@@ -151,7 +151,7 @@ test.skipIf(!hasDeno)('each block scope is named after its statement', async () 
   );
 });
 
-test.skipIf(!hasDeno)('a variable of a block with the name of a variable of the Global scope: both are shown', async () => {
+test.skipIf(skip)('a variable of a block with the name of a variable of the Global scope: both are shown', async () => {
   const [s] = await pauses('shadowing.ts', 1);
   const global = s.frames.find((f) => f.name === 'Global scope')!;
   // An object is shown by the value of its only field.
@@ -170,7 +170,7 @@ test.skipIf(!hasDeno)('a variable of a block with the name of a variable of the 
   assert.deepEqual(global.blocks, ['block']);
 });
 
-test.skipIf(!hasDeno)('objects: getters are not called, closures, uninitialized let', async () => {
+test.skipIf(skip)('objects: getters are not called, closures, uninitialized let', async () => {
   const [inBirthday, inCounter, atEnd] = await pauses('objects.ts', 3);
   const ann = idOf(variable(inBirthday, 'Person.birthday', 'this'));
   assert.equal(idOf(variable(inBirthday, 'Global scope', 'ann')), ann);
@@ -182,7 +182,7 @@ test.skipIf(!hasDeno)('objects: getters are not called, closures, uninitialized 
   assert.deepEqual(variable(atEnd, 'Global scope', 'later'), { k: 'uninit' });
 });
 
-test.skipIf(!hasDeno)('classes: class boxes with static variables, attributes, methods and superclass', async () => {
+test.skipIf(skip)('classes: class boxes with static variables, attributes, methods and superclass', async () => {
   const [s] = await pauses('classes.ts', 1);
   const ann = s.objects[idOf(variable(s, 'Global scope', 'ann'))];
   const bob = s.objects[idOf(variable(s, 'Global scope', 'bob'))];
@@ -215,7 +215,7 @@ test.skipIf(!hasDeno)('classes: class boxes with static variables, attributes, m
   assert.equal(birthday.blocks, undefined, 'the scope of the class around the method is no block of the method');
 });
 
-test.skipIf(!hasDeno)('names: the variables t, e, r, n, i and o, in three rounds of requests for three scopes', async () => {
+test.skipIf(skip)('names: the variables t, e, r, n, i and o, in three rounds of requests for three scopes', async () => {
   const [inLoop, atEnd] = await pausesWithRounds('names.ts', 2);
   assert.deepEqual(
     inLoop.snapshot.frames.map((f) => f.name),
@@ -243,7 +243,7 @@ test.skipIf(!hasDeno)('names: the variables t, e, r, n, i and o, in three rounds
   assert.equal(inLoop.snapshot.fallback, false);
 });
 
-test.skipIf(!hasDeno)('a new program in the same session: the heap walker is installed when it is missing', async () => {
+test.skipIf(skip)('a new program in the same session: the heap walker is installed when it is missing', async () => {
   // A step after the first one, as after a restart of the program in the same debug session.
   const [first] = await pausesWithRounds('names.ts', 1, { steps: [5] });
   assert.deepEqual(variable(first.snapshot, 'inner', 'i'), { k: 'num', v: '1' });
@@ -252,7 +252,7 @@ test.skipIf(!hasDeno)('a new program in the same session: the heap walker is ins
   assert.equal(first.rounds, 5);
 });
 
-test.skipIf(!hasDeno)('a long result of the heap walker comes whole from V8', async () => {
+test.skipIf(skip)('a long result of the heap walker comes whole from V8', async () => {
   const [s] = await pausesWithRounds('long.ts', 1, { limits: { ...DEFAULT_LIMITS, str: 2000 } });
   const words = s.snapshot.objects[idOf(variable(s.snapshot, 'Global scope', 'words'))];
   assert.equal(words.items?.length, 100);
@@ -261,9 +261,9 @@ test.skipIf(!hasDeno)('a long result of the heap walker comes whole from V8', as
   assert.equal(s.rounds, 3);
 });
 
-test.skipIf(!hasDeno)('exported names before their lines have run are uninitialized, and the program goes on', async () => {
-  // Reading such a name with `typeof` stopped Deno ("abort: Unexpected instance type encountered").
-  const insp = await DenoInspector.start(deno, join(fixtures, 'exports.ts'), port++, true);
+test.skipIf(skip)('exported names before their lines have run are uninitialized, and the program goes on', async () => {
+  // Reading such a name with `typeof` stopped Deno 2.5 ("abort: Unexpected instance type encountered"), which Mindbug 0.1 ran.
+  const insp = await NodeInspector.start(join(fixtures, 'exports.ts'), port++, true);
   try {
     let ev = await insp.waitForPause();
     // V8 lists also the names without a value, which VS Code's JavaScript debugger leaves out.
@@ -285,7 +285,7 @@ test.skipIf(!hasDeno)('exported names before their lines have run are uninitiali
     assert.deepEqual(variable(inStatic, 'Global scope', 'LIMIT'), { k: 'num', v: '3' });
     const self = inStatic.objects[idOf(variable(inStatic, 'Car (set up static variables)', 'this'))];
     assert.equal(self.kind, 'class');
-    // Deno 2.5 and newer give the internal empty value for Car here. Deno 2.0 to 2.4 read the class itself.
+    // V8 can give the internal empty value for Car here (Deno 2.5 did), or the class itself (Node.js).
     const global = variable(inStatic, 'Global scope', 'Car');
     if (global.k !== 'uninit') assert.equal(idOf(global), self.id);
 

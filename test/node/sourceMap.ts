@@ -2,9 +2,9 @@
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
-// Minimal source map reader for the tests: maps a line in the JavaScript that Deno runs back to
+// Minimal source map reader for the tests: maps a line in the JavaScript that Node.js runs back to
 // the line in the TypeScript file. VS Code's JavaScript debugger does the same with the source
-// maps that Deno sends, so the test stand-in (fakeDap.ts) reports the same line numbers.
+// maps of the hooks of Mindbug, so the test stand-in (fakeDap.ts) reports the same line numbers.
 
 const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
@@ -50,7 +50,7 @@ export function parseMappings(mappings: string): LineMap {
   return lines;
 }
 
-/** Reads the map from a `data:` URL (Deno inlines its source maps). */
+/** Reads the map from a `data:` URL (the hooks of Mindbug inline their source maps). */
 export function lineMapFromUrl(url: string): LineMap | undefined {
   const m = /^data:application\/json[^,]*?(;base64)?,(.*)$/s.exec(url);
   if (!m) return undefined;

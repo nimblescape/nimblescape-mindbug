@@ -2,7 +2,7 @@
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
-// A connection to V8, the JavaScript engine of Deno and Node.js, with the Chrome DevTools Protocol (CDP). VS Code's
+// A connection to V8, the JavaScript engine of Node.js, with the Chrome DevTools Protocol (CDP). VS Code's
 // JavaScript debugger gives it to other extensions: the DAP request `requestCDPProxy` returns the address of a
 // WebSocket server of the debugger, which sends each request on to V8. The server runs on the computer of the
 // debugger, which is also the computer of Mindbug (both are workspace extensions), so the requests do not go through
@@ -49,7 +49,7 @@ export interface CdpCallFrame {
   returnValue?: CdpRemoteObject;
 }
 
-/** The part of a CDP connection that the collector needs. The tests use the V8 inspector of Deno directly. */
+/** The part of a CDP connection that the collector needs. The tests use the V8 inspector of Node.js directly. */
 export interface CdpClient {
   /** The call frames of the current pause, the newest first, or none when the program runs. */
   callFrames(): Promise<CdpCallFrame[]>;

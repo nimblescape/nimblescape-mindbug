@@ -2,12 +2,13 @@
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
-// A small Chrome DevTools Protocol client for Deno's V8 inspector, used by the tests.
-// VS Code's JavaScript debugger talks the same protocol to Deno; these tests use it directly.
+// A small Chrome DevTools Protocol client for the V8 inspector of Node.js, used by the tests.
+// VS Code's JavaScript debugger talks the same protocol to Node.js; these tests use it directly.
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import type { CdpCallFrame as V8CallFrame } from '../../src/v8Connection.ts';
 import { lineMapFromUrl, originalLine, type LineMap } from './sourceMap.ts';
+import { mindbugNode } from './typeScript.ts';
 
 export interface CdpCallFrame extends V8CallFrame {
   location: { scriptId: string; lineNumber: number; columnNumber: number };
@@ -18,7 +19,7 @@ export interface PausedEvent {
   callFrames: CdpCallFrame[];
 }
 
-export class DenoInspector {
+export class NodeInspector {
   private nextId = 1;
   private readonly pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
   private readonly pauses: PausedEvent[] = [];
@@ -26,7 +27,7 @@ export class DenoInspector {
   private exited = false;
   /** Script id to URL, from Debugger.scriptParsed events (CallFrame.url can be empty). */
   readonly scripts = new Map<string, string>();
-  /** Script id to its source map line table (Deno sends inline source maps for TypeScript). */
+  /** Script id to its source map line table (the hooks of Mindbug give inline source maps for TypeScript). */
   readonly sourceMaps = new Map<string, LineMap>();
   output = '';
 
@@ -43,17 +44,18 @@ export class DenoInspector {
   }
 
   /**
-   * Starts `deno run --inspect-brk` and connects to it. The first pause (at the first line of the
-   * program) is dropped unless `keepFirstPause` is true.
+   * Starts `node --inspect-brk` with the TypeScript file, as Mindbug starts it (mindbugNode), and connects to it. The
+   * first pause (at the first line of the program) is dropped unless `keepFirstPause` is true.
    */
-  static async start(deno: string, file: string, port: number, keepFirstPause = false): Promise<DenoInspector> {
-    const proc = spawn(deno, ['run', `--inspect-brk=127.0.0.1:${port}`, '--allow-all', file], {
+  static async start(file: string, port: number, keepFirstPause = false): Promise<NodeInspector> {
+    const typeScript = mindbugNode();
+    const proc = spawn(process.execPath, [`--inspect-brk=127.0.0.1:${port}`, ...typeScript.args, file], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, NO_COLOR: '1' },
+      env: { ...process.env, ...typeScript.env, NO_COLOR: '1' },
     });
     let output = '';
     const url = await new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error(`Deno did not start:\n${output}`)), 20000);
+      const timer = setTimeout(() => reject(new Error(`Node.js did not start:\n${output}`)), 20000);
       const onData = (d: Buffer) => {
         output += d.toString();
         const m = /ws:\/\/[^\s]+/.exec(output);
@@ -64,17 +66,20 @@ export class DenoInspector {
       };
       proc.stderr!.on('data', onData);
       proc.stdout!.on('data', onData);
-      proc.on('exit', (code) => reject(new Error(`Deno exited with code ${code}:\n${output}`)));
+      proc.on('exit', (code) => reject(new Error(`Node.js exited with code ${code}:\n${output}`)));
     });
     const ws = new WebSocket(url);
     await new Promise<void>((resolve, reject) => {
       ws.addEventListener('open', () => resolve());
       ws.addEventListener('error', () => reject(new Error('cannot connect to the inspector')));
     });
-    const inspector = new DenoInspector(proc, ws);
+    const inspector = new NodeInspector(proc, ws);
     proc.stdout!.on('data', (d: Buffer) => (inspector.output += d.toString()));
     await inspector.send('Runtime.enable');
     await inspector.send('Debugger.enable');
+    // The code of Node.js, as with "skipFiles": ["<node_internals>/**"] of the JavaScript debugger: a step does not
+    // pause in it. Node.js 22 pauses first in its own code that loads an ES module.
+    await inspector.send('Debugger.setBlackboxPatterns', { patterns: ['^node:'] });
     await inspector.send('Runtime.runIfWaitingForDebugger');
     // --inspect-brk stops at the first line of the program.
     const first = await inspector.waitForPause();

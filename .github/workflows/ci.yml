@@ -5,11 +5,11 @@
 # Test the extension and build its package for every push to main and every
 # pull request, on the pinned Node.js 24 release (.node-version); VS Code 1.125
 # (engines.vscode) and later run extensions on Node.js 24 too. The job "test"
-# installs the locked development tools without install scripts and the pinned
-# Deno release, checks the types, runs the unit tests, the tests against real
-# Deno programs, the screenshot tests and the tests in a real VS Code (stable),
-# and packages the VSIX with vsce, which also validates the manifest and the
-# README. The VSIX and the screenshots stay workflow artifacts for inspection.
+# installs the locked development tools without install scripts, checks the
+# types, runs the unit tests, the screenshot tests, the tests in a real VS Code
+# (stable) and the tests against real Node.js programs, which run with the
+# TypeScript compiler of that VS Code, and packages the VSIX with vsce, which
+# also validates the manifest and the README. The VSIX and the screenshots stay workflow artifacts for inspection.
 # This workflow publishes nothing: the release workflow calls it for the commit
 # of a version and publishes the VSIX of that call. A change of this file
 # changes the release process: its pull request needs a dry run (rule 4). The
@@ -34,7 +34,7 @@ on:
         required: false
         default: ''
       vscode-version:
-        description: The VS Code version of the tests in VS Code, "insiders" or a version such as 1.125.0; empty for stable. When set, the tests against Deno programs and the screenshot tests do not run.
+        description: The VS Code version of the tests in VS Code, "insiders" or a version such as 1.125.0; empty for stable. When set, the screenshot tests and the tests against Node.js programs do not run.
         type: string
         required: false
         default: ''
@@ -65,19 +65,6 @@ jobs:
         with:
           node-version-file: .node-version
 
-      # The tests run the examples with Deno. The archive of the pinned release must have the SHA-256 sum that the
-      # release publishes (deno-x86_64-unknown-linux-gnu.zip.sha256sum), so CI needs no action of another publisher.
-      - name: Install the pinned Deno release
-        env:
-          DENO_VERSION: 2.9.7
-          DENO_SHA256: c6527f24f4b16031d3ae4fa9f658d5f11534c8d84ce7dc8502420280919c3490
-        run: |
-          curl -fsSLo "$RUNNER_TEMP/deno.zip" "https://dl.deno.land/release/v$DENO_VERSION/deno-x86_64-unknown-linux-gnu.zip"
-          echo "$DENO_SHA256  $RUNNER_TEMP/deno.zip" | sha256sum --check --strict
-          unzip -q "$RUNNER_TEMP/deno.zip" -d "$RUNNER_TEMP/deno"
-          echo "$RUNNER_TEMP/deno" >> "$GITHUB_PATH"
-          "$RUNNER_TEMP/deno/deno" --version
-
       - name: Install the locked development tools without install scripts
         run: npm ci --ignore-scripts
 
@@ -86,10 +73,6 @@ jobs:
 
       - name: Run the unit tests
         run: npm test
-
-      - name: Run the tests against Deno programs
-        if: ${{ !inputs.vscode-version }}
-        run: npm run test:deno
 
       - name: Run the screenshot tests
         if: ${{ !inputs.vscode-version }}
@@ -110,6 +93,12 @@ jobs:
         env:
           VSCODE_TEST_VERSION: ${{ inputs.vscode-version }}
         run: xvfb-run -a npm run test:vscode
+
+      # After the tests in VS Code: Node.js runs the programs with the TypeScript compiler of the VS Code in
+      # .vscode-test/, as Mindbug runs them.
+      - name: Run the tests against Node.js programs
+        if: ${{ !inputs.vscode-version }}
+        run: npm run test:node
 
       - name: Build the VSIX package
         run: npm run package
