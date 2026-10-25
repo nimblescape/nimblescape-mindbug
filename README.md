@@ -35,7 +35,7 @@ The animation steps through the example [return-object.ts](https://github.com/ni
 
 - VS Code 1.125 or later. Mindbug uses the JavaScript debugger that is part of VS Code.
 - The extension [nimblescape TypeScript](https://marketplace.visualstudio.com/items?itemName=nimblescape.nimblescape-typescript) 0.2.0 or newer. VS Code installs it together with Mindbug. Its command `ts` runs the TypeScript file with the TypeScript compiler of VS Code, so your project needs no other package.
-- [Node.js](https://nodejs.org) on the `PATH`, for the command `ts`.
+- [Node.js](https://nodejs.org) 22 or newer on the `PATH`, for the command `ts`.
 
 ## Usage
 

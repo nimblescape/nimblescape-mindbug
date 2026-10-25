@@ -11,12 +11,14 @@ debug type `ts` of the extension nimblescape TypeScript
 (`nimblescape.nimblescape-typescript`). VS Code installs that extension
 together with Mindbug. Its command `ts` checks the program, compiles it
 with the TypeScript compiler that VS Code uses, and runs it with Node.js.
-So all of TypeScript runs, also an `enum` and a constructor parameter
-property such as `constructor(private name: string)`. Mindbug 0.1.6 ran a
-TypeScript file with the option `--experimental-transform-types` of
-Node.js, and Node.js 26 removed that option, so such a program stopped
-with the error `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`. Mindbug itself now
-uses no option of Node.js.
+When the check finds an error, `ts` shows it and does not start the
+program. All of TypeScript runs, also an `enum` and a constructor
+parameter property such as `constructor(private name: string)`. Mindbug
+0.1.6 ran a TypeScript file with the option
+`--experimental-transform-types` of Node.js, and Node.js 26 removed that
+option, so such a program stopped with the error
+`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`. Mindbug itself now uses no option of
+Node.js. `ts` needs Node.js 22 or newer on the `PATH`.
 
 **The program runs in the terminal.** The debug type `ts` runs the
 program in the integrated terminal of VS Code, so `prompt()` can read the

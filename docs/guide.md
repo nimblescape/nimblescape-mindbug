@@ -8,7 +8,7 @@ The complete guide to Mindbug. The short overview is the [README](../README.md);
 
 - Visual Studio Code 1.125 or later. Mindbug uses the JavaScript debugger that is part of VS Code (`ms-vscode.js-debug`).
 - The extension [nimblescape TypeScript](https://marketplace.visualstudio.com/items?itemName=nimblescape.nimblescape-typescript) (`nimblescape.nimblescape-typescript`) 0.2.0 or newer. VS Code installs it together with Mindbug. Its debug type `ts` runs the program with the command `ts`, with the TypeScript compiler that VS Code uses, so the program needs no other package (see [The command ts](#the-command-ts)).
-- [Node.js](https://nodejs.org) on the `PATH`, for the command `ts`.
+- [Node.js](https://nodejs.org) 22 or newer on the `PATH`, for the command `ts`.
 - A trusted workspace. VS Code debugs a program only in a workspace that you trust, so Mindbug does not run in Restricted Mode.
 
 ## Install

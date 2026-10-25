@@ -4,12 +4,12 @@
 
 // The tests in a real VS Code (npm run test:vscode): @vscode/test-cli downloads VS Code to .vscode-test/, starts it
 // with the extension of the development build in dist/ and the folder examples/, and runs the bundled tests of
-// out/test/vscode/ (scripts/build-vscode-tests.mjs) with mocha in its extension host. The tests debug the examples
-// with the debug type "ts" of the extension nimblescape TypeScript, the extension dependency of Mindbug: test-cli
-// installs the pinned release of TS_EXTENSION from the Marketplace, or the VSIX file that MINDBUG_TS_VSIX names (for a
-// test before that release). Its command ts runs the programs with the Node.js of the PATH. VSCODE_TEST_VERSION
-// selects the VS Code version: "stable" (the default), "insiders" or a version such as 1.125.0. On Linux without a
-// display, run it under xvfb-run.
+// out/test/vscode/ (scripts/build-vscode-tests.mjs) with mocha in its extension host. The tests debug the examples with
+// the debug type "ts" of the extension nimblescape TypeScript, the extension dependency of Mindbug: test-cli installs
+// the pinned release of TS_EXTENSION from the Marketplace, or the VSIX file that MINDBUG_TS_VSIX names (for a test
+// before that release). Its command ts runs the programs with the Node.js of the PATH (22 or newer).
+// VSCODE_TEST_VERSION selects the VS Code version: "stable" (the default), "insiders" or a version such as 1.125.0. On
+// Linux without a display, run it under xvfb-run.
 import { defineConfig } from '@vscode/test-cli';
 
 /** The release of nimblescape TypeScript that the tests use, instead of the newest one of the Marketplace. */
