@@ -335,6 +335,8 @@ test('user frames: own files only', () => {
   assert.ok(!f('/p/node_modules/x/index.js'));
   assert.ok(!f(undefined));
   assert.ok(!f('/home/s/sort.ts', 'label'));
+  // The function of Node.js that runs a compiled CommonJS module of the command ts, in a run folder in /tmp.
+  assert.ok(!f('/tmp/nimblescape-ts-1234/out/home/s/sort.js', 'deemphasize'));
   // Deno's own code, as VS Code's JavaScript debugger names it: a relative path and a sourceReference.
   assert.ok(!f('deno_node/console.ts', undefined, 562595578));
   assert.ok(!f('runtime/90_deno_ns.js', undefined, 179477628));

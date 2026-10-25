@@ -138,14 +138,12 @@ async function debug(api: MindbugApi, start: Start, file: string, breakpointLine
     const snapshot = await first;
     if (start.mindbug) {
       // The debug type "mindbug" becomes a configuration of type "ts", and the debug type "ts" turns it into one of
-      // VS Code's JavaScript debugger that runs the command ts.
+      // VS Code's JavaScript debugger that runs the command ts with the file. The pause at the first statement
+      // (stopOnEntry) is checked by the first snapshot of each test.
       const config = sessions[0]?.configuration;
       assert.equal(sessions[0]?.type, 'pwa-node');
       assert.match(path.basename(String(config?.runtimeExecutable)), /^ts(\.cmd)?$/);
-      assert.equal(config?.program, file);
-      // The debug type "ts" implements stopOnEntry with the entry breakpoint of the JavaScript debugger: it replaces
-      // true with the path of the compiled program.
-      assert.ok(config?.stopOnEntry, 'stopOnEntry is on');
+      assert.equal(config?.args?.[0], file);
     }
     return snapshot;
   } finally {
@@ -936,8 +934,6 @@ describe('the Mindbug view in VS Code', () => {
   it('starts a program without a pause at its first line when the switch "Stop on entry" is off', async () => {
     const config = () => vscode.workspace.getConfiguration('nimblescape.mindbug');
     const file = path.join(examples(), 'blocks.ts');
-    const sessions: vscode.DebugSession[] = [];
-    const started = vscode.debug.onDidStartDebugSession((s) => sessions.push(s));
     try {
       await api.saveViewOption('stopOnEntry', false);
       assert.equal(config().inspect('stopOnEntry')?.globalValue, false);
@@ -948,11 +944,8 @@ describe('the Mindbug view in VS Code', () => {
       const first = api.nextSnapshot(TIMEOUT);
       assert.ok(await runWithMindbug(file), 'the debug session starts');
       const s = await first;
-      const launched = sessions.find((x) => x.type === 'pwa-node')?.configuration;
-      assert.ok(!launched?.stopOnEntry, 'stopOnEntry is off');
       assert.equal(top(s)?.line, 30, 'the first pause is the breakpoint');
     } finally {
-      started.dispose();
       vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
       await config().update('stopOnEntry', undefined, vscode.ConfigurationTarget.Global);
     }
