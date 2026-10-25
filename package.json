@@ -101,7 +101,7 @@
         "nimblescape.mindbug.nodePath": {
           "type": "string",
           "default": "node",
-          "markdownDescription": "Path to Node.js 22.7 or newer, with which **Run with Mindbug** and a launch configuration of type `mindbug` start the program. The default `node` works when Node.js is on the `PATH`. The Mindbug view works with every program that VS Code's JavaScript debugger runs, also when you start it with a launch configuration of another type."
+          "markdownDescription": "Path to Node.js 24 or newer, with which **Run with Mindbug** and a launch configuration of type `mindbug` start the program. The default `node` works when Node.js is on the `PATH`. The Mindbug view works with every program that VS Code's JavaScript debugger runs, also when you start it with a launch configuration of another type."
         },
         "nimblescape.mindbug.inspectPort": {
           "type": "number",

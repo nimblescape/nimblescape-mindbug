@@ -19,11 +19,12 @@ export interface LaunchSettings {
   stopOnEntry: boolean;
 }
 
-/** Node.js runs TypeScript files from version 22.7 on, with the option --experimental-transform-types. */
-export const MIN_NODE: [number, number] = [22, 7];
-
-/** Node.js 26 removed the option --experimental-transform-types: it only strips the types of a TypeScript file. */
-export const NODE_WITHOUT_TRANSFORM = 26;
+/**
+ * The oldest major version of Node.js that Mindbug starts: Node.js 24 has the synchronous module hooks
+ * (module.registerHooks) for the hooks of Mindbug (typeScriptHooks.ts), and strips the types of a TypeScript file
+ * without an option.
+ */
+export const MIN_NODE = 24;
 
 /** The environment variable with the TypeScript compiler for the hooks of Mindbug (typeScriptHooks.ts). */
 export const TYPESCRIPT_VARIABLE = 'NIMBLESCAPE_MINDBUG_TYPESCRIPT';
@@ -78,50 +79,22 @@ export function versionOf(program: string): Promise<string | undefined> {
   });
 }
 
-/** The major and minor number of a Node.js version (`node --version`, such as "v24.1.0"). */
-function nodeVersion(version: string): [number, number] | undefined {
-  const m = /^v?(\d+)\.(\d+)/.exec(version.trim());
-  return m ? [Number(m[1]), Number(m[2])] : undefined;
-}
-
-/** True for a Node.js version (`node --version`) that is `min` or newer. */
-function atLeast(version: string, min: [number, number]): boolean {
-  const v = nodeVersion(version);
-  if (!v) return false;
-  const [major, minor] = v;
-  return major > min[0] || (major === min[0] && minor >= min[1]);
-}
-
-/** True for a Node.js version (`node --version`, such as "v24.1.0") that runs TypeScript files. */
+/** True for a Node.js version (`node --version`, such as "v24.1.0") that Mindbug starts: MIN_NODE or newer. */
 export function nodeRunsTypeScript(version: string): boolean {
-  return atLeast(version, MIN_NODE);
+  const m = /^v?(\d+)\.\d+/.exec(version.trim());
+  return m !== null && Number(m[1]) >= MIN_NODE;
 }
 
 /**
- * True for a Node.js version that runs the hooks of Mindbug (typeScriptHooks.ts): it has synchronous module hooks
- * (module.registerHooks) and strips the types of a TypeScript file without an option. Node.js 22.18 and newer, 23.6
- * and newer, and 24 and later.
+ * How Node.js runs a TypeScript file. With a TypeScript compiler (`typescript`, its file typescript.js, see
+ * typeScriptCompiler), Node.js runs the hooks of Mindbug (`hooks`, the file dist/typeScriptHooks.js): they turn each
+ * TypeScript file into JavaScript with that compiler and the tsconfig.json of the file, so all of TypeScript runs, also
+ * enums and constructor parameter properties. Without a compiler, Node.js only strips the types and stops with the
+ * error ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX at an enum or a parameter property. Mindbug uses no experimental option of
+ * Node.js.
  */
-export function nodeRunsHooks(version: string): boolean {
-  const v = nodeVersion(version);
-  if (!v) return false;
-  const [major, minor] = v;
-  return major >= 24 || (major === 23 && minor >= 6) || (major === 22 && minor >= 18);
-}
-
-/**
- * How Node.js of `version` runs a TypeScript file. With a TypeScript compiler (`typescript`, its file typescript.js,
- * see typeScriptCompiler), Node.js runs the hooks of Mindbug (`hooks`, the file dist/typeScriptHooks.js): they turn
- * each TypeScript file into JavaScript with that compiler and the tsconfig.json of the file, so all of TypeScript runs,
- * also enums and constructor parameter properties. Without the hooks, Node.js 22.7 to 25 run the file with
- * --experimental-transform-types, which also runs enums and parameter properties. Node.js 26 and later only strip the
- * types and stop with the error ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX at an enum or a parameter property.
- */
-export function nodeTypeScript(version: string, typescript: string | undefined, hooks: string): NodeTypeScript {
-  if (typescript && nodeRunsHooks(version)) return { args: ['--require', hooks], env: { [TYPESCRIPT_VARIABLE]: typescript } };
-  const major = nodeVersion(version)?.[0] ?? 0;
-  const args = major < NODE_WITHOUT_TRANSFORM ? ['--experimental-transform-types', '--disable-warning=ExperimentalWarning'] : [];
-  return { args, env: {} };
+export function nodeTypeScript(typescript: string | undefined, hooks: string): NodeTypeScript {
+  return typescript ? { args: ['--require', hooks], env: { [TYPESCRIPT_VARIABLE]: typescript } } : { args: [], env: {} };
 }
 
 /**
@@ -150,11 +123,11 @@ export function typeScriptCompiler(
 /** The version of Node.js (`node --version`), or the reason why it cannot run the program (a message for the student). */
 export type NodeChoice = { version: string } | { problem: string };
 
-/** The Node.js of the settings, after a check that it runs TypeScript files. */
+/** The Node.js of the settings, after a check that it is Node.js MIN_NODE or newer. */
 export async function findNode(s: LaunchSettings, version = versionOf): Promise<NodeChoice> {
   const node = await version(s.nodePath);
   if (node && nodeRunsTypeScript(node)) return { version: node };
-  const minNode = `Node.js ${MIN_NODE.join('.')} or newer`;
-  const found = node ? `"${s.nodePath}" is Node.js ${node}, which cannot run TypeScript files` : `did not find "${s.nodePath}"`;
+  const minNode = `Node.js ${MIN_NODE} or newer`;
+  const found = node ? `"${s.nodePath}" is Node.js ${node}, which is too old` : `did not find "${s.nodePath}"`;
   return { problem: `Mindbug needs ${minNode} and ${found}. Install it, or set "nimblescape.mindbug.nodePath".` };
 }

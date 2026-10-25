@@ -4,7 +4,8 @@
 
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { compilerOptions, moduleFormat, type TypeScript } from '../../src/typeScriptHooks.ts';
+import * as path from 'node:path';
+import { compilerOptions, moduleFormat, packageJsonOf, type TypeScript } from '../../src/typeScriptHooks.ts';
 
 test('the format of a TypeScript file, as Node.js decides it', () => {
   const never = () => assert.fail('the syntax decides only without "type"');
@@ -15,6 +16,19 @@ test('the format of a TypeScript file, as Node.js decides it', () => {
   // Without "type": an ES module with `import` or `export`, else a CommonJS module.
   assert.equal(moduleFormat('/a/main.ts', undefined, () => true), 'esm');
   assert.equal(moduleFormat('/a/main.ts', undefined, () => false), 'cjs');
+});
+
+test('the package.json of a file, as Node.js finds it', () => {
+  const files = (...list: string[]) => (file: string) => list.map((f) => path.resolve(f)).includes(file);
+  const main = path.resolve('/course/20-assignments/01/main.ts');
+  // The first package.json in the folder of the file or above it.
+  const own = path.resolve('/course/20-assignments/01/package.json');
+  assert.equal(packageJsonOf(main, files(own, '/course/package.json')), own);
+  assert.equal(packageJsonOf(main, files('/course/package.json')), path.resolve('/course/package.json'));
+  assert.equal(packageJsonOf(main, files()), undefined);
+  // The search ends at a folder named node_modules.
+  const inPackage = path.resolve('/course/node_modules/lib/index.ts');
+  assert.equal(packageJsonOf(inPackage, files('/course/node_modules/package.json', '/course/package.json')), undefined);
 });
 
 test('the options of the project, with the changes that a run in memory needs', () => {

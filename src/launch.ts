@@ -97,7 +97,7 @@ export class MindbugConfigurationProvider implements vscode.DebugConfigurationPr
     }
     const program = c.program ?? '${file}';
     const cwd = c.cwd ?? folder?.uri.fsPath ?? '${fileDirname}';
-    const typeScript = nodeTypeScript(node.version, vscodeTypeScript(folder), this.hooks);
+    const typeScript = nodeTypeScript(vscodeTypeScript(folder), this.hooks);
     return { ...debugConfiguration(program, cwd, settings, typeScript), name: c.name || 'Mindbug' };
   }
 }

@@ -8,7 +8,6 @@ import * as path from 'node:path';
 import {
   debugConfiguration,
   findNode,
-  nodeRunsHooks,
   nodeRunsTypeScript,
   nodeTypeScript,
   typeScriptCompiler,
@@ -19,45 +18,29 @@ import { TYPESCRIPT_VARIABLE as HOOKS_VARIABLE } from '../../src/typeScriptHooks
 
 const settings: LaunchSettings = { nodePath: 'node', port: 9229, stopOnEntry: true };
 
-test('Node.js runs TypeScript files from version 22.7 on', () => {
-  assert.ok(nodeRunsTypeScript('v24.20.0'));
-  assert.ok(nodeRunsTypeScript('v22.7.0'));
-  assert.ok(nodeRunsTypeScript('23.0.0'));
-  assert.ok(!nodeRunsTypeScript('v22.6.0'));
-  assert.ok(!nodeRunsTypeScript('v20.19.1'));
-  assert.ok(!nodeRunsTypeScript('deno 2.9.7'));
+test('Mindbug starts Node.js 24 and newer', () => {
+  for (const version of ['v24.0.0', 'v24.22.0', '25.9.0', 'v26.12.1', 'v27.1.0']) assert.ok(nodeRunsTypeScript(version), version);
+  for (const version of ['v23.11.1', 'v22.22.0', 'v22.7.0', 'v20.19.1', 'deno 2.9.7']) assert.ok(!nodeRunsTypeScript(version), version);
 });
 
-test('Mindbug takes the Node.js of the settings when it runs TypeScript', async () => {
+test('Mindbug takes the Node.js of the settings when it is Node.js 24 or newer', async () => {
   const versions = (found: Record<string, string>) => async (program: string) => found[program];
   assert.deepEqual(await findNode(settings, versions({ node: 'v26.1.0' })), { version: 'v26.1.0' });
-  assert.deepEqual(await findNode({ ...settings, nodePath: '/opt/node' }, versions({ '/opt/node': 'v22.7.0' })), { version: 'v22.7.0' });
-  const old = await findNode(settings, versions({ node: 'v20.19.1' }));
-  assert.ok('problem' in old && old.problem.includes('Node.js v20.19.1'), 'Node.js 20 cannot run TypeScript');
+  assert.deepEqual(await findNode({ ...settings, nodePath: '/opt/node' }, versions({ '/opt/node': 'v24.0.0' })), { version: 'v24.0.0' });
+  const old = await findNode(settings, versions({ node: 'v22.22.0' }));
+  assert.ok('problem' in old && old.problem.includes('Node.js 24 or newer'), 'Mindbug names the version it needs');
+  assert.ok('problem' in old && old.problem.includes('Node.js v22.22.0'), 'Mindbug does not start Node.js 22');
   const none = await findNode({ ...settings, nodePath: '/opt/node' }, versions({}));
   assert.ok('problem' in none && none.problem.includes('did not find "/opt/node"'));
 });
 
-test('Node.js runs the hooks of Mindbug from version 22.18, 23.6 and 24 on', () => {
-  for (const version of ['v22.18.0', 'v22.22.0', 'v23.6.0', 'v24.0.0', 'v24.22.0', 'v25.9.0', 'v26.0.0', 'v27.1.0']) {
-    assert.ok(nodeRunsHooks(version), version);
-  }
-  for (const version of ['v22.7.0', 'v22.17.1', 'v23.5.0', 'v20.19.1', 'deno 2.9.7']) assert.ok(!nodeRunsHooks(version), version);
-});
-
-test('Node.js runs TypeScript with the hooks and the compiler of VS Code, else with its own options', () => {
+test('Node.js runs TypeScript with the hooks and the compiler of VS Code, else it only strips the types', () => {
   const typescript = path.resolve('/vscode/extensions/node_modules/typescript/lib/typescript.js');
   const hooks = path.resolve('/ext/dist/typeScriptHooks.js');
   assert.equal(TYPESCRIPT_VARIABLE, HOOKS_VARIABLE, 'the hooks read the variable that Mindbug sets');
-  for (const version of ['v22.18.0', 'v24.22.0', 'v26.0.0', 'v26.12.1']) {
-    assert.deepEqual(nodeTypeScript(version, typescript, hooks), { args: ['--require', hooks], env: { [TYPESCRIPT_VARIABLE]: typescript } });
-  }
-  // Without the hooks, Node.js 22.7 to 25 run enums and parameter properties with --experimental-transform-types.
-  const transform = { args: ['--experimental-transform-types', '--disable-warning=ExperimentalWarning'], env: {} };
-  assert.deepEqual(nodeTypeScript('v22.17.0', typescript, hooks), transform);
-  for (const version of ['v22.7.0', 'v24.22.0', 'v25.9.0']) assert.deepEqual(nodeTypeScript(version, undefined, hooks), transform);
-  // Node.js 26 removed the option, and only strips the types.
-  for (const version of ['v26.0.0', 'v27.2.1']) assert.deepEqual(nodeTypeScript(version, undefined, hooks), { args: [], env: {} });
+  assert.deepEqual(nodeTypeScript(typescript, hooks), { args: ['--require', hooks], env: { [TYPESCRIPT_VARIABLE]: typescript } });
+  // No experimental option of Node.js.
+  assert.deepEqual(nodeTypeScript(undefined, hooks), { args: [], env: {} });
 });
 
 test('the TypeScript compiler of VS Code: the setting js/ts.tsdk.path, then typescript.tsdk, then the TypeScript of VS Code', () => {

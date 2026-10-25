@@ -10,7 +10,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as esbuild from 'esbuild';
-import { nodeTypeScript, type NodeTypeScript } from '../../src/runtime.ts';
+import { nodeRunsTypeScript, nodeTypeScript, type NodeTypeScript } from '../../src/runtime.ts';
 
 /** The TypeScript compiler that VS Code ships, from the VS Code in .vscode-test/, or undefined. */
 export function vscodeTypeScript(): string | undefined {
@@ -40,13 +40,10 @@ export function hooksFile(): string {
 
 /** The options and the environment variables with which Mindbug runs a TypeScript file in this Node.js. */
 export function mindbugNode(): NodeTypeScript {
-  return nodeTypeScript(process.version, vscodeTypeScript(), hooksFile());
+  return nodeTypeScript(vscodeTypeScript(), hooksFile());
 }
 
-/**
- * True when this Node.js runs all of TypeScript as Mindbug runs it: with the hooks and a compiler, or with
- * --experimental-transform-types (Node.js 22.7 to 25).
- */
+/** True when this Node.js runs all of TypeScript as Mindbug runs it: Node.js 24 or newer, with the hooks and a compiler. */
 export function runsAllOfTypeScript(): boolean {
-  return mindbugNode().args.length > 0;
+  return nodeRunsTypeScript(process.version) && vscodeTypeScript() !== undefined;
 }

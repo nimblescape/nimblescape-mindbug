@@ -13,7 +13,7 @@
 // compiler comes from VS Code or from the project, and nothing else of Mindbug runs in the program.
 
 import * as fs from 'node:fs';
-import { findPackageJSON, registerHooks } from 'node:module';
+import { registerHooks } from 'node:module';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -105,7 +105,7 @@ export function typeScriptHooks(ts: TypeScript): { load: Parameters<typeof regis
   const formatOf = (url: string, file: string): 'esm' | 'cjs' => {
     let format = formats.get(url);
     if (!format) {
-      const packageJson = findPackageJSON(url);
+      const packageJson = packageJsonOf(file);
       format = moduleFormat(file, packageJson ? packageType(packageJson) : undefined, () =>
         ts.isExternalModule(ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.ESNext, false, ts.ScriptKind.TS)),
       );
@@ -153,6 +153,20 @@ function typeScriptFile(url: string): string | undefined {
   if (!url.startsWith('file:')) return undefined;
   const file = fileURLToPath(url);
   return /\.[cm]?ts$/.test(file) && !/\.d\.[cm]?ts$/.test(file) ? file : undefined;
+}
+
+/**
+ * The package.json file that decides the "type" of `file`, as Node.js finds it: the first package.json in the folder of
+ * the file or in a folder above it. The search ends at a folder named node_modules, and at the root. `exists` gives
+ * the file system to the unit tests. Mindbug does not use module.findPackageJSON of Node.js, which is not stable yet.
+ */
+export function packageJsonOf(file: string, exists: (file: string) => boolean = fs.existsSync): string | undefined {
+  for (let folder = path.dirname(file); path.basename(folder) !== 'node_modules'; folder = path.dirname(folder)) {
+    const packageJson = path.join(folder, 'package.json');
+    if (exists(packageJson)) return packageJson;
+    if (path.dirname(folder) === folder) return undefined;
+  }
+  return undefined;
 }
 
 /** The "type" of a package.json file, or undefined. */

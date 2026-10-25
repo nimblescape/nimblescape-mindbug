@@ -11,7 +11,7 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { nodeRunsHooks } from '../../src/runtime.ts';
+import { nodeRunsTypeScript } from '../../src/runtime.ts';
 import { TYPESCRIPT_VARIABLE } from '../../src/typeScriptHooks.ts';
 import { hooksFile, vscodeTypeScript } from './typeScript.ts';
 
@@ -45,7 +45,7 @@ const GREET = `export function greet(name: string): string {
 const typescript = vscodeTypeScript();
 const hooks = hooksFile();
 
-test.skipIf(!typescript || !nodeRunsHooks(process.version))('Node.js runs enums and parameter properties with the hooks', () => {
+test.skipIf(!typescript || !nodeRunsTypeScript(process.version))('Node.js runs enums and parameter properties with the hooks', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mindbug-hooks-'));
   try {
     const env = { ...process.env, [TYPESCRIPT_VARIABLE]: typescript };
