@@ -143,7 +143,9 @@ async function debug(api: MindbugApi, start: Start, file: string, breakpointLine
       assert.equal(sessions[0]?.type, 'pwa-node');
       assert.match(path.basename(String(config?.runtimeExecutable)), /^ts(\.cmd)?$/);
       assert.equal(config?.program, file);
-      assert.equal(config?.stopOnEntry, true);
+      // The debug type "ts" implements stopOnEntry with the entry breakpoint of the JavaScript debugger: it replaces
+      // true with the path of the compiled program.
+      assert.ok(config?.stopOnEntry, 'stopOnEntry is on');
     }
     return snapshot;
   } finally {
@@ -168,7 +170,8 @@ async function closeTextEditors(): Promise<void> {
 
 async function stop(): Promise<void> {
   const ended = new Promise<void>((resolve) => {
-    const d = vscode.debug.onDidTerminateDebugSession(() => {
+    const d = vscode.debug.onDidTerminateDebugSession((session) => {
+      if (session.parentSession) return;
       d.dispose();
       resolve();
     });
@@ -841,8 +844,11 @@ function recordTopFrames(): { files: string[]; dispose(): void } {
 async function stepsToTheEnd(api: MindbugApi, start: Start): Promise<void> {
   const file = path.join(examples(), 'end-test.ts');
   fs.writeFileSync(file, END_PROGRAM);
+  // The end of the root session: the debug type "ts" also has child sessions, for the command ts, for tsc and for
+  // the program, and the session of tsc ends before the program starts.
   const ended = new Promise<undefined>((resolve) => {
-    const d = vscode.debug.onDidTerminateDebugSession(() => {
+    const d = vscode.debug.onDidTerminateDebugSession((session) => {
+      if (session.parentSession) return;
       d.dispose();
       resolve(undefined);
     });
@@ -943,7 +949,7 @@ describe('the Mindbug view in VS Code', () => {
       assert.ok(await runWithMindbug(file), 'the debug session starts');
       const s = await first;
       const launched = sessions.find((x) => x.type === 'pwa-node')?.configuration;
-      assert.equal(launched?.stopOnEntry, false);
+      assert.ok(!launched?.stopOnEntry, 'stopOnEntry is off');
       assert.equal(top(s)?.line, 30, 'the first pause is the breakpoint');
     } finally {
       started.dispose();
