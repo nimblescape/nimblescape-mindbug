@@ -8,7 +8,7 @@ The complete guide to Mindbug. The short overview is the [README](../README.md);
 
 - Visual Studio Code 1.125 or later. Mindbug uses the JavaScript debugger that is part of VS Code (`ms-vscode.js-debug`); it needs no other extension.
 - One of these runtimes:
-  - [Node.js](https://nodejs.org) 22.7 or newer, on the `PATH` or at the path of the setting `nimblescape.mindbug.nodePath`. Node.js runs the TypeScript file with the hooks of Mindbug and the TypeScript compiler that VS Code uses, so the program needs no other package (see [Runtimes](#runtimes)).
+  - [Node.js](https://nodejs.org) 24 or newer, on the `PATH` or at the path of the setting `nimblescape.mindbug.nodePath`. Node.js runs the TypeScript file with the hooks of Mindbug and the TypeScript compiler that VS Code uses, so the program needs no other package (see [Runtimes](#runtimes)).
   - [Deno 2](https://docs.deno.com/runtime/getting_started/installation/), on the `PATH` or at the path of the setting `nimblescape.mindbug.denoPath`.
 - A trusted workspace. VS Code debugs a program only in a workspace that you trust, so Mindbug does not run in Restricted Mode.
 
@@ -131,13 +131,12 @@ When an own launch configuration of type `node` starts Deno (`"runtimeExecutable
 
 ## Runtimes
 
-With the runtime `auto` (the default), Mindbug takes Node.js when `node --version` shows version 22.7 or newer, else Deno when `deno --version` runs. For a program of a Deno project, a folder with a `deno.json` or `deno.jsonc` file or a folder below it, Mindbug takes Deno first and Node.js only when Deno is not installed. With `deno` or `node`, it takes only that runtime. When it finds no runtime, a message says what is missing, and the program does not start.
+With the runtime `auto` (the default), Mindbug takes Node.js when `node --version` shows version 24 or newer, else Deno when `deno --version` runs. For a program of a Deno project, a folder with a `deno.json` or `deno.jsonc` file or a folder below it, Mindbug takes Deno first and Node.js only when Deno is not installed. With `deno` or `node`, it takes only that runtime. When it finds no runtime, a message says what is missing, and the program does not start.
 
 | Runtime | Command that the debugger runs |
 | --- | --- |
 | Deno | `deno run --inspect-brk=127.0.0.1:<port> --allow-all <file>` |
-| Node.js 22.18 or newer | `node --inspect-brk=127.0.0.1:<port> --require <hooks> <file>`, where `<hooks>` is the file `dist/typeScriptHooks.js` of the extension, and the environment variable `NIMBLESCAPE_MINDBUG_TYPESCRIPT` names the compiler. The hooks remove this variable before the program starts. |
-| Node.js 22.7 to 22.17 | `node --inspect-brk=127.0.0.1:<port> --experimental-transform-types --disable-warning=ExperimentalWarning <file>` |
+| Node.js 24 or newer | `node --inspect-brk=127.0.0.1:<port> --require <hooks> <file>`, where `<hooks>` is the file `dist/typeScriptHooks.js` of the extension, and the environment variable `NIMBLESCAPE_MINDBUG_TYPESCRIPT` names the compiler. The hooks remove this variable before the program starts. |
 
 `<port>` is the setting `nimblescape.mindbug.inspectPort` (9229). With `stopOnEntry` off, the option is `--inspect-wait` instead of `--inspect-brk`: the program waits for the debugger, but does not pause at its first line. The runtime waits for the debugger on `127.0.0.1` only, so no other computer can connect to it. The JavaScript debugger reads the source map of the runtime, so the debugger and the view show the lines of your TypeScript file.
 
@@ -145,9 +144,9 @@ With `--allow-all`, Deno gives the program all the rights of your user, as Node.
 
 ### TypeScript in Node.js
 
-Node.js only strips the types of a TypeScript file. It stops with the error `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` at TypeScript code that is more than types: an `enum`, a constructor parameter property such as `constructor(private name: string)`, or a `namespace` with code. Node.js 22.7 to 25 also run such code with the option `--experimental-transform-types`, but Node.js 26 removed this option.
+Node.js only strips the types of a TypeScript file. It stops with the error `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` at TypeScript code that is more than types: an `enum`, a constructor parameter property such as `constructor(private name: string)`, or a `namespace` with code. Node.js 22.7 to 25 also run such code with the experimental option `--experimental-transform-types`, but Node.js 26 removed this option.
 
-So Mindbug starts Node.js 22.18 and newer with its own hooks: the file `dist/typeScriptHooks.js` of the extension, which Node.js loads with `--require` before the first line of the program. The hooks register a hook for the module loader of Node.js (`module.registerHooks`). It turns each TypeScript file (`.ts`, `.mts`, `.cts`) into JavaScript in memory before Node.js runs it, with the TypeScript compiler that VS Code uses and with the options of the `tsconfig.json` of the file. The hooks change only the options that a run in memory needs: the module format, which Node.js decides from the extension of the file and the field `type` of its `package.json`, no output files (also with `noEmit`), and a source map in the JavaScript, so that the debugger and the view show your TypeScript file. Mindbug writes no file, and the program needs no other package. A syntax error stops the program with a `SyntaxError` that names the file, the line, the column and the message of TypeScript.
+So Mindbug starts Node.js with its own hooks: the file `dist/typeScriptHooks.js` of the extension, which Node.js loads with `--require` before the first line of the program. The hooks register a hook for the module loader of Node.js (`module.registerHooks`). It turns each TypeScript file (`.ts`, `.mts`, `.cts`) into JavaScript in memory before Node.js runs it, with the TypeScript compiler that VS Code uses and with the options of the `tsconfig.json` of the file. The hooks change only the options that a run in memory needs: the module format, which Node.js decides from the extension of the file and the field `type` of its `package.json`, no output files (also with `noEmit`), and a source map in the JavaScript, so that the debugger and the view show your TypeScript file. Mindbug writes no file, and the program needs no other package. A syntax error stops the program with a `SyntaxError` that names the file, the line, the column and the message of TypeScript.
 
 Mindbug takes the TypeScript compiler (the file `typescript.js` in the folder `lib` of a TypeScript package) in this order:
 
@@ -157,7 +156,7 @@ Mindbug takes the TypeScript compiler (the file `typescript.js` in the folder `l
 
 A relative folder is relative to the workspace folder. Mindbug skips a folder without `typescript.js`, for example the folder of TypeScript 7, which has no compiler in JavaScript. Mindbug reads the settings also from the settings of the workspace (`.vscode/settings.json`), so it takes the TypeScript of the project also when you did not choose **Use Workspace Version** in VS Code.
 
-When Mindbug finds no compiler, Node.js 22.18 to 25 also run the file with `--experimental-transform-types`, and Node.js 26 and later only strip its types.
+When Mindbug finds no compiler, Node.js only strips the types of the file. Mindbug uses no experimental option of Node.js.
 
 ## Settings
 
@@ -165,7 +164,7 @@ When Mindbug finds no compiler, Node.js 22.18 to 25 also run the file with `--ex
 | --- | --- | --- |
 | `nimblescape.mindbug.runtime` | `auto` | The runtime of **Run with Mindbug** and of a launch configuration of type `mindbug`: `auto` (Node.js, else Deno; Deno first for a program in a folder with `deno.json` or `deno.jsonc`), `deno` or `node`. The attribute `runtime` of a launch configuration wins over this setting. |
 | `nimblescape.mindbug.denoPath` | `deno` | Path to the Deno program. The default works when Deno is on the `PATH`. |
-| `nimblescape.mindbug.nodePath` | `node` | Path to Node.js 22.7 or newer. The default works when Node.js is on the `PATH`. |
+| `nimblescape.mindbug.nodePath` | `node` | Path to Node.js 24 or newer. The default works when Node.js is on the `PATH`. |
 | `nimblescape.mindbug.inspectPort` | `9229` | Port on which Deno or Node.js waits for the debugger. Change it when another program uses port 9229. |
 | `nimblescape.mindbug.stopOnEntry` | `true` | Pause at the first line of the program, so that you can step from the start. The switch **Stop on entry** of the view changes it. |
 | `nimblescape.mindbug.openAutomatically` | `true` | Open the Mindbug view at the first pause of a debug session. |
@@ -212,7 +211,7 @@ The folder [examples](../examples) has nine small programs:
 
 | Problem | What to do |
 | --- | --- |
-| "Mindbug did not find Deno" or "Mindbug needs Deno or Node.js 22.7 or newer" | Install Deno or Node.js 22.7 or newer, or set `nimblescape.mindbug.denoPath` or `nimblescape.mindbug.nodePath` to the full path of the program. Restart VS Code after an installation, so that it sees the new `PATH`. |
+| "Mindbug did not find Deno" or "Mindbug needs Deno or Node.js 24 or newer" | Install Deno or Node.js 24 or newer, or set `nimblescape.mindbug.denoPath` or `nimblescape.mindbug.nodePath` to the full path of the program. Restart VS Code after an installation, so that it sees the new `PATH`. |
 | The Debug Console shows `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`, for example "TypeScript enum is not supported in strip-only mode" | Node.js 26 or later ran the program without a TypeScript compiler, so it only stripped the types: Mindbug found no `typescript.js` (see [TypeScript in Node.js](#typescript-in-nodejs)). Install TypeScript 5 or 6 in the project (`npm install --save-dev typescript@6`) and set `js/ts.tsdk.path` to `node_modules/typescript/lib`, or run the program with Deno. |
 | The program does not start, and the Debug Console says that the address is in use | Another program uses port 9229. Set `nimblescape.mindbug.inspectPort` to another port, for example 9230. |
 | The view does not open | Run **Open Mindbug** while the program is paused, or turn on `nimblescape.mindbug.openAutomatically`. |

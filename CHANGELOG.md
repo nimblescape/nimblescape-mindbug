@@ -10,15 +10,22 @@ option `--experimental-transform-types`, with which Mindbug ran a
 TypeScript file in Node.js. Node.js 26 only strips the types, so a program
 with an `enum` or a constructor parameter property such as
 `constructor(private name: string)` stopped with the error
-`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`. Mindbug now starts Node.js 22.18 and
-newer with its own hooks for the module loader of Node.js. The hooks turn
+`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`. Mindbug now starts Node.js with its
+own hooks for the module loader of Node.js. The hooks turn
 each TypeScript file into JavaScript in memory, with the TypeScript
 compiler that VS Code uses and with the options of the `tsconfig.json` of
 the project. The compiler is the one of the setting `js/ts.tsdk.path`,
 then of the older setting `typescript.tsdk`, else the TypeScript that
 VS Code ships. So the program needs no other package, and all of
-TypeScript runs. Node.js 22.7 to 22.17 run the program with
-`--experimental-transform-types`, as before.
+TypeScript runs. Mindbug uses no experimental option of Node.js any more.
+
+**Node.js 24 or newer.** Mindbug now starts Node.js 24 and newer, not
+Node.js 22 and 23: Node.js 24 is the oldest version that has the module
+hooks of Mindbug and strips the types of a TypeScript file without an
+option. With Node.js 22 or 23, **Run with Mindbug** shows a message that
+names the version that Mindbug needs, or, with the runtime `auto`, takes
+Deno when it is installed. A launch configuration of type `node` is not
+changed: the view shows its program with every version of Node.js.
 
 **The runtime `auto` prefers Node.js.** With the runtime `auto` (the
 default), Mindbug now takes Node.js when it is installed, and Deno only

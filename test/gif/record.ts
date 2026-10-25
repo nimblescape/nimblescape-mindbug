@@ -11,7 +11,7 @@
 //   xvfb-run -a -s "-screen 0 1440x816x24" npm run gif
 //
 // Linux only: it needs Xvfb (or another X display), ffmpeg with x11grab and drawtext, xdotool, the font Inter
-// (fc-match finds it; Debian and Ubuntu: fonts-inter), and Deno or Node.js 22.7 or newer on the PATH. It builds the
+// (fc-match finds it; Debian and Ubuntu: fonts-inter), and Deno or Node.js 24 or newer on the PATH. It builds the
 // package (npm run package), packs the driver as a second extension, downloads VS Code to .vscode-test/, installs both
 // extensions into a new profile in test/gif/output/, and writes test/gif/output/mindbug-run.gif. Copy it to
 // docs/images/ after a check.

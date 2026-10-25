@@ -107,9 +107,9 @@
             "node"
           ],
           "enumDescriptions": [
-            "Node.js 22.7 or newer when it is installed, else Deno. For a program in a folder with deno.json or deno.jsonc: Deno when it is installed, else Node.js.",
+            "Node.js 24 or newer when it is installed, else Deno. For a program in a folder with deno.json or deno.jsonc: Deno when it is installed, else Node.js.",
             "Deno, the program of the setting nimblescape.mindbug.denoPath.",
-            "Node.js 22.7 or newer, the program of the setting nimblescape.mindbug.nodePath, with the TypeScript compiler of VS Code."
+            "Node.js 24 or newer, the program of the setting nimblescape.mindbug.nodePath, with the TypeScript compiler of VS Code."
           ],
           "default": "auto",
           "markdownDescription": "The runtime that **Run with Mindbug** and a launch configuration of type `mindbug` start the program with (the attribute `runtime` of the launch configuration wins over this setting). The Mindbug view works with every runtime that VS Code's JavaScript debugger runs, also when you start the program with a launch configuration of another type."
@@ -117,7 +117,7 @@
         "nimblescape.mindbug.nodePath": {
           "type": "string",
           "default": "node",
-          "markdownDescription": "Path to Node.js 22.7 or newer, used when the runtime is `node` or `auto`. The default `node` works when Node.js is on the `PATH`."
+          "markdownDescription": "Path to Node.js 24 or newer, used when the runtime is `node` or `auto`. The default `node` works when Node.js is on the `PATH`."
         },
         "nimblescape.mindbug.denoPath": {
           "type": "string",
@@ -259,9 +259,9 @@
                   "node"
                 ],
                 "enumDescriptions": [
-                  "Node.js 22.7 or newer when it is installed, else Deno; Deno first for a program in a folder with deno.json or deno.jsonc.",
+                  "Node.js 24 or newer when it is installed, else Deno; Deno first for a program in a folder with deno.json or deno.jsonc.",
                   "Deno (setting nimblescape.mindbug.denoPath).",
-                  "Node.js 22.7 or newer (setting nimblescape.mindbug.nodePath), with the TypeScript compiler of VS Code."
+                  "Node.js 24 or newer (setting nimblescape.mindbug.nodePath), with the TypeScript compiler of VS Code."
                 ],
                 "description": "The runtime that runs the program. The default is the setting nimblescape.mindbug.runtime."
               },

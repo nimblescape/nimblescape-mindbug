@@ -9,8 +9,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as esbuild from 'esbuild';
-import { nodeRunsHooks } from '../../src/runtime.ts';
-import { compilerOptions, moduleFormat, type TypeScript, TYPESCRIPT_VARIABLE } from '../../src/typeScriptHooks.ts';
+import { nodeRunsTypeScript } from '../../src/runtime.ts';
+import { compilerOptions, moduleFormat, packageJsonOf, type TypeScript, TYPESCRIPT_VARIABLE } from '../../src/typeScriptHooks.ts';
 
 test('the format of a TypeScript file, as Node.js decides it', () => {
   const never = () => assert.fail('the syntax decides only without "type"');
@@ -21,6 +21,19 @@ test('the format of a TypeScript file, as Node.js decides it', () => {
   // Without "type": an ES module with `import` or `export`, else a CommonJS module.
   assert.equal(moduleFormat('/a/main.ts', undefined, () => true), 'esm');
   assert.equal(moduleFormat('/a/main.ts', undefined, () => false), 'cjs');
+});
+
+test('the package.json of a file, as Node.js finds it', () => {
+  const files = (...list: string[]) => (file: string) => list.map((f) => path.resolve(f)).includes(file);
+  const main = path.resolve('/course/20-assignments/01/main.ts');
+  // The first package.json in the folder of the file or above it.
+  const own = path.resolve('/course/20-assignments/01/package.json');
+  assert.equal(packageJsonOf(main, files(own, '/course/package.json')), own);
+  assert.equal(packageJsonOf(main, files('/course/package.json')), path.resolve('/course/package.json'));
+  assert.equal(packageJsonOf(main, files()), undefined);
+  // The search ends at a folder named node_modules.
+  const inPackage = path.resolve('/course/node_modules/lib/index.ts');
+  assert.equal(packageJsonOf(inPackage, files('/course/node_modules/package.json', '/course/package.json')), undefined);
 });
 
 test('the options of the project, with the changes that a run in memory needs', () => {
@@ -89,7 +102,7 @@ const GREET = `export function greet(name: string): string {
 
 const typescript = vscodeTypeScript();
 
-test.skipIf(!typescript || !nodeRunsHooks(process.version))('Node.js runs enums and parameter properties with the hooks', () => {
+test.skipIf(!typescript || !nodeRunsTypeScript(process.version))('Node.js runs enums and parameter properties with the hooks', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mindbug-hooks-'));
   try {
     // The hooks as the package has them (dist/typeScriptHooks.js, built by esbuild.mjs).

@@ -126,7 +126,7 @@ export class MindbugConfigurationProvider implements vscode.DebugConfigurationPr
       void vscode.window.showErrorMessage(choice.problem);
       return undefined;
     }
-    const typeScript = choice.runtime === 'node' ? nodeTypeScript(choice.version, vscodeTypeScript(folder), this.hooks) : undefined;
+    const typeScript = choice.runtime === 'node' ? nodeTypeScript(vscodeTypeScript(folder), this.hooks) : undefined;
     return { ...debugConfiguration(program, cwd, choice.runtime, settings, typeScript), name: c.name || 'Mindbug' };
   }
 }
