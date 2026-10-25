@@ -35,7 +35,7 @@ function isRestart(m: any): boolean {
 }
 
 /**
- * The debug types of VS Code's JavaScript debugger for Node.js and Deno, whose sessions the view follows: "pwa-node"
+ * The debug types of VS Code's JavaScript debugger for Node.js, whose sessions the view follows: "pwa-node"
  * (also the session of a configuration of type "mindbug", and the child session that runs the program), "node" and
  * "node-terminal" (the JavaScript Debug Terminal). The helper of src/heapWalker.ts is JavaScript, so the sessions of
  * other debuggers, for example of Python or Go, get no request of Mindbug.

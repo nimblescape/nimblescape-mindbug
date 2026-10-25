@@ -5,7 +5,8 @@
 // The statement of a block scope, from the code where V8 says that the scope starts. The positions are the ones that
 // V8 gives (tested with Deno 2.9 and Node.js 22): the `{` of a block, a place in the header of a for loop, the `(` of
 // a catch clause, and the word switch. Deno runs the code that it made from the TypeScript file (`for(`, `while(w < 1){`); Node.js runs the
-// TypeScript file with the types replaced by spaces, so the spaces of the student stay.
+// code of the TypeScript compiler (`for (`, `while (w < 1) {`), or, with --experimental-transform-types, the TypeScript file with the
+// types replaced by spaces, so the spaces of the student stay.
 
 import { test } from 'vitest';
 import assert from 'node:assert/strict';

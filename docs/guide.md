@@ -2,14 +2,13 @@
 
 The complete guide to Mindbug. The short overview is the [README](../README.md); how Mindbug works inside is in [architecture.md](architecture.md), and the security model in [security.md](security.md).
 
-**Contents:** [Requirements](#requirements) · [Install](#install) · [First steps](#first-steps) · [The Mindbug view](#the-mindbug-view) · [Step history](#step-history) · [Commands](#commands) · [Launch configurations](#launch-configurations) · [Runtimes](#runtimes) · [Settings](#settings) · [Examples](#examples) · [Known limits](#known-limits) · [Troubleshooting](#troubleshooting) · [Uninstall](#uninstall) · [Build from source](#build-from-source)
+**Contents:** [Requirements](#requirements) · [Install](#install) · [First steps](#first-steps) · [The Mindbug view](#the-mindbug-view) · [Step history](#step-history) · [Commands](#commands) · [Launch configurations](#launch-configurations) · [The command ts](#the-command-ts) · [Settings](#settings) · [Examples](#examples) · [Known limits](#known-limits) · [Troubleshooting](#troubleshooting) · [Uninstall](#uninstall) · [Build from source](#build-from-source)
 
 ## Requirements
 
-- Visual Studio Code 1.125 or later. Mindbug uses the JavaScript debugger that is part of VS Code (`ms-vscode.js-debug`); it needs no other extension.
-- One of these runtimes:
-  - [Deno 2](https://docs.deno.com/runtime/getting_started/installation/), on the `PATH` or at the path of the setting `nimblescape.mindbug.denoPath`.
-  - [Node.js](https://nodejs.org) 22.7 or newer, on the `PATH` or at the path of the setting `nimblescape.mindbug.nodePath`. Node.js runs a TypeScript file from version 22.7 on, with the option `--experimental-transform-types`.
+- Visual Studio Code 1.125 or later. Mindbug uses the JavaScript debugger that is part of VS Code (`ms-vscode.js-debug`).
+- The extension [nimblescape TypeScript](https://marketplace.visualstudio.com/items?itemName=nimblescape.nimblescape-typescript) (`nimblescape.nimblescape-typescript`) 0.2.0 or newer. VS Code installs it together with Mindbug. Its debug type `ts` runs the program with the command `ts`, with the TypeScript compiler that VS Code uses, so the program needs no other package (see [The command ts](#the-command-ts)).
+- [Node.js](https://nodejs.org) 22 or newer on the `PATH`, for the command `ts`.
 - A trusted workspace. VS Code debugs a program only in a workspace that you trust, so Mindbug does not run in Restricted Mode.
 
 ## Install
@@ -98,7 +97,7 @@ The view keeps the steps of the newest debug session, at most `nimblescape.mindb
 
 | Command | Where | What it does |
 | --- | --- | --- |
-| **Run with Mindbug** | Command Palette and the button at the top right of a TypeScript editor, when no program runs | Saves the file and starts it with Deno or Node.js in the debugger, as a launch configuration of type `mindbug` does. |
+| **Run with Mindbug** | Command Palette and the button at the top right of a TypeScript editor, when no program runs | Saves the file and starts it with Node.js in the debugger, as a launch configuration of type `mindbug` does. |
 | **Open Mindbug** | The button at the top right of the editor while a program runs in the JavaScript debugger | Opens the Mindbug view, for example after you closed it. |
 
 The view also opens by itself at the first pause of a debug session, unless the setting `nimblescape.mindbug.openAutomatically` is off.
@@ -119,37 +118,36 @@ The debug type `mindbug` starts a TypeScript file from a launch configuration (`
 | Attribute | Default | What it does |
 | --- | --- | --- |
 | `program` | `${file}` (the file of the active editor) | The TypeScript file to run. |
-| `runtime` | the setting `nimblescape.mindbug.runtime` | `auto`, `deno` or `node`. |
 | `cwd` | the workspace folder | The folder in which the program runs. |
-| `stopOnEntry` | the switch **Stop on entry** of the view (the setting `nimblescape.mindbug.stopOnEntry`) | Pause at the first line of the program. |
+| `stopOnEntry` | the switch **Stop on entry** of the view (the setting `nimblescape.mindbug.stopOnEntry`) | Pause at the first statement of the program. |
+| `args` | none | The arguments of the program. |
+| `env` | none | Environment variables of the program. |
+| `console` | `integratedTerminal` | Where the program runs: the integrated terminal, where `prompt()` reads the input, the Debug Console (`internalConsole`) or an external terminal (`externalTerminal`). |
+
+The other attributes of the debug type `ts` pass through too.
+
+Mindbug 0.1 had the attribute `runtime`, which could choose Deno. A launch configuration with `"runtime": "deno"` now does not start, and a message says to remove the attribute. Mindbug ignores the values `auto` and `node`.
 
 Without a `launch.json` file, press F5 in a TypeScript file and select **Mindbug**. The list **Run and Debug** also offers **Mindbug: current file**.
 
-The view also works with a launch configuration of type `node` of the JavaScript debugger, and with the JavaScript Debug Terminal: it follows every debug session of the JavaScript debugger for Node.js and Deno. The [launch.json](../examples/.vscode/launch.json) of the examples has a configuration of type `mindbug` and one of type `node`.
+The view also works with a launch configuration of type `ts` of nimblescape TypeScript, with one of type `node` of the JavaScript debugger, and with the JavaScript Debug Terminal: it follows every debug session of the JavaScript debugger for Node.js. The [launch.json](../examples/.vscode/launch.json) of the examples has a configuration of each of the types `mindbug`, `ts` and `node`.
 
-When an own launch configuration of type `node` starts Deno (`"runtimeExecutable": "deno"`), add the files of Deno to `skipFiles`, as the debug type `mindbug` does: `"skipFiles": ["<node_internals>/**", "ext:*/**"]`. The files of Deno have names that start with `ext:`. Without this, a step after the last line of the program stops in the code of Deno (for example `99_main.js`), and VS Code opens that file.
+## The command ts
 
-## Runtimes
+Mindbug has no debugger of its own. It turns a launch configuration of type `mindbug` into one of the debug type `ts` of nimblescape TypeScript, with the same `program`, `cwd` and other attributes, and with `stopOnEntry` from the configuration or from the switch **Stop on entry**. The debug type `ts` runs the command `ts <file>` in the JavaScript debugger of VS Code:
 
-With the runtime `auto` (the default), Mindbug takes Deno when `deno --version` runs, else Node.js when `node --version` shows version 22.7 or newer. With `deno` or `node`, it takes only that runtime. When it finds no runtime, a message says what is missing, and the program does not start.
+1. `ts` checks the program with the TypeScript compiler that VS Code uses and the `tsconfig.json` of the project. It shows the errors and does not run a program with an error.
+2. It compiles the program to JavaScript with source maps. So all of TypeScript runs, also an `enum`, a constructor parameter property such as `constructor(private name: string)`, and a `namespace` with code.
+3. It runs the JavaScript with Node.js. The debugger reads the source maps, so the debugger and the view show the lines of your TypeScript file.
 
-| Runtime | Command that the debugger runs |
-| --- | --- |
-| Deno | `deno run --inspect-brk=127.0.0.1:<port> --allow-all <file>` |
-| Node.js | `node --inspect-brk=127.0.0.1:<port> --experimental-transform-types --disable-warning=ExperimentalWarning <file>` |
+The extension nimblescape TypeScript describes the command `ts` in detail: which TypeScript and which Node.js it takes, and where it writes the compiled files. Mindbug passes no option to Node.js and runs no code of its own before the first line of the program.
 
-`<port>` is the setting `nimblescape.mindbug.inspectPort` (9229). With `stopOnEntry` off, the option is `--inspect-wait` instead of `--inspect-brk`: the program waits for the debugger, but does not pause at its first line. The runtime waits for the debugger on `127.0.0.1` only, so no other computer can connect to it. The JavaScript debugger reads the source map of the runtime, so the debugger and the view show the lines of your TypeScript file.
-
-With `--allow-all`, Deno gives the program all the rights of your user, as Node.js does: it can read and write files, use the network and start other programs. See [Security](security.md#the-program-that-you-run).
+The program has all the rights of your user: it can read and write files, use the network and start other programs. See [Security](security.md#the-program-that-you-run).
 
 ## Settings
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `nimblescape.mindbug.runtime` | `auto` | The runtime of **Run with Mindbug** and of a launch configuration of type `mindbug`: `auto` (Deno when it is installed, else Node.js), `deno` or `node`. The attribute `runtime` of a launch configuration wins over this setting. |
-| `nimblescape.mindbug.denoPath` | `deno` | Path to the Deno program. The default works when Deno is on the `PATH`. |
-| `nimblescape.mindbug.nodePath` | `node` | Path to Node.js 22.7 or newer. The default works when Node.js is on the `PATH`. |
-| `nimblescape.mindbug.inspectPort` | `9229` | Port on which Deno or Node.js waits for the debugger. Change it when another program uses port 9229. |
 | `nimblescape.mindbug.stopOnEntry` | `true` | Pause at the first line of the program, so that you can step from the start. The switch **Stop on entry** of the view changes it. |
 | `nimblescape.mindbug.openAutomatically` | `true` | Open the Mindbug view at the first pause of a debug session. |
 | `nimblescape.mindbug.showClasses` | `true` | Show the classes, with their static variables, at the top of the heap. The switch **Show classes** of the view changes it. |
@@ -187,19 +185,19 @@ The folder [examples](../examples) has nine small programs:
 - **A `Proxy`** runs the traps of its handler when the helper reads it: there is no way to read a proxy without them.
 - **`await`**: after an `await`, the function calls before it are no longer on the stack, so the view shows only the scopes up to the first `await`.
 - **Large programs**: the view reads at most `nimblescape.mindbug.maxObjects` objects per scope; an object after that shows "… not loaded". It shows at most `nimblescape.mindbug.maxArrayItems` items of an array, a set or a map, and at most `nimblescape.mindbug.maxStringLength` characters of a string.
-- **Other languages**: the view follows only the JavaScript debugger for Node.js and Deno. It shows nothing for a program in a browser, or for other debuggers such as Python.
-- **Node.js 22 and the set-up of fields**: when the program pauses in the scope "(set up fields)" of a class that also has a static variable, Node.js 22 stops with a fatal error of V8 as soon as the debugger runs code there. Mindbug runs no code in that scope, but the debugger of VS Code can, for example for a watch expression or when you move the mouse over a variable in the editor. Node.js 24 and Deno do not have this fault.
-- **Node.js and breakpoints**: with Node.js, the program can miss the pause at its first line and pause first at a breakpoint. This happens when the line number of a breakpoint equals the line of the first statement in the code that Node.js generates from the TypeScript file, because of a fault of the JavaScript debugger of VS Code. Move the breakpoint to another line, or set it after the program has paused at its first line.
+- **Other languages**: the view follows only the JavaScript debugger for Node.js. It shows nothing for a program in a browser, or for other debuggers such as Python.
+- **Node.js 22 and the set-up of fields**: when the program pauses in the scope "(set up fields)" of a class that also has a static variable, Node.js 22 stops with a fatal error of V8 as soon as the debugger runs code there. Mindbug runs no code in that scope, but the debugger of VS Code can, for example for a watch expression or when you move the mouse over a variable in the editor. Node.js 24 does not have this fault.
+- **Node.js and breakpoints**: with Node.js, the program can miss the pause at its first line and pause first at a breakpoint. This happens when the line number of a breakpoint equals the line of the first statement in the JavaScript that Node.js runs for the TypeScript file, because of a fault of the JavaScript debugger of VS Code. Move the breakpoint to another line, or set it after the program has paused at its first line.
 
 ## Troubleshooting
 
 | Problem | What to do |
 | --- | --- |
-| "Mindbug did not find Deno" or "Mindbug needs Deno or Node.js 22.7 or newer" | Install Deno or Node.js 22.7 or newer, or set `nimblescape.mindbug.denoPath` or `nimblescape.mindbug.nodePath` to the full path of the program. Restart VS Code after an installation, so that it sees the new `PATH`. |
-| The program does not start, and the Debug Console says that the address is in use | Another program uses port 9229. Set `nimblescape.mindbug.inspectPort` to another port, for example 9230. |
+| VS Code says that the debug type `ts` is not supported | The extension nimblescape TypeScript is missing or turned off. Install it, or turn it on in the Extensions view. |
+| The program does not start, and the terminal shows errors of TypeScript | `ts` runs a program only when its check finds no error. Fix the errors, which the Problems view also shows. |
+| A launch configuration of type `node` stops with `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`, for example "TypeScript enum is not supported in strip-only mode" | Node.js only strips the types of a TypeScript file. Use **Run with Mindbug**, or a launch configuration of type `mindbug` or `ts`, which compile the program. |
 | The view does not open | Run **Open Mindbug** while the program is paused, or turn on `nimblescape.mindbug.openAutomatically`. |
 | The view says "The memory could not be read" | The debugger or V8 did not answer a request of Mindbug. Step once more; when the message stays, report it (see [Support](../SUPPORT.md)) with a small program and the text of the message. |
-| A step opens a file of Deno, such as `99_main.js` or `01_console.js` | This happens with an own launch configuration of type `node` that starts Deno. Add `"skipFiles": ["<node_internals>/**", "ext:*/**"]` to it (see [Launch configurations](#launch-configurations)), or use **Run with Mindbug** or the debug type `mindbug`. |
 | **Run with Mindbug** is missing | The button shows only in a TypeScript editor while no program runs. Check that the workspace is trusted. |
 
 ## Uninstall

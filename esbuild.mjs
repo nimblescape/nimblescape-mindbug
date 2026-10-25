@@ -3,12 +3,12 @@
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
 // Builds the extension (Node.js, CommonJS) and the webview (browser) into dist/. VS Code provides the module `vscode`
-// at run time, so the bundle of the extension leaves it out. Both bundles are readable JavaScript: not minified, so
-// that they keep the names of the source and anyone can read the code of the package and compare it with the source
-// (CONTRIBUTING.md, "Reviewing the package"). The option `keepNames` stays off: it adds calls of a helper of esbuild
-// into every function, also into installHeapWalker of src/heapWalker.ts, whose text runs in the debugged program,
-// where that helper does not exist. Only a development build writes source maps; a production build (--production,
-// which vscode:prepublish passes) has none.
+// at run time, so the bundle of the extension leaves it out. The bundles are readable JavaScript: not
+// minified, so that they keep the names of the source and anyone can read the code of the package and compare it with
+// the source (CONTRIBUTING.md, "Reviewing the package"). The option `keepNames` stays off: it adds calls of a helper of
+// esbuild into every function, also into installHeapWalker of src/heapWalker.ts, whose text runs in the debugged
+// program, where that helper does not exist. Only a development build writes source maps; a production build
+// (--production, which vscode:prepublish passes) has none.
 import * as esbuild from 'esbuild';
 import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
 
@@ -43,11 +43,13 @@ const webview = {
 
 mkdirSync('dist', { recursive: true });
 // No map of an earlier development build may stay next to a minified bundle.
-if (production) for (const file of ['dist/extension.js.map', 'dist/webview.js.map']) rmSync(file, { force: true });
+if (production) {
+  for (const file of ['dist/extension.js.map', 'dist/webview.js.map']) rmSync(file, { force: true });
+}
 const copyCss = () => copyFileSync('webview/style.css', 'dist/webview.css');
 
 if (watch) {
-  const contexts = await Promise.all([esbuild.context(extension), esbuild.context(webview)]);
+  const contexts = await Promise.all([extension, webview].map((b) => esbuild.context(b)));
   await Promise.all(contexts.map((c) => c.watch()));
   copyCss();
 } else {

@@ -9,7 +9,7 @@
 import { fileURLToPath } from 'node:url';
 import type { DapClient } from '../../src/snapshot.ts';
 import type { CdpClient } from '../../src/v8Connection.ts';
-import type { DenoInspector, PausedEvent } from './inspector.ts';
+import type { NodeInspector, PausedEvent } from './inspector.ts';
 
 /**
  * The name that VS Code's JavaScript debugger shows for a frame. It writes the class of `this` in
@@ -30,10 +30,10 @@ export class FakeDap implements DapClient {
   /** Every request that was sent, for assertions. */
   readonly log: { command: string; args: any }[] = [];
 
-  private readonly inspector: DenoInspector;
+  private readonly inspector: NodeInspector;
   private readonly paused: PausedEvent;
 
-  constructor(inspector: DenoInspector, paused: PausedEvent) {
+  constructor(inspector: NodeInspector, paused: PausedEvent) {
     this.inspector = inspector;
     this.paused = paused;
   }
@@ -54,7 +54,7 @@ export class FakeDap implements DapClient {
 }
 
 /** The connection to V8 at a pause, as the CDP proxy of js-debug gives it. */
-export function inspectorV8(inspector: DenoInspector, paused: PausedEvent): CdpClient {
+export function inspectorV8(inspector: NodeInspector, paused: PausedEvent): CdpClient {
   return {
     callFrames: () => Promise.resolve(paused.callFrames),
     send: (method, params) => inspector.send(method, params),

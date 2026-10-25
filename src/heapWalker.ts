@@ -192,7 +192,7 @@ export function installHeapWalker(version: number, globalName: string): string {
 
   /**
    * Names of the instance attributes that a class declares (`name;`, `age = 0;`), read from the
-   * class source text. Deno and Node.js keep these declarations when they remove the TypeScript types.
+   * class source text. The TypeScript compiler and Node.js keep these declarations when they remove the types.
    * When the class declares none (plain JavaScript), the `this.x = ...` assignments are used.
    */
   function declaredAttributes(src: string): string[] {

@@ -12,6 +12,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_VIEW_OPTIONS } from '../../src/model.ts';
+import { TS_EXTENSION } from '../../src/runtime.ts';
 
 /** The root folder of this repository, which holds the manifest and the documents. */
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -83,6 +84,10 @@ describe('the manifest', () => {
 
   it('declares no runtime dependency', () => {
     expect(manifest.dependencies).toBeUndefined();
+  });
+
+  it('depends on the extension that contributes the debug type "ts"', () => {
+    expect(manifest.extensionDependencies).toEqual([TS_EXTENSION]);
   });
 });
 

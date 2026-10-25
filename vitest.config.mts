@@ -4,7 +4,7 @@
 
 import { defineConfig } from 'vitest/config';
 
-// Unit tests (npm test), and the test of the release check. They need no Deno and no VS Code.
+// Unit tests (npm test), and the test of the release check. They need no VS Code.
 export default defineConfig({
   test: {
     include: ['test/unit/**/*.test.ts', 'scripts/**/*.test.mjs'],

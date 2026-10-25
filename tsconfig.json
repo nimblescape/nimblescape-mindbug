@@ -29,7 +29,7 @@
     "test"
   ],
   "exclude": [
-    "test/deno/fixtures",
+    "test/node/fixtures",
     "examples",
     "node_modules",
     "dist"

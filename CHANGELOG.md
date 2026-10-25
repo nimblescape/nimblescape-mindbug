@@ -3,6 +3,45 @@
 Each section lists the changes of one released version. The release workflow
 takes the section of a version as the notes of its GitHub release.
 
+## 0.2.0
+
+**Mindbug runs programs with the command `ts`.** **Run with Mindbug** and
+a launch configuration of type `mindbug` now start the program with the
+debug type `ts` of the extension nimblescape TypeScript
+(`nimblescape.nimblescape-typescript`). VS Code installs that extension
+together with Mindbug. Its command `ts` checks the program, compiles it
+with the TypeScript compiler that VS Code uses, and runs it with Node.js.
+When the check finds an error, `ts` shows it and does not start the
+program. All of TypeScript runs, also an `enum` and a constructor
+parameter property such as `constructor(private name: string)`. Mindbug
+0.1.6 ran a TypeScript file with the option
+`--experimental-transform-types` of Node.js, and Node.js 26 removed that
+option, so such a program stopped with the error
+`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`. Mindbug itself now uses no option of
+Node.js. `ts` needs Node.js 22 or newer on the `PATH`.
+
+**The program runs in the terminal.** The debug type `ts` runs the
+program in the integrated terminal of VS Code, so `prompt()` can read the
+input there. Before, the output of the program was in the Debug Console.
+The attribute `console` of a launch configuration of type `mindbug`
+chooses another place, for example `"internalConsole"`. Its attributes
+`args` and `env` pass to the program, and the other attributes of the
+debug type `ts` pass through too.
+
+**Fewer settings.** The settings `nimblescape.mindbug.nodePath` and
+`nimblescape.mindbug.inspectPort` are gone: the debug type `ts` chooses
+Node.js and connects the debugger. The setting
+`nimblescape.mindbug.stopOnEntry` and the switch **Stop on entry** of the
+view work as before.
+
+**No Deno.** Mindbug no longer starts Deno. The settings
+`nimblescape.mindbug.runtime` and `nimblescape.mindbug.denoPath` are gone.
+A launch configuration with `"runtime": "deno"` does not start, and a
+message says to remove the attribute; Mindbug ignores the values `auto`
+and `node`. The Mindbug view still shows every debug session of the
+JavaScript debugger of VS Code, also one of a launch configuration of type
+`node` that starts Deno (`"runtimeExecutable": "deno"`).
+
 ## 0.1.6
 
 **Block scopes.** A block `{ … }` that declares a `let`, `const` or

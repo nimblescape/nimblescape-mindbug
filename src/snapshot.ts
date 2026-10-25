@@ -104,6 +104,9 @@ function withLocalPath(frame: DapStackFrame): DapStackFrame {
 /** True when the frame belongs to the student's own code (not Deno or Node internals). */
 export function isUserFrame(frame: DapStackFrame): boolean {
   if (frame.presentationHint === 'label' || frame.presentationHint === 'subtle') return false;
+  // VS Code's JavaScript debugger marks a frame without a place in the TypeScript file ("Skipped by smartStep"), for
+  // example the function of Node.js that runs a compiled CommonJS module, at line 1 of the compiled file.
+  if (frame.presentationHint === 'deemphasize') return false;
   const src = frame.source;
   if (!src || !src.path) return false;
   if (src.presentationHint === 'deemphasize') return false;

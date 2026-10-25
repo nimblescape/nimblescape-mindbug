@@ -1,7 +1,7 @@
 {
   "name": "nimblescape-mindbug",
   "displayName": "nimblescape Mindbug",
-  "description": "Shows the stack (one scope for each function call) and the heap of a paused TypeScript program as a diagram, to help students learn how memory works. Starts the program with Deno or Node.js in the JavaScript debugger of VS Code, and at each pause runs a small helper in the program that reads its objects and changes nothing.",
+  "description": "Shows the stack (one scope for each function call) and the heap of a paused TypeScript program as a diagram, to help students learn how memory works. Starts the program with the command ts of nimblescape TypeScript in the JavaScript debugger of VS Code, and at each pause runs a small helper in the program that reads its objects and changes nothing.",
   "version": "0.1.6",
   "publisher": "nimblescape",
   "license": "MIT",
@@ -28,7 +28,6 @@
   ],
   "keywords": [
     "node",
-    "deno",
     "typescript",
     "heap",
     "stack",
@@ -46,6 +45,9 @@
   "extensionKind": [
     "workspace"
   ],
+  "extensionDependencies": [
+    "nimblescape.nimblescape-typescript"
+  ],
   "activationEvents": [
     "onDebug"
   ],
@@ -53,11 +55,11 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false,
-      "description": "Mindbug starts the TypeScript program of the workspace with Deno or Node.js and runs code in it, and VS Code debugs a program only in a trusted workspace."
+      "description": "Mindbug starts the TypeScript program of the workspace with the command ts and runs code in it, and VS Code debugs a program only in a trusted workspace."
     },
     "virtualWorkspaces": {
       "supported": false,
-      "description": "Deno and Node.js run a file on the disk, which a virtual workspace does not have."
+      "description": "Node.js runs a file on the disk, which a virtual workspace does not have."
     }
   },
   "contributes": {
@@ -99,36 +101,6 @@
     "configuration": {
       "title": "nimblescape Mindbug",
       "properties": {
-        "nimblescape.mindbug.runtime": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "deno",
-            "node"
-          ],
-          "enumDescriptions": [
-            "Deno when it is installed, else Node.js 22.7 or newer.",
-            "Deno, the program of the setting nimblescape.mindbug.denoPath.",
-            "Node.js 22.7 or newer, the program of the setting nimblescape.mindbug.nodePath."
-          ],
-          "default": "auto",
-          "markdownDescription": "The runtime that **Run with Mindbug** and a launch configuration of type `mindbug` start the program with (the attribute `runtime` of the launch configuration wins over this setting). The Mindbug view works with every runtime that VS Code's JavaScript debugger runs, also when you start the program with a launch configuration of another type."
-        },
-        "nimblescape.mindbug.nodePath": {
-          "type": "string",
-          "default": "node",
-          "markdownDescription": "Path to Node.js 22.7 or newer, used when the runtime is `node` (or `auto` without Deno). The default `node` works when Node.js is on the `PATH`."
-        },
-        "nimblescape.mindbug.denoPath": {
-          "type": "string",
-          "default": "deno",
-          "markdownDescription": "Path to the Deno program, used when the runtime is `deno` or `auto`. The default `deno` works when Deno is on the `PATH`."
-        },
-        "nimblescape.mindbug.inspectPort": {
-          "type": "number",
-          "default": 9229,
-          "markdownDescription": "Port on which Deno or Node.js waits for the debugger when **Run with Mindbug** or a launch configuration of type `mindbug` starts the program. Change it when another program uses port 9229."
-        },
         "nimblescape.mindbug.stopOnEntry": {
           "type": "boolean",
           "default": true,
@@ -251,20 +223,6 @@
                 "description": "The TypeScript file to run. The default is the file of the active editor.",
                 "default": "${file}"
               },
-              "runtime": {
-                "type": "string",
-                "enum": [
-                  "auto",
-                  "deno",
-                  "node"
-                ],
-                "enumDescriptions": [
-                  "Deno when it is installed, else Node.js 22.7 or newer.",
-                  "Deno (setting nimblescape.mindbug.denoPath).",
-                  "Node.js 22.7 or newer (setting nimblescape.mindbug.nodePath)."
-                ],
-                "description": "The runtime that runs the program. The default is the setting nimblescape.mindbug.runtime."
-              },
               "cwd": {
                 "type": "string",
                 "description": "The folder in which the program runs. The default is the workspace folder.",
@@ -274,6 +232,34 @@
                 "type": "boolean",
                 "description": "Pause at the first statement of the program. The default is the setting nimblescape.mindbug.stopOnEntry.",
                 "default": true
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The arguments of the program.",
+                "default": []
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "description": "Environment variables of the program.",
+                "default": {}
+              },
+              "console": {
+                "enum": [
+                  "integratedTerminal",
+                  "internalConsole",
+                  "externalTerminal"
+                ],
+                "description": "Where the program runs and writes its output. The default of the debug type ts is integratedTerminal, where prompt() can read the input.",
+                "default": "integratedTerminal"
               }
             }
           }
@@ -289,7 +275,7 @@
         "configurationSnippets": [
           {
             "label": "Mindbug: Run a TypeScript file",
-            "description": "Runs a TypeScript file with Deno or Node.js and shows its memory in the Mindbug view.",
+            "description": "Runs a TypeScript file with the command ts and shows its memory in the Mindbug view.",
             "body": {
               "type": "mindbug",
               "request": "launch",
@@ -306,7 +292,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:deno": "vitest run --config vitest.deno.config.mts",
+    "test:node": "vitest run --config vitest.node.config.mts",
     "test:render": "node esbuild.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/render/screenshots.ts",
     "test:vscode": "node esbuild.mjs && node scripts/build-vscode-tests.mjs && vscode-test --label vscode",
     "vscode:prepublish": "node esbuild.mjs --production",
