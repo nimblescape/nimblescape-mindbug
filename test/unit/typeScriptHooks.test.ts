@@ -5,7 +5,7 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import * as path from 'node:path';
-import { compilerOptions, moduleFormat, packageJsonOf, type TypeScript } from '../../src/typeScriptHooks.ts';
+import { compilerOptions, moduleFormat, packageJsonOf, type TypeScript } from '../node/typeScriptHooks.ts';
 
 test('the format of a TypeScript file, as Node.js decides it', () => {
   const never = () => assert.fail('the syntax decides only without "type"');

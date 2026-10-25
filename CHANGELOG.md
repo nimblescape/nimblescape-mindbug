@@ -5,45 +5,40 @@ takes the section of a version as the notes of its GitHub release.
 
 ## 0.2.0
 
-**Node.js only.** **Run with Mindbug** and a launch configuration of type
-`mindbug` now run every program with Node.js 24 or newer, with the
-TypeScript compiler that VS Code uses. Mindbug no longer starts Deno. The
-settings `nimblescape.mindbug.runtime` and `nimblescape.mindbug.denoPath`
-are gone. A launch configuration with `"runtime": "deno"` does not start,
-and a message says to remove the attribute; Mindbug ignores the values
-`auto` and `node`. The Mindbug view still shows every debug session of the
+**Mindbug runs programs with the command `ts`.** **Run with Mindbug** and
+a launch configuration of type `mindbug` now start the program with the
+debug type `ts` of the extension nimblescape TypeScript
+(`nimblescape.nimblescape-typescript`). VS Code installs that extension
+together with Mindbug. Its command `ts` checks the program, compiles it
+with the TypeScript compiler that VS Code uses, and runs it with Node.js.
+So all of TypeScript runs, also an `enum` and a constructor parameter
+property such as `constructor(private name: string)`. Mindbug 0.1.6 ran a
+TypeScript file with the option `--experimental-transform-types` of
+Node.js, and Node.js 26 removed that option, so such a program stopped
+with the error `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`. Mindbug itself now
+uses no option of Node.js.
+
+**The program runs in the terminal.** The debug type `ts` runs the
+program in the integrated terminal of VS Code, so `prompt()` can read the
+input there. Before, the output of the program was in the Debug Console.
+The attribute `console` of a launch configuration of type `mindbug`
+chooses another place, for example `"internalConsole"`. Its attributes
+`args` and `env` pass to the program, and the other attributes of the
+debug type `ts` pass through too.
+
+**Fewer settings.** The settings `nimblescape.mindbug.nodePath` and
+`nimblescape.mindbug.inspectPort` are gone: the debug type `ts` chooses
+Node.js and connects the debugger. The setting
+`nimblescape.mindbug.stopOnEntry` and the switch **Stop on entry** of the
+view work as before.
+
+**No Deno.** Mindbug no longer starts Deno. The settings
+`nimblescape.mindbug.runtime` and `nimblescape.mindbug.denoPath` are gone.
+A launch configuration with `"runtime": "deno"` does not start, and a
+message says to remove the attribute; Mindbug ignores the values `auto`
+and `node`. The Mindbug view still shows every debug session of the
 JavaScript debugger of VS Code, also one of a launch configuration of type
 `node` that starts Deno (`"runtimeExecutable": "deno"`).
-
-## 0.1.7
-
-**Enums and parameter properties with Node.js 26.** Node.js 26 removed the
-option `--experimental-transform-types`, with which Mindbug ran a
-TypeScript file in Node.js. Node.js 26 only strips the types, so a program
-with an `enum` or a constructor parameter property such as
-`constructor(private name: string)` stopped with the error
-`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`. Mindbug now starts Node.js with its
-own hooks for the module loader of Node.js. The hooks turn
-each TypeScript file into JavaScript in memory, with the TypeScript
-compiler that VS Code uses and with the options of the `tsconfig.json` of
-the project. The compiler is the one of the setting `js/ts.tsdk.path`,
-then of the older setting `typescript.tsdk`, else the TypeScript that
-VS Code ships. So the program needs no other package, and all of
-TypeScript runs. Mindbug uses no experimental option of Node.js any more.
-
-**Node.js 24 or newer.** Mindbug now starts Node.js 24 and newer, not
-Node.js 22 and 23: Node.js 24 is the oldest version that has the module
-hooks of Mindbug and strips the types of a TypeScript file without an
-option. With Node.js 22 or 23, **Run with Mindbug** shows a message that
-names the version that Mindbug needs, or, with the runtime `auto`, takes
-Deno when it is installed. A launch configuration of type `node` is not
-changed: the view shows its program with every version of Node.js.
-
-**The runtime `auto` prefers Node.js.** With the runtime `auto` (the
-default), Mindbug now takes Node.js when it is installed, and Deno only
-when Node.js is not. A program in a folder with a `deno.json` or
-`deno.jsonc` file, or in a folder below it, is a Deno project: there Mindbug
-takes Deno first. Before, `auto` took Deno whenever it was installed.
 
 ## 0.1.6
 

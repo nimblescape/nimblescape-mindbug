@@ -8,7 +8,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import type { CdpCallFrame as V8CallFrame } from '../../src/v8Connection.ts';
 import { lineMapFromUrl, originalLine, type LineMap } from './sourceMap.ts';
-import { mindbugNode } from './typeScript.ts';
+import { nodeWithTypeScript } from './typeScript.ts';
 
 export interface CdpCallFrame extends V8CallFrame {
   location: { scriptId: string; lineNumber: number; columnNumber: number };
@@ -27,7 +27,7 @@ export class NodeInspector {
   private exited = false;
   /** Script id to URL, from Debugger.scriptParsed events (CallFrame.url can be empty). */
   readonly scripts = new Map<string, string>();
-  /** Script id to its source map line table (the hooks of Mindbug give inline source maps for TypeScript). */
+  /** Script id to its source map line table (the hooks of typeScriptHooks.ts give inline source maps). */
   readonly sourceMaps = new Map<string, LineMap>();
   output = '';
 
@@ -44,11 +44,12 @@ export class NodeInspector {
   }
 
   /**
-   * Starts `node --inspect-brk` with the TypeScript file, as Mindbug starts it (mindbugNode), and connects to it. The
-   * first pause (at the first line of the program) is dropped unless `keepFirstPause` is true.
+   * Starts `node --inspect-brk` with the TypeScript file, with the hooks and the compiler of VS Code
+   * (nodeWithTypeScript), and connects to it. The first pause (at the first line of the program) is dropped unless
+   * `keepFirstPause` is true.
    */
   static async start(file: string, port: number, keepFirstPause = false): Promise<NodeInspector> {
-    const typeScript = mindbugNode();
+    const typeScript = nodeWithTypeScript();
     const proc = spawn(process.execPath, [`--inspect-brk=127.0.0.1:${port}`, ...typeScript.args, file], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, ...typeScript.env, NO_COLOR: '1' },

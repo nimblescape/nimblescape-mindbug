@@ -53,16 +53,19 @@ async function runToLine(api: MindbugApi, file: string, line: number): Promise<M
 }
 
 /**
- * A way to start a program: the command "Run with Mindbug", a launch configuration of type "mindbug", or an own launch
- * configuration of VS Code's JavaScript debugger.
+ * A way to start a program: the command "Run with Mindbug", a launch configuration of type "mindbug", an own launch
+ * configuration of the debug type "ts" of the extension nimblescape TypeScript, or one of VS Code's JavaScript
+ * debugger.
  */
 interface Start {
   title: string;
   run(file: string): Thenable<unknown>;
   /** True when the first pause is at the first statement of the program. */
   pausesAtFirstStatement: boolean;
-  /** True for the starts through the debug type "mindbug", which Mindbug turns into a configuration for Node.js. */
+  /** True for the starts through the debug type "mindbug", which Mindbug turns into a configuration of type "ts". */
   mindbug: boolean;
+  /** True when the command ts compiles the program, so all of TypeScript runs, also enums and parameter properties. */
+  compiles: boolean;
 }
 
 function runWithMindbug(file: string): Thenable<boolean | undefined> {
@@ -70,12 +73,13 @@ function runWithMindbug(file: string): Thenable<boolean | undefined> {
 }
 
 const STARTS: Start[] = [
-  { title: 'Run with Mindbug', run: runWithMindbug, pausesAtFirstStatement: true, mindbug: true },
+  { title: 'Run with Mindbug', run: runWithMindbug, pausesAtFirstStatement: true, mindbug: true, compiles: true },
   {
     // A launch.json configuration of type "mindbug" for the file of the active editor.
     title: 'launch configuration of type "mindbug"',
     pausesAtFirstStatement: true,
     mindbug: true,
+    compiles: true,
     run: () =>
       vscode.debug.startDebugging(vscode.workspace.workspaceFolders?.[0], {
         type: 'mindbug',
@@ -85,11 +89,27 @@ const STARTS: Start[] = [
       }),
   },
   {
-    // What a student writes in launch.json: nothing in it is about Mindbug. Node.js comes from the PATH.
+    // The launch.json of a course: nothing in it is about Mindbug. The debug type "ts" stops at the first statement.
+    title: 'own launch configuration of type "ts"',
+    pausesAtFirstStatement: true,
+    mindbug: false,
+    compiles: true,
+    run: (file) =>
+      vscode.debug.startDebugging(vscode.workspace.workspaceFolders?.[0], {
+        type: 'ts',
+        request: 'launch',
+        name: 'ts: current file',
+        program: file,
+        stopOnEntry: true,
+      }),
+  },
+  {
+    // A launch configuration of VS Code's JavaScript debugger: Node.js from the PATH only strips the types.
     // With stopOnEntry, the debugger stops at the first line of the file that can stop, which can be inside a function.
     title: 'own launch configuration, Node.js',
     pausesAtFirstStatement: false,
     mindbug: false,
+    compiles: false,
     run: (file) =>
       vscode.debug.startDebugging(vscode.workspace.workspaceFolders?.[0], {
         type: 'node',
@@ -117,17 +137,13 @@ async function debug(api: MindbugApi, start: Start, file: string, breakpointLine
     assert.ok(await start.run(file), 'the debug session starts');
     const snapshot = await first;
     if (start.mindbug) {
-      // The debug type "mindbug" becomes a configuration of VS Code's JavaScript debugger for Node.js, which runs the
-      // TypeScript file with the hooks of Mindbug and the TypeScript compiler of VS Code: the examples set no
-      // js/ts.tsdk.path.
+      // The debug type "mindbug" becomes a configuration of type "ts", and the debug type "ts" turns it into one of
+      // VS Code's JavaScript debugger that runs the command ts.
       const config = sessions[0]?.configuration;
       assert.equal(sessions[0]?.type, 'pwa-node');
-      assert.equal(config?.runtimeExecutable, 'node');
+      assert.match(path.basename(String(config?.runtimeExecutable)), /^ts(\.cmd)?$/);
       assert.equal(config?.program, file);
-      const extension = vscode.extensions.getExtension('nimblescape.nimblescape-mindbug')!.extensionPath;
-      const typescript = path.join(vscode.env.appRoot, 'extensions', 'node_modules', 'typescript', 'lib', 'typescript.js');
-      assert.deepEqual(config?.runtimeArgs?.slice(1), ['--require', path.join(extension, 'dist', 'typeScriptHooks.js')]);
-      assert.deepEqual(config?.env, { NIMBLESCAPE_MINDBUG_TYPESCRIPT: typescript });
+      assert.equal(config?.stopOnEntry, true);
     }
     return snapshot;
   } finally {
@@ -928,54 +944,11 @@ describe('the Mindbug view in VS Code', () => {
       const s = await first;
       const launched = sessions.find((x) => x.type === 'pwa-node')?.configuration;
       assert.equal(launched?.stopOnEntry, false);
-      assert.ok(launched?.runtimeArgs?.some((a: string) => a.startsWith('--inspect-wait=')), 'Node.js waits for the debugger without a pause');
       assert.equal(top(s)?.line, 30, 'the first pause is the breakpoint');
     } finally {
       started.dispose();
       vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
       await config().update('stopOnEntry', undefined, vscode.ConfigurationTarget.Global);
-    }
-  });
-
-  it('runs Node.js with the TypeScript compiler of js/ts.tsdk.path, else of typescript.tsdk', async () => {
-    const config = () => vscode.workspace.getConfiguration();
-    // A copy of the TypeScript of VS Code, as the folder lib of a TypeScript package of the project.
-    const folder = path.join(examples(), 'tsdk-test');
-    const lib = path.join(folder, 'lib');
-    fs.mkdirSync(lib, { recursive: true });
-    const shipped = path.join(vscode.env.appRoot, 'extensions', 'node_modules', 'typescript', 'lib', 'typescript.js');
-    fs.copyFileSync(shipped, path.join(lib, 'typescript.js'));
-    const file = path.join(examples(), 'people.ts');
-    // The compiler of the debug session of Mindbug, after the first pause of the program.
-    const compiler = async (): Promise<unknown> => {
-      const sessions: vscode.DebugSession[] = [];
-      const started = vscode.debug.onDidStartDebugSession((s) => sessions.push(s));
-      try {
-        vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
-        await vscode.window.showTextDocument(vscode.Uri.file(file));
-        const first = api.nextSnapshot(TIMEOUT);
-        assert.ok(await runWithMindbug(file), 'the debug session starts');
-        await first;
-        return sessions.find((x) => x.type === 'pwa-node')?.configuration.env?.NIMBLESCAPE_MINDBUG_TYPESCRIPT;
-      } finally {
-        started.dispose();
-        await stop();
-      }
-    };
-    try {
-      // A relative folder is relative to the workspace folder.
-      await config().update('js/ts.tsdk.path', 'tsdk-test/lib', vscode.ConfigurationTarget.Global);
-      await config().update('typescript.tsdk', path.join(examples(), 'missing', 'lib'), vscode.ConfigurationTarget.Global);
-      assert.equal(await compiler(), path.join(lib, 'typescript.js'));
-      // The deprecated setting, when js/ts.tsdk.path is not set.
-      await config().update('js/ts.tsdk.path', undefined, vscode.ConfigurationTarget.Global);
-      await config().update('typescript.tsdk', lib, vscode.ConfigurationTarget.Global);
-      assert.equal(await compiler(), path.join(lib, 'typescript.js'));
-    } finally {
-      await config().update('js/ts.tsdk.path', undefined, vscode.ConfigurationTarget.Global);
-      await config().update('typescript.tsdk', undefined, vscode.ConfigurationTarget.Global);
-      await closeTextEditors();
-      fs.rmSync(folder, { recursive: true, force: true });
     }
   });
 
@@ -1031,9 +1004,9 @@ describe('the Mindbug view in VS Code', () => {
       it('shows the variables of each block, also a variable that hides one of the same name', () => blocks(api, start));
       it('does not stop in the code of the runtime: a step after the last line ends the program', () =>
         stepsToTheEnd(api, start));
-      // An own launch configuration of type "node" runs Node.js without the hooks of Mindbug, and Node.js 26 only strips
-      // the types.
-      if (start.mindbug) {
+      // An own launch configuration of type "node" runs Node.js without the command ts, and Node.js only strips the
+      // types.
+      if (start.compiles) {
         it('runs enums and constructor parameter properties', () => enumsAndParameterProperties(api, start));
       }
     });

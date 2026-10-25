@@ -2,15 +2,16 @@
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
-// Runs TypeScript files in Node.js with the TypeScript compiler that VS Code uses. Node.js only strips the types of a
-// TypeScript file; Node.js 26 has no option that also runs enums and constructor parameter properties. Mindbug starts
-// Node.js with `--require dist/typeScriptHooks.js` and names the compiler (the file typescript.js) in the environment
-// variable NIMBLESCAPE_MINDBUG_TYPESCRIPT (runtime.ts, nodeTypeScript). This file runs in the program, before its first
-// line. It registers a synchronous hook of the module loader of Node.js (module.registerHooks), which turns each
-// TypeScript file into JavaScript before Node.js runs it: with the options of the tsconfig.json of the file, as the
-// project compiles it, and with an inline source map, so the debugger shows the TypeScript file. The hook changes only
-// the options that a run in memory needs (see compilerOptions). This file imports only modules of Node.js: the
-// compiler comes from VS Code or from the project, and nothing else of Mindbug runs in the program.
+// Runs TypeScript files in Node.js with the TypeScript compiler that VS Code ships, for the tests against real Node.js
+// programs (typeScript.ts, inspector.ts). Node.js only strips the types of a TypeScript file; Node.js 26 has no option
+// that also runs enums and constructor parameter properties. Mindbug itself runs a program with the command ts of the
+// extension nimblescape TypeScript (src/runtime.ts), which compiles it with the same compiler into files; the tests in
+// VS Code (test/vscode/) cover that. These tests compile in memory instead, so the raw inspector client sees the
+// TypeScript file under its own name. Node.js loads this file with `--require`, and the variable
+// NIMBLESCAPE_MINDBUG_TYPESCRIPT names the compiler (the file typescript.js). The file registers a synchronous hook of
+// the module loader of Node.js (module.registerHooks), which turns each TypeScript file into JavaScript before Node.js
+// runs it: with the options of the tsconfig.json of the file, and with an inline source map. The hook changes only the
+// options that a run in memory needs (see compilerOptions). This file imports only modules of Node.js.
 
 import * as fs from 'node:fs';
 import { registerHooks } from 'node:module';
@@ -158,7 +159,7 @@ function typeScriptFile(url: string): string | undefined {
 /**
  * The package.json file that decides the "type" of `file`, as Node.js finds it: the first package.json in the folder of
  * the file or in a folder above it. The search ends at a folder named node_modules, and at the root. `exists` gives
- * the file system to the unit tests. Mindbug does not use module.findPackageJSON of Node.js, which is not stable yet.
+ * the file system to the unit tests. This file does not use module.findPackageJSON of Node.js, which is not stable yet.
  */
 export function packageJsonOf(file: string, exists: (file: string) => boolean = fs.existsSync): string | undefined {
   for (let folder = path.dirname(file); path.basename(folder) !== 'node_modules'; folder = path.dirname(folder)) {

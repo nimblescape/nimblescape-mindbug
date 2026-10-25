@@ -11,10 +11,11 @@
 //   xvfb-run -a -s "-screen 0 1440x816x24" npm run gif
 //
 // Linux only: it needs Xvfb (or another X display), ffmpeg with x11grab and drawtext, xdotool, the font Inter
-// (fc-match finds it; Debian and Ubuntu: fonts-inter), and Node.js 24 or newer on the PATH. It builds the
+// (fc-match finds it; Debian and Ubuntu: fonts-inter), and Node.js on the PATH for the command ts. It builds the
 // package (npm run package), packs the driver as a second extension, downloads VS Code to .vscode-test/, installs both
 // extensions into a new profile in test/gif/output/, and writes test/gif/output/mindbug-run.gif. Copy it to
-// docs/images/ after a check.
+// docs/images/ after a check. VS Code installs nimblescape TypeScript, the extension dependency of Mindbug, from the
+// Marketplace, or from the VSIX file that MINDBUG_TS_VSIX names.
 
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -226,6 +227,7 @@ const executable = await downloadAndUnzipVSCode({ version: process.env.VSCODE_TE
 run(resolveCliPathFromVSCodeExecutablePath(executable), [
   `--user-data-dir=${userData}`,
   `--extensions-dir=${extensions}`,
+  ...(process.env.MINDBUG_TS_VSIX ? ['--install-extension', process.env.MINDBUG_TS_VSIX] : []),
   '--install-extension', mindbugVsix,
   '--install-extension', driverVsix,
 ]);

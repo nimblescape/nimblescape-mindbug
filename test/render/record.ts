@@ -2,7 +2,7 @@
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
-// Records the memory snapshots of the example programs, step by step, with a real Node.js, as Mindbug runs it
+// Records the memory snapshots of the example programs, step by step, with a real Node.js and the hooks of the tests
 // (test/node/typeScript.ts: with the TypeScript compiler of the VS Code that `npm run test:vscode` downloads). The
 // screenshot test (screenshots.ts) draws these snapshots, so it does not need Node.js to run the examples.
 //

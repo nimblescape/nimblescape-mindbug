@@ -6,14 +6,23 @@
   "version": "0.2.0",
   "configurations": [
     {
-      // Mindbug starts the file of the active editor with Node.js.
+      // Mindbug starts the file of the active editor with the debug type "ts" of nimblescape TypeScript.
       "name": "Mindbug: current file",
       "type": "mindbug",
       "request": "launch",
       "program": "${file}"
     },
     {
-      // A launch configuration of VS Code's JavaScript debugger, without Mindbug: the Mindbug view shows it too.
+      // The debug type "ts" of nimblescape TypeScript, without Mindbug: the Mindbug view shows it too.
+      "name": "ts: current file",
+      "type": "ts",
+      "request": "launch",
+      "program": "${file}",
+      "stopOnEntry": true
+    },
+    {
+      // A launch configuration of VS Code's JavaScript debugger: the Mindbug view shows it too. Node.js only strips the
+      // types, so it does not run an enum or a constructor parameter property.
       "name": "Node.js: current file",
       "type": "node",
       "request": "launch",

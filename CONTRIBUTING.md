@@ -11,24 +11,23 @@ security model.
 | File | Purpose |
 | --- | --- |
 | `src/extension.ts` | The entry point: the controller, the configuration provider of the debug type `mindbug`, and the commands. |
-| `src/launch.ts`, `src/runtime.ts` | The debug type `mindbug`, the command **Run with Mindbug**, the check of Node.js, and the TypeScript compiler that VS Code uses. |
-| `src/typeScriptHooks.ts` | The hooks with which Node.js runs TypeScript files with that compiler, in the program. |
+| `src/launch.ts`, `src/runtime.ts` | The debug type `mindbug`, which starts the debug type `ts` of nimblescape TypeScript, and the command **Run with Mindbug**. |
 | `src/controller.ts` | Follows the debug sessions of the JavaScript debugger, reads a snapshot at each pause, and marks the line of an earlier step in the editor. |
 | `src/snapshot.ts`, `src/v8Connection.ts`, `src/heapWalker.ts` | Build one snapshot with the stack trace of the Debug Adapter Protocol and the requests to V8 through the CDP proxy of the JavaScript debugger, and the helper that runs in the paused program. |
 | `src/changes.ts`, `src/model.ts` | The changes between two snapshots, and the types of a snapshot and of the messages of the view. |
 | `src/panel.ts`, `src/webviewHtml.ts` | The webview panel "Mindbug" and its HTML page with its content security policy. |
 | `webview/` | The view: the step history, the layout, the HTML of the boxes, the arrows and the styles. |
 | `test/unit/` | The unit tests with vitest. They need no VS Code. `test/unit/manifest.test.ts` checks the manifest, `.vscodeignore` and the documents. |
-| `test/node/` | The tests against real Node.js programs through the V8 inspector, with their programs in `test/node/fixtures/`, and the test of the TypeScript hooks in Node.js. `typeScript.ts` starts Node.js as Mindbug starts it. |
+| `test/node/` | The tests against real Node.js programs through the V8 inspector, with their programs in `test/node/fixtures/`, and the TypeScript hooks of these tests (`typeScriptHooks.ts`) with their test in Node.js. `typeScript.ts` starts Node.js with these hooks and the TypeScript compiler of VS Code. |
 | `test/render/` | The screenshot test (`screenshots.ts`), the recorder of its steps (`record.ts`) and the recorded steps (`snapshots/`). |
 | `test/gif/` | The recorder of the animation of the README (`record.ts`), and the driver (`driver.ts`) that runs `examples/return-object.ts`, `examples/blocks.ts` and `examples/closures.ts` in a real VS Code. |
 | `test/vscode/`, `.vscode-test.mjs`, `scripts/build-vscode-tests.mjs` | The tests in a real VS Code, their settings, and their build into `out/`. |
 | `examples/` | The example programs, with a `launch.json` file. The tests in VS Code and the screenshot test use them. |
 | `docs/` | The user guide, the architecture, the security model, and the images in `docs/images/`: the GIF of the README, from `npm run gif`, and the screenshots of the user guide, from the screenshot test. `stack-and-heap.png` is a screenshot of the README of the release 0.1.1, whose page on the Marketplace still shows it; delete it after the next release. `return-object.gif` is the GIF of the README of the release 0.1.5, whose page on the Marketplace still shows it; delete it after the next release. |
-| `dist/` | The bundles `dist/extension.js`, `dist/typeScriptHooks.js` and `dist/webview.js`, and `dist/webview.css`, built by `esbuild.mjs` and kept out of Git. |
+| `dist/` | The bundles `dist/extension.js` and `dist/webview.js`, and `dist/webview.css`, built by `esbuild.mjs` and kept out of Git. |
 | `media/` | The icons of the command **Open Mindbug** and of the line of an earlier step in the editor. |
 | `resources/icon.png`, `resources/icon.svg` | The Marketplace icon (256 × 256 PNG, because the Marketplace takes no SVG icon) and its source: two scopes of the stack and one object on the heap, on the tile of the nimblescape extensions. |
-| `esbuild.mjs` | Bundles the extension, the TypeScript hooks and the view. The bundles are readable: not minified. A production build (`--production`) has no source map. |
+| `esbuild.mjs` | Bundles the extension and the view. The bundles are readable: not minified. A production build (`--production`) has no source map. |
 | `tsconfig.json` | The TypeScript settings of the type check: strict, and no output, because esbuild builds the bundles. |
 | `vitest.config.mts`, `vitest.node.config.mts` | The settings of the unit tests (`test/unit/**/*.test.ts` and `scripts/**/*.test.mjs`) and of the tests against Node.js programs. |
 | `package.json` | The extension manifest. The section [Manifest](#manifest) explains it. |
@@ -54,8 +53,9 @@ development tools are TypeScript, esbuild, vitest, mocha with
 [`@vscode/vsce`](https://github.com/microsoft/vscode-vsce), the Microsoft tool
 that packages and publishes extensions. Everything runs on Node.js 24: the
 release in `.node-version` for the tools and CI, and the runtime of VS Code
-(`engines.vscode`) for the extension. The tests in VS Code and against
-Node.js programs run the programs with the TypeScript compiler of the VS Code
+(`engines.vscode`) for the extension. The tests in VS Code run the programs
+with the debug type `ts` of nimblescape TypeScript, which test-cli installs.
+The tests against Node.js programs take the TypeScript compiler of the VS Code
 that `npm run test:vscode` downloads, so CI runs `npm run test:node` after it.
 
 | Command | Effect |
@@ -66,8 +66,8 @@ that `npm run test:vscode` downloads, so CI runs `npm run test:node` after it.
 | `npm run test:node` | Runs the tests against real Node.js programs, with the Node.js that runs npm. Run `npm run test:vscode` first, so that the tests find the TypeScript compiler of VS Code in `.vscode-test/`. |
 | `npm run record` | Records the steps of the examples with Node.js into `test/render/snapshots/`, after a change of the examples or of the snapshot. |
 | `npm run test:render` | Draws the recorded steps in Chromium and writes screenshots in the light, dark and high contrast themes to `test/render/output/`. Copy changed screenshots to `docs/images/`. |
-| `npm run gif` | Records the animation of the README from a real VS Code, on Linux only: `xvfb-run -a -s "-screen 0 1440x816x24" npm run gif`. It builds the package, installs it with the driver of `test/gif/` into a new profile of the downloaded VS Code, steps through `examples/return-object.ts` with F5 (the launch configuration "Mindbug: current file" of `examples/.vscode/launch.json`), Step Into and Step Over, and goes back through the step history. Then it turns the switch "Stop on entry" off and runs `examples/blocks.ts` and `examples/closures.ts` with F5 to their breakpoints. It joins the screenshots with ffmpeg to `test/gif/output/mindbug-run.gif`. The GIF has the style of the GIFs of nimblescape PlantUML and nimblescape Comment Links: a VS Code window of 1440 × 816 pixels in the theme Dark Modern, a blue band above it with the number and the caption of each scene, and for 1.6 s after each key press a label with the key and its command. The zoom is 110 %, not 120 % as in the other GIFs: the toolbar of the view needs two lines for its six switches, and at 120 % the view has no room for the object of the return step and for the parts of the nested blocks. The steps and the captions are in `test/gif/driver.ts`. It needs ffmpeg (with `x11grab` and `drawtext`), xdotool, the font Inter (Debian and Ubuntu: `fonts-inter`), and Node.js 24 or newer on the `PATH`. Run it as a user that is not root: VS Code shows a warning and "[Superuser]" in the title for root. Copy the GIF to `docs/images/` after a check. |
-| `npm run test:vscode` | Downloads VS Code to `.vscode-test/`, and runs the tests in VS Code with Node.js. Node.js runs the examples with the hooks of Mindbug and the TypeScript compiler of the downloaded VS Code, so it must be Node.js 24 or newer. On Linux without a display, run it under `xvfb-run -a`. `VSCODE_TEST_VERSION` selects the VS Code version: `stable` (the default), `insiders` or a version such as `1.125.0`. |
+| `npm run gif` | Records the animation of the README from a real VS Code, on Linux only: `xvfb-run -a -s "-screen 0 1440x816x24" npm run gif`. It builds the package, installs it with the driver of `test/gif/` into a new profile of the downloaded VS Code, steps through `examples/return-object.ts` with F5 (the launch configuration "Mindbug: current file" of `examples/.vscode/launch.json`), Step Into and Step Over, and goes back through the step history. Then it turns the switch "Stop on entry" off and runs `examples/blocks.ts` and `examples/closures.ts` with F5 to their breakpoints. It joins the screenshots with ffmpeg to `test/gif/output/mindbug-run.gif`. The GIF has the style of the GIFs of nimblescape PlantUML and nimblescape Comment Links: a VS Code window of 1440 × 816 pixels in the theme Dark Modern, a blue band above it with the number and the caption of each scene, and for 1.6 s after each key press a label with the key and its command. The zoom is 110 %, not 120 % as in the other GIFs: the toolbar of the view needs two lines for its six switches, and at 120 % the view has no room for the object of the return step and for the parts of the nested blocks. The steps and the captions are in `test/gif/driver.ts`. It needs ffmpeg (with `x11grab` and `drawtext`), xdotool, the font Inter (Debian and Ubuntu: `fonts-inter`), and Node.js on the `PATH` for the command `ts`. VS Code installs nimblescape TypeScript from the Marketplace, or from the VSIX file that `MINDBUG_TS_VSIX` names. Run it as a user that is not root: VS Code shows a warning and "[Superuser]" in the title for root. Copy the GIF to `docs/images/` after a check. |
+| `npm run test:vscode` | Downloads VS Code to `.vscode-test/`, installs the pinned release of nimblescape TypeScript (`.vscode-test.mjs`), and runs the tests in VS Code. Its command `ts` runs the examples with the Node.js of the `PATH`. To test with a build of nimblescape TypeScript before its release, set `MINDBUG_TS_VSIX` to the path of its VSIX file. On Linux without a display, run it under `xvfb-run -a`. `VSCODE_TEST_VERSION` selects the VS Code version: `stable` (the default), `insiders` or a version such as `1.125.0`. |
 | `npm run build` | Bundles `dist/` with source maps; `npm run watch` bundles again after each change. |
 | `npm run package` | Builds `nimblescape-mindbug-<version>.vsix` with vsce, which first runs the production build (`vscode:prepublish`). vsce also validates the manifest and the README. |
 | `npm run install-local` | Builds the package and installs it into every profile of the VS Code of this computer; `-- --profile <name>` installs into one profile. |
@@ -87,7 +87,7 @@ or `examples/closures.ts`, adapt the lines in `test/gif/driver.ts` and run
 
 ## Reviewing the package
 
-The VSIX holds the three bundles of `dist/` as readable JavaScript: not
+The VSIX holds the two bundles of `dist/` as readable JavaScript: not
 minified, with the names of the source. To compare a VSIX with the sources,
 unpack it (a VSIX is a ZIP file), run `npm ci --ignore-scripts` and
 `npm run vscode:prepublish` at the tag of its version, and compare
@@ -102,7 +102,8 @@ locked versions of the tools, the build gives the same files.
 - The version is the only source of the package version, and the tag of a release names it.
 - The engine range defines the compatible VS Code versions. `@types/vscode` stays at the lowest version of that range, and the workflow "VS Code versions" tests that version.
 - `main` selects the bundle `dist/extension.js`. A test checks it.
-- `.vscodeignore` lists the files of the package, not a `files` field: it ignores everything and keeps the bundles, the style sheet, the icons, `package.json`, `README.md`, `CHANGELOG.md`, `LICENSE` and `SUPPORT.md`. A test checks the list, that the bundle of the extension leaves out the editor API and the built-in modules of Node.js only, and that the bundle of the TypeScript hooks, which runs in the program, imports only built-in modules of Node.js.
+- `.vscodeignore` lists the files of the package, not a `files` field: it ignores everything and keeps the bundles, the style sheet, the icons, `package.json`, `README.md`, `CHANGELOG.md`, `LICENSE` and `SUPPORT.md`. A test checks the list, and that the bundle of the extension leaves out the editor API and the built-in modules of Node.js only.
+- `extensionDependencies` names nimblescape TypeScript (`nimblescape.nimblescape-typescript`), whose debug type `ts` runs the programs. VS Code installs it together with Mindbug. A test checks it.
 - `extensionKind` selects the workspace host, where the files and the runtimes are, also on a remote host.
 - The activation event `onDebug` activates the extension when a debug session starts; the commands activate it too.
 - `contributes` declares the commands, the menus, the settings and the debug type `mindbug`, with the attributes of its launch configuration and its snippet.

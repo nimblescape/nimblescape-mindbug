@@ -12,6 +12,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_VIEW_OPTIONS } from '../../src/model.ts';
+import { TS_EXTENSION } from '../../src/runtime.ts';
 
 /** The root folder of this repository, which holds the manifest and the documents. */
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -84,6 +85,10 @@ describe('the manifest', () => {
   it('declares no runtime dependency', () => {
     expect(manifest.dependencies).toBeUndefined();
   });
+
+  it('depends on the extension that contributes the debug type "ts"', () => {
+    expect(manifest.extensionDependencies).toEqual([TS_EXTENSION]);
+  });
 });
 
 describe('the package', () => {
@@ -94,7 +99,6 @@ describe('the package', () => {
     expect(ignore[0], '.vscodeignore ignores everything first').toBe('**');
     const kept = [
       'dist/extension.js',
-      'dist/typeScriptHooks.js',
       'dist/webview.js',
       'dist/webview.css',
       'resources/icon.png',
@@ -120,10 +124,6 @@ describe('the package', () => {
     const { local, packages } = runtimeImports('src/extension.ts');
     expect(local.has('src/heapWalker.ts'), 'the scan finds the modules that the entry point imports').toBe(true);
     for (const name of packages) expect(name === 'vscode' || name.startsWith('node:'), `the bundle imports ${name}`).toBe(true);
-    // The hooks run in the debugged program: they import only modules of Node.js, and no other module of Mindbug.
-    const hooks = runtimeImports('src/typeScriptHooks.ts');
-    expect([...hooks.local], 'the hooks import no module of Mindbug').toEqual(['src/typeScriptHooks.ts']);
-    for (const name of hooks.packages) expect(name.startsWith('node:'), `the hooks import ${name}`).toBe(true);
     const view = runtimeImports('webview/main.ts');
     expect([...view.packages], 'the bundle of the view imports no package').toEqual([]);
   });

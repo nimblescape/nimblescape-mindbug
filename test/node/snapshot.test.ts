@@ -3,9 +3,9 @@
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
 // End-to-end test of the snapshot collector against a real Node.js program, through the V8 inspector of Node.js.
-// Node.js runs the program as Mindbug runs it (typeScript.ts). FakeDap answers the Debug Adapter Protocol request
-// stackTrace the way VS Code's JavaScript debugger does, and the collector sends its requests to V8 directly, as
-// through the CDP proxy of the debugger. The fixtures are ES modules (fixtures/package.json), as in a course.
+// Node.js runs the program with the TypeScript compiler of VS Code (typeScript.ts), the compiler that the command ts
+// takes in VS Code. FakeDap answers the Debug Adapter Protocol request stackTrace the way VS Code's JavaScript debugger
+// does, and the collector sends its requests to V8 directly, as through the CDP proxy of the debugger. The fixtures are ES modules (fixtures/package.json), as in a course.
 //
 // npm run test:node (vitest.node.config.mts); `npm test` does not run them. Without the TypeScript of the VS Code in
 // .vscode-test/, Node.js 26 cannot run the fixtures, and the tests are skipped.

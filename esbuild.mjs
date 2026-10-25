@@ -2,9 +2,8 @@
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
-// Builds the extension (Node.js, CommonJS), the hooks with which Node.js runs TypeScript (src/typeScriptHooks.ts;
-// Node.js, CommonJS, which Node.js loads with --require) and the webview (browser) into dist/. VS Code provides the
-// module `vscode` at run time, so the bundle of the extension leaves it out. The bundles are readable JavaScript: not
+// Builds the extension (Node.js, CommonJS) and the webview (browser) into dist/. VS Code provides the module `vscode`
+// at run time, so the bundle of the extension leaves it out. The bundles are readable JavaScript: not
 // minified, so that they keep the names of the source and anyone can read the code of the package and compare it with
 // the source (CONTRIBUTING.md, "Reviewing the package"). The option `keepNames` stays off: it adds calls of a helper of
 // esbuild into every function, also into installHeapWalker of src/heapWalker.ts, whose text runs in the debugged
@@ -33,15 +32,6 @@ const extension = {
   external: ['vscode'],
 };
 
-const hooks = {
-  ...common,
-  entryPoints: ['src/typeScriptHooks.ts'],
-  outfile: 'dist/typeScriptHooks.js',
-  platform: 'node',
-  format: 'cjs',
-  target: 'node24',
-};
-
 const webview = {
   ...common,
   entryPoints: ['webview/main.ts'],
@@ -54,15 +44,15 @@ const webview = {
 mkdirSync('dist', { recursive: true });
 // No map of an earlier development build may stay next to a minified bundle.
 if (production) {
-  for (const file of ['dist/extension.js.map', 'dist/typeScriptHooks.js.map', 'dist/webview.js.map']) rmSync(file, { force: true });
+  for (const file of ['dist/extension.js.map', 'dist/webview.js.map']) rmSync(file, { force: true });
 }
 const copyCss = () => copyFileSync('webview/style.css', 'dist/webview.css');
 
 if (watch) {
-  const contexts = await Promise.all([extension, hooks, webview].map((b) => esbuild.context(b)));
+  const contexts = await Promise.all([extension, webview].map((b) => esbuild.context(b)));
   await Promise.all(contexts.map((c) => c.watch()));
   copyCss();
 } else {
-  await Promise.all([extension, hooks, webview].map((b) => esbuild.build(b)));
+  await Promise.all([extension, webview].map((b) => esbuild.build(b)));
   copyCss();
 }

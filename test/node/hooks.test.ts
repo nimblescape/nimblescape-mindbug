@@ -2,7 +2,7 @@
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
-// The hooks of Mindbug (src/typeScriptHooks.ts) in Node.js, with the TypeScript compiler of the VS Code in
+// The hooks of the tests (typeScriptHooks.ts) in Node.js, with the TypeScript compiler of the VS Code in
 // .vscode-test/ (typeScript.ts). Without it, or in a Node.js without synchronous module hooks, the test is skipped.
 
 import { test } from 'vitest';
@@ -11,9 +11,8 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { nodeRunsTypeScript } from '../../src/runtime.ts';
-import { TYPESCRIPT_VARIABLE } from '../../src/typeScriptHooks.ts';
-import { hooksFile, vscodeTypeScript } from './typeScript.ts';
+import { TYPESCRIPT_VARIABLE } from './typeScriptHooks.ts';
+import { hooksFile, nodeHasHooks, vscodeTypeScript } from './typeScript.ts';
 
 /** A program with an enum, a class with constructor parameter properties, and an import of another TypeScript file. */
 const PROGRAM = `import { greet } from './greet.ts';
@@ -45,7 +44,7 @@ const GREET = `export function greet(name: string): string {
 const typescript = vscodeTypeScript();
 const hooks = hooksFile();
 
-test.skipIf(!typescript || !nodeRunsTypeScript(process.version))('Node.js runs enums and parameter properties with the hooks', () => {
+test.skipIf(!typescript || !nodeHasHooks(process.version))('Node.js runs enums and parameter properties with the hooks', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mindbug-hooks-'));
   try {
     const env = { ...process.env, [TYPESCRIPT_VARIABLE]: typescript };
