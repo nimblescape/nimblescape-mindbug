@@ -1,6 +1,6 @@
 # Support
 
-Mindbug is free and open source. Ask questions and report problems in the [issues on GitHub](https://github.com/nimblescape/nimblescape-mindbug/issues). Search the open and closed issues first. The [user guide](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/guide.md#troubleshooting) has a section "Troubleshooting".
+Mindbug is free and open source. Ask questions and report problems in the [issues on GitHub](https://github.com/nimblescape/mindbug-vscode/issues). Search the open and closed issues first. The [user guide](https://github.com/nimblescape/mindbug-vscode/blob/main/docs/guide.md#troubleshooting) has a section "Troubleshooting".
 
 ## What to include in a report
 

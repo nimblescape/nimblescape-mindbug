@@ -12,12 +12,12 @@
   "homepage": "https://nimblescape.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nimblescape/nimblescape-mindbug.git"
+    "url": "https://github.com/nimblescape/mindbug-vscode.git"
   },
   "bugs": {
-    "url": "https://github.com/nimblescape/nimblescape-mindbug/issues"
+    "url": "https://github.com/nimblescape/mindbug-vscode/issues"
   },
-  "qna": "https://github.com/nimblescape/nimblescape-mindbug/issues",
+  "qna": "https://github.com/nimblescape/mindbug-vscode/issues",
   "engines": {
     "vscode": "^1.125.0"
   },
