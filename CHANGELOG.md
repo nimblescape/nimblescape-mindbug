@@ -5,6 +5,14 @@ takes the section of a version as the notes of its GitHub release.
 
 ## 0.2.1
 
+**Faster steps in a deep call stack.** Mindbug now reads the objects of
+all scopes of a step at once. Before, it read them once for each scope,
+so an object that several scopes reach, for example a list that a
+recursive function passes on, was read again for each call. The setting
+`nimblescape.mindbug.maxObjects` now counts the objects of the whole
+step, not of each scope. The objects of the variables come first, then
+the objects that they point to, the newest function call first.
+
 **Only while the view is open.** Mindbug now reads the memory of a paused
 program only while the Mindbug view is open. Before, it ran its helper at
 each pause of every debug session of the JavaScript debugger for Node.js,

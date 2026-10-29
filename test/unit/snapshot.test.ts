@@ -21,7 +21,7 @@ import {
   callArgument,
 } from '../../src/snapshot.ts';
 import { installFunction, WALKER_VERSION, walkerFunction } from '../../src/heapWalker.ts';
-import type { HeapObject, Value } from '../../src/model.ts';
+import type { HeapObject, MemorySnapshot, Value } from '../../src/model.ts';
 import type { CdpCallFrame, CdpClient, CdpRemoteObject } from '../../src/v8Connection.ts';
 
 /** A frame of the student's code as VS Code's JavaScript debugger gives it in the stack trace. */
@@ -96,10 +96,10 @@ function fakeV8(
         calledIn.add(i);
         if (params.functionDeclaration === installFunction()) return { result: { type: 'string', value: 'installed' } };
         assert.equal(params.functionDeclaration, walkerFunction());
-        // The first argument is the limits, the others the values of the variables.
+        // The first argument is the limits, the others the values of the variables of all frames.
         const vars = params.arguments.slice(1).map((a: { objectId: string }, k: number) => {
-          const [, , j, name] = a.objectId.split('|');
-          return { name: String(k), value: walker(i, name, Number(j)) };
+          const [, frame, j, name] = a.objectId.split('|');
+          return { name: String(k), value: walker(Number(frame), name, Number(j)) };
         });
         return { result: { type: 'string', value: JSON.stringify({ v: WALKER_VERSION, vars, objects, missing: [] }) } };
       }
@@ -451,6 +451,71 @@ test('the variables keep the order of V8: own variables, then blocks from the ou
     ['zeta', 'alpha', 'swap'],
   );
   assert.equal(s.fallback, true);
+});
+
+/**
+ * A recursion: two calls of countdown and the Global scope, each with a variable that points to the same array. The
+ * spy records, for each call of the heap walker, the frames of its arguments; a call with the values of several frames
+ * fails when `oneCallFails` is true.
+ */
+function recursion(oneCallFails = false) {
+  const items: CdpRemoteObject = { type: 'object', subtype: 'array', className: 'Array', description: 'Array(3)' };
+  const frames: FakeCallFrame[] = [
+    { functionName: 'countdown', scopes: [{ type: 'local', vars: [['n', num(1)], ['items', items]] }, { type: 'global', vars: [] }] },
+    { functionName: 'countdown', scopes: [{ type: 'local', vars: [['n', num(2)], ['items', items]] }, { type: 'global', vars: [] }] },
+    { functionName: '', scopes: [{ type: 'module', vars: [['items', items]] }, { type: 'global', vars: [] }] },
+  ];
+  const dap = stackTrace([dapFrame(1, 'countdown'), dapFrame(2, 'countdown'), dapFrame(3, '<anonymous>')]);
+  const objects: HeapObject[] = [{ id: 1, kind: 'array', type: 'Array', items: [], length: 3 }];
+  const walker = (frame: number, name: string): Value =>
+    name === 'items' ? { k: 'ref', id: 1 } : name === 'n' ? { k: 'num', v: String(frame + 1) } : { k: 'undef' };
+  const v8 = fakeV8(frames, walker, objects);
+  const calls: string[][] = [];
+  const spy: CdpClient = {
+    callFrames: () => v8.callFrames(),
+    send: (method, params: any) => {
+      if (method === 'Runtime.callFunctionOn' && params.functionDeclaration === walkerFunction()) {
+        const of = params.arguments.slice(1).map((a: { objectId: string }) => a.objectId.split('|')[1]);
+        calls.push(of);
+        if (oneCallFails && new Set(of).size > 1) {
+          return Promise.reject(new Error('Argument should belong to the same JavaScript world as target object'));
+        }
+      }
+      return v8.send(method, params);
+    },
+  };
+  return { dap, spy, calls };
+}
+
+const valuesByFrame = (s: MemorySnapshot) => s.frames.map((f) => [f.name, f.vars.map((v) => [v.name, v.value])]);
+
+const RECURSION_VALUES = [
+  ['Global scope', [['items', { k: 'ref', id: 1 }]]],
+  ['countdown', [['n', { k: 'num', v: '2' }], ['items', { k: 'ref', id: 1 }]]],
+  ['countdown', [['n', { k: 'num', v: '1' }], ['items', { k: 'ref', id: 1 }]]],
+];
+
+test('one call of the heap walker reads all frames of a step, the newest frame first', async () => {
+  const { dap, spy, calls } = recursion();
+  const s = await collectSnapshot(dap, spy, 1, 2);
+  assert.equal(calls.length, 1, 'one call for three frames');
+  // The walker reads breadth first, so the order of its arguments decides which objects come first.
+  assert.deepEqual([...new Set(calls[0])], ['0', '1', '2']);
+  assert.deepEqual(calls[0], [...calls[0]].sort());
+  assert.deepEqual(valuesByFrame(s), RECURSION_VALUES);
+  assert.deepEqual(Object.keys(s.objects), ['1']);
+  assert.equal(s.fallback, false);
+});
+
+test('when the one call of the heap walker fails, each frame is read with its own call', async () => {
+  const { dap, spy, calls } = recursion(true);
+  const s = await collectSnapshot(dap, spy, 1, 2);
+  assert.deepEqual(
+    calls.map((c) => [...new Set(c)]),
+    [['0', '1', '2'], ['0'], ['1'], ['2']],
+  );
+  assert.deepEqual(valuesByFrame(s), RECURSION_VALUES);
+  assert.ok(s.frames.every((f) => f.note === undefined), 'no error in a frame');
 });
 
 test('a stack that changed between the answers of the debugger and of V8 is not read', async () => {
