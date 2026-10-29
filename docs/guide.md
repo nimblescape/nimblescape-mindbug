@@ -93,6 +93,8 @@ The editor shows the line where the program was at that step, also when that lin
 
 The view keeps the steps of the newest debug session, at most `nimblescape.mindbug.maxHistorySteps` steps; then the oldest steps go away. A new debug session starts a new history, and so does **Restart** (Ctrl+Shift+F5) of the debugger: the steps of the earlier run go away, and the steps of the new run count from 1.
 
+Mindbug reads the memory only while the view is open. When you close the view, the pauses after that are not steps, and Mindbug sends no request to the program. When you open the view again (**Open Mindbug**), it reads the current pause as the next step, and the steps from before stay in the history.
+
 ## Commands
 
 | Command | Where | What it does |

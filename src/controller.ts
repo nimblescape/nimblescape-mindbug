@@ -3,7 +3,7 @@
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
 // Connects the debugger with the memory panel: it watches the debug sessions, reads a new
-// snapshot at every pause and sends it to the panel.
+// snapshot at every pause while the panel is open and sends it to the panel.
 
 import * as vscode from 'vscode';
 import { blockMarkLines, blockMarks, blockRanges, bracketPairs, type BlockMark, type BracketPair } from './blockRanges.ts';
@@ -51,6 +51,8 @@ export class MemoryController implements vscode.Disposable {
   private panel: MemoryPanel | undefined;
   private readonly autoOpened = new Set<string>();
   private paused: PauseState | undefined;
+  /** The pause of the newest snapshot. A pause while the panel was closed has no snapshot until the panel opens. */
+  private readPause: PauseState | undefined;
   private refreshSeq = 0;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly disposables: vscode.Disposable[] = [];
@@ -166,6 +168,11 @@ export class MemoryController implements vscode.Disposable {
             this.panel = undefined;
             this.viewOverrides = {};
             this.onViewStep(undefined);
+            // Mindbug reads the memory only while the panel is open: a read that runs now gives no step, and the
+            // connections to V8 close. The step history stays for the panel that opens next.
+            clearTimeout(this.refreshTimer);
+            this.refreshSeq++;
+            for (const id of [...this.connections.keys()]) this.disconnect(id);
           },
           onViewStep: (m) => this.onViewStep(m),
           onViewOption: (name, value) => void this.saveViewOption(name, value),
@@ -180,8 +187,9 @@ export class MemoryController implements vscode.Disposable {
     const item = vscode.debug.activeStackItem;
     if (!this.paused && item && JS_DEBUG_TYPES.includes(item.session.type)) {
       this.paused = { session: item.session, threadId: item.threadId };
-      this.scheduleRefresh();
     }
+    // The pause can have come while the panel was closed, when Mindbug did not read it.
+    if (this.paused && this.paused !== this.readPause) this.scheduleRefresh();
   }
 
   /**
@@ -528,7 +536,12 @@ export class MemoryController implements vscode.Disposable {
     this.post({ type: 'history', snapshots: [], sessionId: '' });
   }
 
+  /**
+   * Reads the memory of the current pause soon. Only while the panel is open: with the panel closed, Mindbug sends no
+   * request to the debugger and runs no helper in the program.
+   */
   private scheduleRefresh(): void {
+    if (!this.panel) return;
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
     this.refreshTimer = setTimeout(() => void this.refresh(), 40);
   }
@@ -545,9 +558,10 @@ export class MemoryController implements vscode.Disposable {
 
   private async refresh(): Promise<void> {
     const pause = this.paused;
-    if (!pause) return;
+    if (!pause || !this.panel) return;
     const seq = ++this.refreshSeq;
-    // The steps count the pauses of one run of the program, which is one session of the JavaScript debugger.
+    // The steps count the pauses that Mindbug read in one run of the program, which is one session of the JavaScript
+    // debugger. A pause while the panel was closed is not a step.
     const sameRun = this.lastSession?.id === pause.session.id;
     const step = sameRun ? (this.history[this.history.length - 1]?.step ?? 0) + 1 : 1;
     try {
@@ -564,6 +578,7 @@ export class MemoryController implements vscode.Disposable {
         this.viewedStep = undefined;
       }
       this.lastSession = pause.session;
+      this.readPause = pause;
       this.history.push(snapshot);
       const max = this.maxSteps();
       if (this.history.length > max) this.history.splice(0, this.history.length - max);

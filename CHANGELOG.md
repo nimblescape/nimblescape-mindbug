@@ -5,6 +5,14 @@ takes the section of a version as the notes of its GitHub release.
 
 ## 0.2.1
 
+**Only while the view is open.** Mindbug now reads the memory of a paused
+program only while the Mindbug view is open. Before, it ran its helper at
+each pause of every debug session of the JavaScript debugger for Node.js,
+also while the view was closed, for example when you debug a project at
+work. With the view closed, Mindbug now sends no request to the debugger.
+When you open the view during a pause, it reads that pause. The pauses
+while the view is closed are not steps of the step history.
+
 **The view after it opens again.** When you closed the Mindbug view after
 the program had ended and opened it again, the view said "Paused at …"
 and marked the last step as the step where the program is now. Now it
