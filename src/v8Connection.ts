@@ -75,18 +75,26 @@ export class V8Connection implements CdpClient {
 
   /** Opens the connection of a debug session of VS Code's JavaScript debugger, or gives undefined when that fails. */
   static async open(dap: DapClient): Promise<V8Connection | undefined> {
+    let ws: WebSocket | undefined;
     try {
       const proxy = await dap.request('requestCDPProxy');
       if (typeof proxy?.port !== 'number' || typeof WebSocket === 'undefined') return undefined;
       const host = String(proxy.host ?? '127.0.0.1');
-      const ws = new WebSocket(`ws://${host.includes(':') ? `[${host}]` : host}:${proxy.port}${proxy.path ?? ''}`);
+      const socket = new WebSocket(`ws://${host.includes(':') ? `[${host}]` : host}:${proxy.port}${proxy.path ?? ''}`);
+      ws = socket;
       await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS);
-        ws.addEventListener('open', () => (clearTimeout(timer), resolve()), { once: true });
-        ws.addEventListener('error', () => (clearTimeout(timer), reject(new Error('no connection'))), { once: true });
+        socket.addEventListener('open', () => (clearTimeout(timer), resolve()), { once: true });
+        socket.addEventListener('error', () => (clearTimeout(timer), reject(new Error('no connection'))), { once: true });
       });
-      return new V8Connection(ws);
+      return new V8Connection(socket);
     } catch {
+      // A socket that did not open in time must not open later without an owner that closes it.
+      try {
+        ws?.close();
+      } catch {
+        // already closed
+      }
       return undefined;
     }
   }
@@ -103,11 +111,18 @@ export class V8Connection implements CdpClient {
         this.pending.delete(id);
         reject(new Error(`no answer from V8 to ${method}`));
       }, TIMEOUT_MS);
-      this.pending.set(id, {
-        resolve: (v) => (clearTimeout(timer), resolve(v)),
-        reject: (e) => (clearTimeout(timer), reject(e)),
-      });
-      this.ws.send(JSON.stringify({ id, method, params }));
+      const p = {
+        resolve: (v: any) => (clearTimeout(timer), resolve(v)),
+        reject: (e: Error) => (clearTimeout(timer), reject(e)),
+      };
+      this.pending.set(id, p);
+      try {
+        this.ws.send(JSON.stringify({ id, method, params }));
+      } catch (e) {
+        // The socket is closing: the request fails at once, not after the timeout.
+        this.pending.delete(id);
+        p.reject(e instanceof Error ? e : new Error(String(e)));
+      }
     });
   }
 

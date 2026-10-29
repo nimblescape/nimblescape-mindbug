@@ -15,7 +15,7 @@
 
 import type { Value } from './model.ts';
 
-export const WALKER_VERSION = 6;
+export const WALKER_VERSION = 7;
 export const GLOBAL_NAME = '__mindbug';
 
 export interface WalkerLimits {
@@ -42,36 +42,90 @@ export function installHeapWalker(version: number, globalName: string): string {
     return 'ready';
   }
 
-  // Keep references to built-ins, so later changes by the program do not affect the walker.
+  // Keep references to built-ins, so later changes by the program do not affect the walker. The walker calls no method
+  // of an object or an array by its name (such as `list.push(x)` or `for … of`, which calls the iterator of the
+  // array), because the program can replace these methods: it calls the saved functions with `apply`. Only the text of
+  // functions and classes is read with the methods of strings and regular expressions.
   const O = Object;
   const getProto = O.getPrototypeOf;
   const getOwnDesc = O.getOwnPropertyDescriptor;
+  const hasOwn = O.hasOwn;
   const ownKeys = Reflect.ownKeys;
   const apply = Reflect.apply;
   const isArray = Array.isArray;
   const isView = ArrayBuffer.isView;
   const stringify = JSON.stringify;
   const objectIs = O.is;
-  const WeakMapCtor = WeakMap;
-  const SetCtor = Set;
+  const getter = (proto: object, key: string) => (getOwnDesc(proto, key) as PropertyDescriptor).get as () => unknown;
+  const strSlice = String.prototype.slice;
   const fnToString = Function.prototype.toString;
   const mapEntries = Map.prototype.entries;
+  const mapIterNext = getProto(apply(mapEntries, new Map(), [])).next;
   const setValues = Set.prototype.values;
-  const mapSize = (getOwnDesc(Map.prototype, 'size') as PropertyDescriptor).get as () => number;
-  const setSize = (getOwnDesc(Set.prototype, 'size') as PropertyDescriptor).get as () => number;
+  const setIterNext = getProto(apply(setValues, new Set(), [])).next;
+  const mapSize = getter(Map.prototype, 'size');
+  const setSize = getter(Set.prototype, 'size');
+  const setHas = Set.prototype.has;
+  const setAdd = Set.prototype.add;
+  const typedArrayLength = getter(getProto(Uint8Array.prototype), 'length');
+  const dataViewLength = getter(DataView.prototype, 'byteLength');
   const dateGetTime = Date.prototype.getTime;
   const dateToIso = Date.prototype.toISOString;
-  const reSource = (getOwnDesc(RegExp.prototype, 'source') as PropertyDescriptor).get as () => string;
+  const reSource = getter(RegExp.prototype, 'source');
   const reToString = RegExp.prototype.toString;
+  const weakMapGet = WeakMap.prototype.get;
+  const weakMapSet = WeakMap.prototype.set;
   const weakMapHas = WeakMap.prototype.has;
   const weakSetHas = WeakSet.prototype.has;
-  const PromiseCtor = Promise;
+  const promiseProto = Promise.prototype;
   const errorProto = Error.prototype;
 
-  const ids = new WeakMapCtor<object, number>();
+  const ids = new WeakMap<object, number>();
   let nextId = 1;
   let limits = { objects: 300, items: 100, fields: 50, str: 200 };
   let cur: { vars: { name: string; value: Value }[]; seen: Set<number>; queue: object[] } | null = null;
+
+  /** Adds `v` at the end of an array of the walker, without the method `push`, which the program can replace. */
+  function add<T>(list: T[], v: T): void {
+    list[list.length] = v;
+  }
+
+  /** True when `list` has the value `v`, without the method `indexOf`. */
+  function has<T>(list: T[], v: T): boolean {
+    for (let i = 0; i < list.length; i++) if (list[i] === v) return true;
+    return false;
+  }
+
+  /** True when `proto` is on the prototype chain of `o`, without `instanceof`, which the program can change. */
+  function inherits(o: object, proto: object): boolean {
+    try {
+      for (let p = getProto(o); p; p = getProto(p)) if (p === proto) return true;
+    } catch {
+      // A Proxy whose handler throws.
+    }
+    return false;
+  }
+
+  /**
+   * The JSON text of a result of the walker, which holds only objects and arrays of the walker, strings, numbers and
+   * booleans. `JSON.stringify` would call a method `toJSON` that the program adds to `Object.prototype` or
+   * `Array.prototype`; this writes the objects itself, and `JSON.stringify` only the strings and numbers.
+   */
+  function json(v: unknown): string {
+    if (typeof v !== 'object' || v === null) return stringify(v) as string;
+    let text = '';
+    if (isArray(v)) {
+      for (let i = 0; i < v.length; i++) text += (i > 0 ? ',' : '') + json(v[i]);
+      return '[' + text + ']';
+    }
+    const keys = ownKeys(v);
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i] as string;
+      const x = (v as Record<string, unknown>)[key];
+      if (x !== undefined) text += (text ? ',' : '') + stringify(key) + ':' + json(x);
+    }
+    return '{' + text + '}';
+  }
 
   function brand(fn: Function, o: unknown): boolean {
     try {
@@ -83,19 +137,19 @@ export function installHeapWalker(version: number, globalName: string): string {
   }
 
   function idOf(o: object): number {
-    let id = ids.get(o);
+    let id = apply(weakMapGet, ids, [o]) as number | undefined;
     if (id === undefined) {
       id = nextId++;
-      ids.set(o, id);
+      apply(weakMapSet, ids, [o, id]);
     }
     return id;
   }
 
   function ref(o: object): Value {
     const id = idOf(o);
-    if (cur && !cur.seen.has(id)) {
-      cur.seen.add(id);
-      cur.queue.push(o);
+    if (cur && !apply(setHas, cur.seen, [id])) {
+      apply(setAdd, cur.seen, [id]);
+      add(cur.queue, o);
     }
     return { k: 'ref', id };
   }
@@ -105,7 +159,7 @@ export function installHeapWalker(version: number, globalName: string): string {
       case 'number':
         return { k: 'num', v: objectIs(v, -0) ? '-0' : String(v) };
       case 'string':
-        return v.length > limits.str ? { k: 'str', v: v.slice(0, limits.str), cut: true } : { k: 'str', v };
+        return v.length > limits.str ? { k: 'str', v: apply(strSlice, v, [0, limits.str]) as string, cut: true } : { k: 'str', v };
       case 'boolean':
         return { k: 'bool', v };
       case 'undefined':
@@ -123,7 +177,7 @@ export function installHeapWalker(version: number, globalName: string): string {
   }
 
   function encDesc(d: PropertyDescriptor): Value {
-    return 'value' in d ? enc(d.value) : { k: 'accessor', get: !!d.get, set: !!d.set };
+    return hasOwn(d, 'value') ? enc(d.value) : { k: 'accessor', get: !!d.get, set: !!d.set };
   }
 
   function className(o: object): string {
@@ -133,7 +187,7 @@ export function installHeapWalker(version: number, globalName: string): string {
         return 'Object';
       }
       const d = getOwnDesc(p, 'constructor');
-      const c = d && 'value' in d ? d.value : undefined;
+      const c = d && hasOwn(d, 'value') ? d.value : undefined;
       if (typeof c === 'function') {
         const n = getOwnDesc(c, 'name');
         if (n && typeof n.value === 'string' && n.value) {
@@ -144,21 +198,6 @@ export function installHeapWalker(version: number, globalName: string): string {
       // A Proxy or an exotic object: use the default name.
     }
     return 'Object';
-  }
-
-  function isError(o: object): boolean {
-    try {
-      let p = getProto(o);
-      while (p) {
-        if (p === errorProto) {
-          return true;
-        }
-        p = getProto(p);
-      }
-    } catch {
-      // ignore
-    }
-    return false;
   }
 
   function isClassFn(f: unknown): boolean {
@@ -176,7 +215,7 @@ export function installHeapWalker(version: number, globalName: string): string {
       const p = getProto(o);
       if (!p) return undefined;
       const d = getOwnDesc(p, 'constructor');
-      const c = d && 'value' in d ? d.value : undefined;
+      const c = d && hasOwn(d, 'value') ? d.value : undefined;
       return isClassFn(c) ? c : undefined;
     } catch {
       return undefined;
@@ -185,7 +224,7 @@ export function installHeapWalker(version: number, globalName: string): string {
 
   function memberName(key: string | symbol, d: PropertyDescriptor): string {
     const name = typeof key === 'symbol' ? '[' + String(key) + ']' : key;
-    if ('value' in d) return name + '()';
+    if (hasOwn(d, 'value')) return name + '()';
     if (d.get && d.set) return 'get/set ' + name;
     return (d.get ? 'get ' : 'set ') + name;
   }
@@ -197,8 +236,8 @@ export function installHeapWalker(version: number, globalName: string): string {
    */
   function declaredAttributes(src: string): string[] {
     const names: string[] = [];
-    const add = (n: string) => {
-      if (n && names.indexOf(n) < 0) names.push(n);
+    const addName = (n: string) => {
+      if (n && !has(names, n)) add(names, n);
     };
     const finish = (raw: string) => {
       let head = raw.trim();
@@ -210,7 +249,7 @@ export function installHeapWalker(version: number, globalName: string): string {
       let name = (eq >= 0 ? head.slice(0, eq) : head).replace(/[?!:].*$/s, '').trim();
       if (/^["'].*["']$/.test(name)) name = name.slice(1, -1);
       if (!name || name.charAt(0) === '#' || /[\s{}]/.test(name)) return;
-      add(name);
+      addName(name);
     };
     let i = src.indexOf('{');
     if (i < 0) return names;
@@ -275,7 +314,7 @@ export function installHeapWalker(version: number, globalName: string): string {
     if (names.length === 0) {
       const re = /\bthis\.([A-Za-z_$][\w$]*)\s*=(?!=)/g;
       let m: RegExpExecArray | null;
-      while ((m = re.exec(src)) !== null) add(m[1]);
+      while ((m = re.exec(src)) !== null) addName(m[1]);
     }
     return names;
   }
@@ -286,27 +325,32 @@ export function installHeapWalker(version: number, globalName: string): string {
     out.fields = [];
     out.methods = [];
     let hidden = 0;
-    for (const key of ownKeys(c)) {
+    const statics = ownKeys(c);
+    for (let i = 0; i < statics.length; i++) {
+      const key = statics[i];
       if (key === 'length' || key === 'name' || key === 'prototype') continue;
       const d = getOwnDesc(c, key);
       if (!d) continue;
-      const isMethod = !d.enumerable && (!('value' in d) || typeof d.value === 'function');
+      const isMethod = !d.enumerable && (!hasOwn(d, 'value') || typeof d.value === 'function');
       if (isMethod) {
-        out.methods.push({ name: memberName(key, d), isStatic: true });
+        add(out.methods, { name: memberName(key, d), isStatic: true });
       } else if (out.fields.length < limits.fields) {
-        out.fields.push({ name: typeof key === 'symbol' ? String(key) : key, value: encDesc(d) });
+        add(out.fields, { name: typeof key === 'symbol' ? String(key) : key, value: encDesc(d) });
       } else {
         hidden++;
       }
     }
-    const proto = (c as any).prototype;
+    const protoDesc = getOwnDesc(c, 'prototype');
+    const proto = protoDesc && hasOwn(protoDesc, 'value') ? protoDesc.value : undefined;
     if (proto && typeof proto === 'object') {
-      for (const key of ownKeys(proto)) {
+      const members = ownKeys(proto);
+      for (let i = 0; i < members.length; i++) {
+        const key = members[i];
         if (key === 'constructor') continue;
         const d = getOwnDesc(proto, key);
         if (!d) continue;
-        if (!('value' in d) || typeof d.value === 'function') {
-          out.methods.push({ name: memberName(key, d), isStatic: false });
+        if (!hasOwn(d, 'value') || typeof d.value === 'function') {
+          add(out.methods, { name: memberName(key, d), isStatic: false });
         }
       }
     }
@@ -366,20 +410,20 @@ export function installHeapWalker(version: number, globalName: string): string {
         out.items = [];
         for (let i = 0; i < m; i++) {
           const d = getOwnDesc(arr, i);
-          out.items.push(d === undefined ? { k: 'hole' } : encDesc(d));
+          add(out.items, d === undefined ? { k: 'hole' } : encDesc(d));
         }
         if (n > m) out.more = n - m;
         return out;
       }
-      if (isView(o) && !(o instanceof DataView)) {
+      if (isView(o) && !brand(dataViewLength, o)) {
         const ta = o as unknown as ArrayLike<number | bigint>;
-        const n = ta.length;
+        const n = apply(typedArrayLength, o, []) as number;
         const m = Math.min(n, limits.items);
         out.kind = 'array';
         out.type = className(o);
         out.length = n;
         out.items = [];
-        for (let i = 0; i < m; i++) out.items.push(enc(ta[i]));
+        for (let i = 0; i < m; i++) add(out.items, enc(ta[i]));
         if (n > m) out.more = n - m;
         return out;
       }
@@ -390,9 +434,9 @@ export function installHeapWalker(version: number, globalName: string): string {
         const total = apply(mapSize, o, []) as number;
         const it = apply(mapEntries, o, []) as Iterator<[unknown, unknown]>;
         for (let i = 0; i < limits.items; i++) {
-          const r = it.next();
+          const r = apply(mapIterNext, it, []) as IteratorResult<[unknown, unknown]>;
           if (r.done) break;
-          out.entries.push({ key: enc(r.value[0]), value: enc(r.value[1]) });
+          add(out.entries, { key: enc(r.value[0]), value: enc(r.value[1]) });
         }
         if (total > out.entries.length) out.more = total - out.entries.length;
         return out;
@@ -404,9 +448,9 @@ export function installHeapWalker(version: number, globalName: string): string {
         const total = apply(setSize, o, []) as number;
         const it = apply(setValues, o, []) as Iterator<unknown>;
         for (let i = 0; i < limits.items; i++) {
-          const r = it.next();
+          const r = apply(setIterNext, it, []) as IteratorResult<unknown>;
           if (r.done) break;
-          out.items.push(enc(r.value));
+          add(out.items, enc(r.value));
         }
         if (total > out.items.length) out.more = total - out.items.length;
         return out;
@@ -430,7 +474,7 @@ export function installHeapWalker(version: number, globalName: string): string {
         out.text = 'contents not visible';
         return out;
       }
-      if (o instanceof PromiseCtor) {
+      if (inherits(o, promiseProto)) {
         out.kind = 'value';
         out.type = 'Promise';
         return out;
@@ -439,11 +483,12 @@ export function installHeapWalker(version: number, globalName: string): string {
       // A plain object or a class instance: UML object notation.
       out.type = className(o);
       out.fields = [];
-      const err = isError(o);
+      const err = inherits(o, errorProto);
       const keys = ownKeys(o);
       let shown = 0;
       let hidden = 0;
-      for (const key of keys) {
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
         const d = getOwnDesc(o, key);
         if (!d) continue;
         const wanted = d.enumerable || (err && key === 'message');
@@ -452,7 +497,7 @@ export function installHeapWalker(version: number, globalName: string): string {
           hidden++;
           continue;
         }
-        out.fields.push({ name: typeof key === 'symbol' ? String(key) : key, value: encDesc(d) });
+        add(out.fields, { name: typeof key === 'symbol' ? String(key) : key, value: encDesc(d) });
         shown++;
       }
       if (hidden > 0) out.more = hidden;
@@ -475,10 +520,10 @@ export function installHeapWalker(version: number, globalName: string): string {
           str: newLimits.str ?? limits.str,
         };
       }
-      cur = { vars: [], seen: new SetCtor<number>(), queue: [] };
+      cur = { vars: [], seen: new Set<number>(), queue: [] };
     },
     v(name: string, value: unknown): void {
-      if (cur) cur.vars.push({ name, value: enc(value) });
+      if (cur) add(cur.vars, { name, value: enc(value) });
     },
     end(): string {
       const c = cur;
@@ -486,12 +531,12 @@ export function installHeapWalker(version: number, globalName: string): string {
       const objects: any[] = [];
       let i = 0;
       while (i < c.queue.length && objects.length < limits.objects) {
-        objects.push(describe(c.queue[i++]));
+        add(objects, describe(c.queue[i++]));
       }
       const missing: number[] = [];
-      for (; i < c.queue.length; i++) missing.push(idOf(c.queue[i]));
+      for (; i < c.queue.length; i++) add(missing, idOf(c.queue[i]));
       cur = null;
-      return stringify({ v: version, vars: c.vars, objects, missing });
+      return json({ v: version, vars: c.vars, objects, missing });
     },
   };
   O.defineProperty(g, globalName, { value: api, configurable: true, writable: true, enumerable: false });

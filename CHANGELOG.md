@@ -3,6 +3,35 @@
 Each section lists the changes of one released version. The release workflow
 takes the section of a version as the notes of its GitHub release.
 
+## 0.2.1
+
+**The view after it opens again.** When you closed the Mindbug view after
+the program had ended and opened it again, the view said "Paused at …"
+and marked the last step as the step where the program is now. Now it
+says "The program has ended." When the view loads again, for example
+after **Developer: Reload Webviews** or when you move it to another
+window, it now shows the steps of the run again. Before, it was empty
+until the next step.
+
+**A program that changes built-in methods.** The helper of Mindbug that
+reads the objects in the program no longer calls a method that the
+program can replace, such as `Array.prototype.push`, the iterator of an
+array or `Map.prototype.entries`, and no `toJSON` that the program adds to
+`Object.prototype`. Before, a program that replaced such a method, for
+example in a lesson about prototypes, ran its own method at every step,
+and its output appeared in the terminal.
+
+**Open Mindbug with another debugger.** When the command **Open Mindbug**
+ran while a program of another language, for example Python, was paused,
+Mindbug sent its requests to that debugger and showed an error. Now it
+waits for a program of the JavaScript debugger.
+
+**Security.** The view tells the extension only the number of a step and
+of a scope, never a file: the extension takes the file and the line from
+its own step history. It checks each message of the view, and the nonce of
+the script of the view comes from the random generator for cryptography.
+A connection to the debugger that did not open in time is closed.
+
 ## 0.2.0
 
 **Mindbug runs programs with the command `ts`.** **Run with Mindbug** and

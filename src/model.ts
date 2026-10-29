@@ -219,17 +219,49 @@ export type ToWebview =
   /** The switches of the view, from the settings; sent again when a setting changes. */
   | { type: 'viewOptions'; opts: ViewOptions };
 
-/** Messages from the webview to the extension. */
+/**
+ * Messages from the webview to the extension. They name steps and frames by their numbers, never a file: the extension
+ * takes the file and the line from its own step history, so a page can open no other file.
+ */
 export type FromWebview =
   | { type: 'ready' }
-  | { type: 'openLocation'; file: string; line: number }
+  /** A click on the title of a scope: show the line of frame number `frame` (index in `frames`) of step `step`. */
+  | { type: 'openLocation'; step: number; frame: number }
   /**
    * The step that the panel shows. `live` is true for the newest step.
    * For an earlier step, the extension marks its line in the editor.
    */
-  | { type: 'viewStep'; step: number; live: boolean; file?: string; line?: number }
+  | { type: 'viewStep'; step: number; live: boolean }
   /** A click on a switch of the view; the extension saves that switch in the settings. */
   | { type: 'viewOption'; name: keyof ViewOptions; value: boolean };
+
+/** A whole number from 0 up, as the numbers of steps and frames are. */
+function isIndex(v: unknown): v is number {
+  return typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
+}
+
+/**
+ * The message of the webview, or undefined for anything else. The extension checks each message before it uses it: the
+ * page shows data of the debugged program, so the extension does not trust what the page sends.
+ */
+export function fromWebview(m: unknown): FromWebview | undefined {
+  if (typeof m !== 'object' || m === null) return undefined;
+  const msg = m as Record<string, unknown>;
+  switch (msg.type) {
+    case 'ready':
+      return { type: 'ready' };
+    case 'openLocation':
+      return isIndex(msg.step) && isIndex(msg.frame) ? { type: 'openLocation', step: msg.step, frame: msg.frame } : undefined;
+    case 'viewStep':
+      return isIndex(msg.step) && typeof msg.live === 'boolean' ? { type: 'viewStep', step: msg.step, live: msg.live } : undefined;
+    case 'viewOption': {
+      const name = VIEW_OPTION_NAMES.find((n) => n === msg.name);
+      return name && typeof msg.value === 'boolean' ? { type: 'viewOption', name, value: msg.value } : undefined;
+    }
+    default:
+      return undefined;
+  }
+}
 
 /**
  * What changed since the previous snapshot.

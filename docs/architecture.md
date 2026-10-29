@@ -30,7 +30,7 @@ flowchart LR
   EXT -- "CDP over the proxy of js-debug: call frames, scope variables, script code, helper calls" --> JSD
   JSD -- "callFunctionOn" --> HW
   EXT -- "snapshots (postMessage)" --> VIEW
-  VIEW -- "viewStep, viewOption" --> EXT
+  VIEW -- "viewStep, openLocation, viewOption" --> EXT
   EXT -- "marks the line of a step" --> ED
 ```
 
@@ -68,7 +68,7 @@ The extension runs in the extension host of VS Code (`extensionKind: workspace`)
 
 `installHeapWalker` in `src/heapWalker.ts` is one function whose text (`Function.prototype.toString`) the extension sends to the program with `Runtime.callFunctionOn`. It defines the global property `__mindbug` (not enumerable) with the functions `begin`, `v` and `end`. A second install with the same `WALKER_VERSION` does nothing. The helper stays in the program until the program ends, so the extension installs it only at the first step of a debug session, and again when the walker function returns `NOT_INSTALLED` (a new program in the same session).
 
-- At its install, the helper keeps references to the built-in functions that it uses (`Object.getPrototypeOf`, `Reflect.ownKeys`, `Map.prototype.entries`, …), so that a program that changes these built-ins later does not change what the helper reads.
+- At its install, the helper keeps references to the built-in functions that it uses (`Object.getPrototypeOf`, `Reflect.ownKeys`, `Map.prototype.entries`, the `next` of the iterators of maps and sets, `WeakMap.prototype.get`, …), so that a program that changes these built-ins later does not change what the helper reads. It calls no method of an object or an array by its name: no `list.push(x)` and no `for … of` over an array, which calls the iterator of the array, because the program can replace these methods. It writes the JSON text of its result itself (`json`), because `JSON.stringify` calls a method `toJSON` that the program can add to `Object.prototype`. Only to read the text of functions and classes (their signatures and the attributes that a class declares), it uses the methods of strings and regular expressions. A unit test replaces the built-in methods and checks that the helper calls none of them.
 - It gives each object a number in a `WeakMap`, so the numbers do not keep any object alive, and an object keeps its number while it lives.
 - It reads property descriptors and never calls a getter, a setter, `toString`, `valueOf` or `toJSON` of the program. A `Proxy` is the one exception: reading it runs the traps of its handler.
 - For each frame, the extension calls one function (`walkerFunction`) with `Runtime.callFunctionOn`. Its arguments are the limits and the values that V8 lists in the scopes of the frame: an object by its id of V8 (`objectId`), any other value by its value (`callArgument` in `src/snapshot.ts`). The function calls `__mindbug.v(index, value)` for each value, and `__mindbug.end()` walks the objects that the values reach, breadth first, up to the limits of the settings, and returns the JSON text. The snapshot finds the variable of each value by its index. When `__mindbug` is missing or has another version, the function returns `NOT_INSTALLED` and reads no value.
@@ -79,7 +79,9 @@ The text of `installHeapWalker` must run in another program, so the function use
 
 ### The view
 
-The view is a webview with the bundle `dist/webview.js` and the style sheet `dist/webview.css`. Its content security policy allows only the scripts with the nonce of the page, and the styles and images of the extension; it loads nothing from the network.
+The view is a webview with the bundle `dist/webview.js` and the style sheet `dist/webview.css`. Its content security policy allows only the scripts with the nonce of the page (128 random bits of `crypto.randomBytes`), and the styles and images of the extension; it loads nothing from the network.
+
+The page shows data of the debugged program, so the extension does not trust its messages. `fromWebview` in `src/model.ts` keeps only the known messages with values of the right type, and the messages name a step and a frame by their numbers, never a file: `viewStep` (the step that the view shows) and `openLocation` (a click on the title of a scope) carry the number of the step and of the frame, and the controller takes the file and the line from its own step history. A page that loads again (after "Reload Webviews", or when the panel moves to another window) sends `ready` again, and the controller sends it the switches, the steps of the run, the last status and the frame selected in the Call Stack view.
 
 | Module | What it does |
 | --- | --- |
@@ -125,8 +127,8 @@ A DAP request `continue`, `next`, `stepIn` or `stepOut`, or the event `continued
 
 ### Step history
 
-1. The step list, the slider or a key selects an earlier step. The view draws the snapshot of that step and sends `viewStep` with its file and line.
-2. The controller opens that file when it is not visible, shows the line, and marks it with a green arrow and a green line, as the debugger marks a selected stack frame, and with the text "Mindbug: step 8 of 14" at its end (`stepMarkText` in `src/model.ts`). The yellow line of the debugger stays the current position.
+1. The step list, the slider or a key selects an earlier step. The view draws the snapshot of that step and sends `viewStep` with the number of the step.
+2. The controller finds the step in its own step history, opens the file of its running function when it is not visible, shows the line, and marks it with a green arrow and a green line, as the debugger marks a selected stack frame, and with the text "Mindbug: step 8 of 14" at its end (`stepMarkText` in `src/model.ts`). The yellow line of the debugger stays the current position.
 3. **Show current step** (or End) selects the newest step again, and the controller removes the mark.
 
 A view that opens later receives the whole history of the newest session (message `history`). A new session starts a new history, and so does a restart of the session: the controller sees the DAP request `restart` (or `disconnect` or `terminate` with `restart: true`), removes the steps of the earlier run at once and sends the view a `history` without steps. The steps count the pauses of the session that pauses, which is the child session of the JavaScript debugger; after a restart, the new child session counts from 1.

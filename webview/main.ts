@@ -8,7 +8,7 @@
 import type { FromWebview, MemorySnapshot, ProgramState, ToWebview } from '../src/model.ts';
 import { computeChanges } from '../src/changes.ts';
 import { clearClassLinks, drawArrows, highlightArrows, showClassLinks } from './arrows.ts';
-import { StepHistory, stepLineText, stepTitle, topFrame, whereText } from './history.ts';
+import { StepHistory, stepLineText, stepTitle, whereText } from './history.ts';
 import { DEFAULT_VIEW_OPTIONS, type ViewOptions } from './layout.ts';
 import { renderFrames, renderHeap } from './render.ts';
 
@@ -138,8 +138,7 @@ function reportView(): void {
   const key = `${history.sessionId}:${snap.step}:${live}`;
   if (key === state.reportedView) return;
   state.reportedView = key;
-  const top = topFrame(snap);
-  vscode.postMessage({ type: 'viewStep', step: snap.step, live, file: top?.file, line: top?.line });
+  vscode.postMessage({ type: 'viewStep', step: snap.step, live });
 }
 
 function render(): void {
@@ -295,10 +294,12 @@ stopOnEntry.addEventListener('change', () => {
   saveOption('stopOnEntry');
 });
 
+// The extension finds the file and the line of the frame in its own step history.
 framesEl.addEventListener('click', (e) => {
   const title = (e.target as HTMLElement).closest<HTMLElement>('.frame-title.link');
-  if (title?.dataset.file) {
-    vscode.postMessage({ type: 'openLocation', file: title.dataset.file, line: Number(title.dataset.line) });
+  const snap = history.current();
+  if (title?.dataset.frame && snap) {
+    vscode.postMessage({ type: 'openLocation', step: snap.step, frame: Number(title.dataset.frame) });
   }
 });
 
