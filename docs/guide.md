@@ -158,7 +158,7 @@ The program has all the rights of your user: it can read and write files, use th
 | `nimblescape.mindbug.showUninitialized` | `false` | Show the variables whose line has not run yet, as "uninitialized": a `let`, `const` or `class` before its line. The switch **Show uninitialized** of the view changes it. |
 | `nimblescape.mindbug.showScopeFrames` | `true` | Draw the block scopes: a colored part in the view, and a rectangle with the same color in the editor around each block scope of the line where the program is. The switch **Show scope frames** of the view changes it. |
 | `nimblescape.mindbug.maxHistorySteps` | `500` | Number of steps that the view keeps for the step history (1 to 5000). |
-| `nimblescape.mindbug.maxObjects` | `300` | Number of heap objects that are read per scope (10 to 5000). |
+| `nimblescape.mindbug.maxObjects` | `300` | Number of heap objects that are read per step, for all scopes together (10 to 5000). |
 | `nimblescape.mindbug.maxArrayItems` | `100` | Number of array items, set members and map entries that are shown per object (5 to 2000). |
 | `nimblescape.mindbug.maxStringLength` | `200` | Number of characters that are shown per string (10 to 10000). |
 
@@ -186,7 +186,7 @@ The folder [examples](../examples) has nine small programs:
 - **Getters** are shown as `get`, not with their value, because calling a getter runs code of the program.
 - **A `Proxy`** runs the traps of its handler when the helper reads it: there is no way to read a proxy without them.
 - **`await`**: after an `await`, the function calls before it are no longer on the stack, so the view shows only the scopes up to the first `await`.
-- **Large programs**: the view reads at most `nimblescape.mindbug.maxObjects` objects per scope; an object after that shows "… not loaded". It shows at most `nimblescape.mindbug.maxArrayItems` items of an array, a set or a map, and at most `nimblescape.mindbug.maxStringLength` characters of a string.
+- **Large programs**: the view reads at most `nimblescape.mindbug.maxObjects` objects per step; an object after that shows "… not loaded". It reads the objects of the variables first, and then the objects that they point to, the newest function call first. It shows at most `nimblescape.mindbug.maxArrayItems` items of an array, a set or a map, and at most `nimblescape.mindbug.maxStringLength` characters of a string.
 - **Other languages**: the view follows only the JavaScript debugger for Node.js. It shows nothing for a program in a browser, or for other debuggers such as Python.
 - **Node.js 22 and the set-up of fields**: when the program pauses in the scope "(set up fields)" of a class that also has a static variable, Node.js 22 stops with a fatal error of V8 as soon as the debugger runs code there. Mindbug runs no code in that scope, but the debugger of VS Code can, for example for a watch expression or when you move the mouse over a variable in the editor. Node.js 24 does not have this fault.
 - **Node.js and breakpoints**: with Node.js, the program can miss the pause at its first line and pause first at a breakpoint. This happens when the line number of a breakpoint equals the line of the first statement in the JavaScript that Node.js runs for the TypeScript file, because of a fault of the JavaScript debugger of VS Code. Move the breakpoint to another line, or set it after the program has paused at its first line.

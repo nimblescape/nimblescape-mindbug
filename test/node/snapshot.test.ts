@@ -252,6 +252,38 @@ test.skipIf(skip)('a new program in the same session: the heap walker is install
   assert.equal(first.rounds, 5);
 });
 
+test.skipIf(skip)('one call of the heap walker per step: an object that several frames reach is read once', async () => {
+  // fill(3), fill(2), fill(1) and the Global scope: each call of fill has its own array and reaches the shared array.
+  const [all] = await pausesWithRounds('recursion.ts', 1);
+  const s = all.snapshot;
+  assert.deepEqual(
+    s.frames.map((f) => f.name),
+    ['Global scope', 'fill', 'fill', 'fill'],
+  );
+  const shared = idOf(variable(s, 'Global scope', 'shared'));
+  for (const f of s.frames.slice(1)) assert.equal(idOf(f.vars.find((v) => v.name === 'all')!.value), shared);
+  // The shared array and its 10 cells, 3 arrays of 20 cells, and the function fill.
+  assert.equal(Object.keys(s.objects).length, 11 + 3 * 21 + 1);
+  assert.deepEqual(s.missing, []);
+  assert.equal(all.rounds, 3);
+
+  // maxObjects counts for the whole step. The walker reads breadth first, and the newest frame first: the objects of
+  // the variables (4 arrays and the function fill), then the objects that they reach, first those of the newest call
+  // (the cells of the shared array, its parameter `all`, then the cells of its own array).
+  const [cut] = await pausesWithRounds('recursion.ts', 1, { limits: { ...DEFAULT_LIMITS, objects: 30 } });
+  const c = cut.snapshot;
+  const [global, fill1, fill2, fill3] = c.frames;
+  const ref = (f: (typeof c.frames)[number], name: string) => idOf(f.vars.find((v) => v.name === name)!.value);
+  const cells = (id: number) => c.objects[id].items!.map(idOf);
+  const read = (ids: number[]) => ids.filter((id) => id in c.objects).length;
+  assert.equal(Object.keys(c.objects).length, 30);
+  assert.equal(read([ref(global, 'shared'), ref(global, 'fill'), ref(fill1, 'own'), ref(fill2, 'own'), ref(fill3, 'own')]), 5);
+  assert.equal(read(cells(ref(global, 'shared'))), 10);
+  assert.equal(read(cells(ref(fill3, 'own'))), 15);
+  assert.equal(read(cells(ref(fill2, 'own'))), 0);
+  assert.equal(c.missing.length, 11 + 3 * 21 + 1 - 30);
+});
+
 test.skipIf(skip)('a long result of the heap walker comes whole from V8', async () => {
   const [s] = await pausesWithRounds('long.ts', 1, { limits: { ...DEFAULT_LIMITS, str: 2000 } });
   const words = s.snapshot.objects[idOf(variable(s.snapshot, 'Global scope', 'words'))];

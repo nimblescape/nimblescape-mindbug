@@ -19,7 +19,7 @@ export const WALKER_VERSION = 7;
 export const GLOBAL_NAME = '__mindbug';
 
 export interface WalkerLimits {
-  /** Maximum number of heap objects described per frame. */
+  /** Maximum number of heap objects described per call of the walker, which reads all frames of a step. */
   objects: number;
   /** Maximum number of array items, set members or map entries per object. */
   items: number;

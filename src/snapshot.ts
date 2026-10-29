@@ -285,8 +285,20 @@ interface FrameNames {
   target?: string;
 }
 
-/** What the heap walker read in a frame: its result, an error, or nothing because it is not installed. */
-type FrameRead = { result: WalkerResult } | { error: string } | { notInstalled: true } | undefined;
+/** What one call of the heap walker gives: its result, an error, or nothing because it is not installed. */
+type WalkerRead = { result: WalkerResult } | { error: string } | { notInstalled: true };
+
+/** What the heap walker read in a frame: the values of its variables by their index, or an error. */
+type FrameRead = { vars: Map<string, Value> } | { error: string } | undefined;
+
+/** What the heap walker read in a step: the values of each frame, and the objects that they reach. */
+interface StepRead {
+  frames: FrameRead[];
+  objects: HeapObject[];
+  missing: number[];
+  /** The walker is not installed in the program (or in the realm of a frame). */
+  notInstalled: boolean;
+}
 
 /** The name of the return value of a function in the local scope of its frame, as VS Code's debugger shows it. */
 export const RETURN_VALUE = 'Return value';
@@ -299,9 +311,9 @@ export const RETURN_VALUE = 'Return value';
  * back. Only the request stackTrace goes through the window of a remote session (for example a Codespace), from the
  * extension host to the window and back to the debugger. The requests to V8 go to the debugger directly (see
  * src/v8Connection.ts). A step needs three rounds, whatever the number of frames: the stack trace together with the
- * call frames of V8, the variables of all scopes, and the heap walker in all frames. The first step of a session
- * installs the walker in the round of the variables; when the walker is missing at a later step (a new program in the
- * same session), two more rounds install it and read the frames again.
+ * call frames of V8, the variables of all scopes, and one call of the heap walker for all frames. The first step of a
+ * session installs the walker in the round of the variables; when the walker is missing at a later step (a new program
+ * in the same session), two more rounds install it and read the frames again.
  */
 export async function collectSnapshot(
   dap: DapClient,
@@ -343,10 +355,10 @@ export async function collectSnapshot(
   const v8Frames = matchCallFrames(callFrames, allFrames, stackIndexes);
   if (!v8Frames) throw new Error('the call frames of V8 do not match the call stack of the debugger');
 
-  // The newest frame where the helper can run.
+  // The newest frame where the helper can run. The helper runs on its global object.
   const helperIndex = userFrames.findIndex((f) => !isFieldSetupFrame(f.name));
+  const target = helperIndex < 0 ? undefined : targetOf(v8Frames[helperIndex]);
   const install = async (): Promise<boolean> => {
-    const target = helperIndex < 0 ? undefined : targetOf(v8Frames[helperIndex]);
     if (!target) return false;
     try {
       await callFunction(v8, target, installFunction(), [{ value: WALKER_VERSION }, { value: GLOBAL_NAME }]);
@@ -360,23 +372,14 @@ export async function collectSnapshot(
     Promise.all(userFrames.map((f, i) => readNames(v8, f, v8Frames[i], i === userFrames.length - 1))),
     step === 1 ? install() : undefined,
   ]);
-  // The helper never runs in the frame that sets up the fields of a new object.
-  const walk = (i: number) => (isFieldSetupFrame(userFrames[i].name) ? undefined : walkFrame(v8, named[i], limits));
-  let reads = await Promise.all(named.map((_, i) => walk(i)));
+  // The helper never reads the frame that sets up the fields of a new object.
+  const walked = userFrames.map((f) => !isFieldSetupFrame(f.name));
+  let read = await walkStep(v8, named, walked, target, limits);
+  if (read.notInstalled && (await install())) read = await walkStep(v8, named, walked, target, limits);
+  snapshot.fallback = helperIndex < 0 || read.notInstalled;
 
-  const notInstalled = (r: FrameRead) => r !== undefined && 'notInstalled' in r;
-  if (reads.some(notInstalled) && (await install())) {
-    reads = await Promise.all(named.map((_, i) => (notInstalled(reads[i]) ? walk(i) : reads[i])));
-  }
-  snapshot.fallback = helperIndex < 0 || reads.some(notInstalled);
-
-  const missing = new Set<number>();
-  for (const r of reads) {
-    if (!r || !('result' in r)) continue;
-    for (const o of r.result.objects) snapshot.objects[o.id] = o;
-    for (const id of r.result.missing) missing.add(id);
-  }
-  const frames = named.map((n, i) => withValues(n, reads[i], snapshot.objects));
+  for (const o of read.objects) snapshot.objects[o.id] = o;
+  const frames = named.map((n, i) => withValues(n, read.frames[i], snapshot.objects));
 
   // Oldest frame first, like Python Tutor.
   snapshot.frames = frames.reverse();
@@ -395,7 +398,7 @@ export async function collectSnapshot(
     // program never gets: `new` gives the new object. So the view shows no return value there.
     if (isClassSetup(frame.name)) frame.vars = frame.vars.filter((v) => v.name !== RETURN_VALUE);
   });
-  snapshot.missing = [...missing].filter((id) => !(id in snapshot.objects));
+  snapshot.missing = [...new Set(read.missing)].filter((id) => !(id in snapshot.objects));
   return snapshot;
 }
 
@@ -638,12 +641,15 @@ function displayOf(
   return { frame, display };
 }
 
-/** Runs the heap walker for the values of the variables of a frame. */
-async function walkFrame(v8: CdpClient, named: FrameNames, limits: WalkerLimits): Promise<FrameRead> {
-  const values = named.display.flatMap((o) => (o.listed.remote ? [callArgument(o.listed.remote)] : []));
-  if (values.length === 0 || !named.target) return undefined;
+/** The arguments of the heap walker for the variables of a frame: the values that V8 lists. */
+function frameArguments(named: FrameNames): object[] {
+  return named.display.flatMap((o) => (o.listed.remote ? [callArgument(o.listed.remote)] : []));
+}
+
+/** Runs the heap walker on `target` for `values`. */
+async function callWalker(v8: CdpClient, target: string, values: object[], limits: WalkerLimits): Promise<WalkerRead> {
   try {
-    const text = await callFunction(v8, named.target, walkerFunction(), [{ value: limits }, ...values]);
+    const text = await callFunction(v8, target, walkerFunction(), [{ value: limits }, ...values]);
     if (text === NOT_INSTALLED) return { notInstalled: true };
     const result = parseWalkerResult(text);
     if (!result) throw new Error('the heap walker result could not be parsed');
@@ -653,16 +659,72 @@ async function walkFrame(v8: CdpClient, named: FrameNames, limits: WalkerLimits)
   }
 }
 
+/** The values of the variables `first` to `first + count - 1` of a result of the walker, by their index from 0. */
+function valuesOf(result: WalkerResult, first: number, count: number): Map<string, Value> {
+  const byIndex = new Map(result.vars.map((v) => [v.name, v.value]));
+  const values = new Map<string, Value>();
+  for (let k = 0; k < count; k++) {
+    const value = byIndex.get(String(first + k));
+    if (value) values.set(String(k), value);
+  }
+  return values;
+}
+
+/**
+ * Reads the values of the variables of all frames of a step with one call of the heap walker, on `target`. The
+ * newest frame comes first. The walker reads the objects breadth first with one list of the objects that it has seen,
+ * so it describes each object once, also when several frames reach it, and `limits.objects` counts for the whole
+ * step: the objects of the variables come before the objects that they reach, and the objects of the newest frame
+ * first. When the call fails, for example because a frame runs in another realm of the program (node:vm), each frame
+ * is read with its own call, on its own global object. `walked` says which frames the walker reads.
+ */
+async function walkStep(
+  v8: CdpClient,
+  named: FrameNames[],
+  walked: boolean[],
+  target: string | undefined,
+  limits: WalkerLimits,
+): Promise<StepRead> {
+  const args = named.map((n, i) => (walked[i] ? frameArguments(n) : []));
+  const values = args.flat();
+  const none: StepRead = { frames: named.map(() => undefined), objects: [], missing: [], notInstalled: false };
+  if (values.length === 0 || !target) return none;
+
+  const read = await callWalker(v8, target, values, limits);
+  if ('notInstalled' in read) return { ...none, notInstalled: true };
+  if ('result' in read) {
+    let first = 0;
+    const frames = args.map((a): FrameRead => {
+      const vars = valuesOf(read.result, first, a.length);
+      first += a.length;
+      return a.length > 0 ? { vars } : undefined;
+    });
+    return { frames, objects: read.result.objects, missing: read.result.missing, notInstalled: false };
+  }
+
+  const reads = await Promise.all(
+    named.map((n, i) => (args[i].length > 0 && n.target ? callWalker(v8, n.target, args[i], limits) : undefined)),
+  );
+  const step: StepRead = { frames: [], objects: [], missing: [], notInstalled: false };
+  for (let i = 0; i < reads.length; i++) {
+    const r = reads[i];
+    step.frames.push(r && 'result' in r ? { vars: valuesOf(r.result, 0, args[i].length) } : r && 'error' in r ? r : undefined);
+    if (r && 'notInstalled' in r) step.notInstalled = true;
+    if (r && 'result' in r) {
+      step.objects.push(...r.result.objects);
+      step.missing.push(...r.result.missing);
+    }
+  }
+  return step;
+}
+
 /** The frame with the values of its variables. `objects` holds the heap objects that all frames together have read. */
 function withValues(named: FrameNames, read: FrameRead, objects: Record<number, HeapObject>): Frame {
   const { frame, display } = named;
   if (read && 'error' in read) frame.note = `The heap could not be read in this scope: ${read.error}`;
 
-  // The heap walker names the value of each variable by its index in its arguments.
-  const walked = new Map<string, Value>();
-  if (read && 'result' in read) {
-    for (const v of read.result.vars) walked.set(v.name, v.value);
-  }
+  // The heap walker names the value of each variable by its index in the arguments of the frame.
+  const walked = read && 'vars' in read ? read.vars : new Map<string, Value>();
 
   for (const o of display) {
     const value = (o.arg === undefined ? undefined : walked.get(String(o.arg))) ?? o.listed.value;

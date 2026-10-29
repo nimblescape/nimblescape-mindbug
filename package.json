@@ -148,7 +148,7 @@
           "default": 300,
           "minimum": 10,
           "maximum": 5000,
-          "description": "Maximum number of heap objects that are read per scope."
+          "description": "Maximum number of heap objects that are read per step, for all scopes together."
         },
         "nimblescape.mindbug.maxArrayItems": {
           "type": "number",
