@@ -815,9 +815,10 @@ interface DapMessage {
   type: string;
   seq: number;
   command?: string;
+  event?: string;
   request_seq?: number;
   arguments?: { startFrame?: number };
-  body?: { stackFrames?: { name: string; source?: { path?: string; name?: string } }[] };
+  body?: { threadId?: number; stackFrames?: { name: string; source?: { path?: string; name?: string } }[] };
 }
 
 /** Records the file of the top frame of each call stack that the JavaScript debugger sends. */
@@ -837,6 +838,114 @@ function recordTopFrames(): { files: string[]; dispose(): void } {
     }),
   });
   return { files, dispose: () => tracker.dispose() };
+}
+
+interface Pause {
+  session: vscode.DebugSession;
+  threadId: number;
+}
+
+/**
+ * Records the pauses of the programs that start later, also the pauses that Mindbug does not read, and counts the
+ * requests `requestCDPProxy`, which only Mindbug sends.
+ */
+function recordPauses(): { next(): Promise<Pause>; cdpRequests(): number; dispose(): void } {
+  const pauses: Pause[] = [];
+  const waiters: ((p: Pause) => void)[] = [];
+  let cdpRequests = 0;
+  const tracker = vscode.debug.registerDebugAdapterTrackerFactory('pwa-node', {
+    createDebugAdapterTracker: (session) => ({
+      onWillReceiveMessage: (m: DapMessage) => {
+        if (m.type === 'request' && m.command === 'requestCDPProxy') cdpRequests++;
+      },
+      onDidSendMessage: (m: DapMessage) => {
+        if (m.type !== 'event' || m.event !== 'stopped') return;
+        const pause = { session, threadId: m.body?.threadId ?? 1 };
+        const waiter = waiters.shift();
+        if (waiter) waiter(pause);
+        else pauses.push(pause);
+      },
+    }),
+  });
+  return {
+    next: () => {
+      const pause = pauses.shift();
+      if (pause) return Promise.resolve(pause);
+      return new Promise((resolve, reject) => {
+        waiters.push(resolve);
+        setTimeout(() => reject(new Error('the program did not pause')), TIMEOUT);
+      });
+    },
+    cdpRequests: () => cdpRequests,
+    dispose: () => tracker.dispose(),
+  };
+}
+
+/** True when the helper of Mindbug is in the paused program: it adds the global `__mindbug`. */
+async function hasHelper(pause: Pause): Promise<boolean> {
+  const trace = await pause.session.customRequest('stackTrace', { threadId: pause.threadId, startFrame: 0, levels: 1 });
+  const frameId = trace?.stackFrames?.[0]?.id;
+  assert.equal(typeof frameId, 'number', 'the program is paused');
+  const result = await pause.session.customRequest('evaluate', { expression: "'__mindbug' in globalThis", frameId, context: 'watch' });
+  return String(result?.result) === 'true';
+}
+
+async function closeView(): Promise<void> {
+  const tabs = vscode.window.tabGroups.all
+    .flatMap((g) => g.tabs)
+    .filter((t) => t.input instanceof vscode.TabInputWebview && t.input.viewType.endsWith('nimblescape.mindbug.memory'));
+  await vscode.window.tabGroups.close(tabs);
+}
+
+/**
+ * Mindbug reads the memory of a paused program only while its view is open. A pause while the view is closed gets no
+ * request of Mindbug and no helper; the view reads it when it opens. The step history keeps the steps from before.
+ */
+async function onlyWhileTheViewIsOpen(api: MindbugApi): Promise<void> {
+  const config = () => vscode.workspace.getConfiguration('nimblescape.mindbug');
+  const file = path.join(examples(), 'return-object.ts');
+  const pauses = recordPauses();
+  try {
+    await closeView();
+    await config().update('openAutomatically', false, vscode.ConfigurationTarget.Global);
+    vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+    await vscode.window.showTextDocument(vscode.Uri.file(file));
+    const before = api.lastSnapshot();
+    const first = pauses.next();
+    // A launch configuration of VS Code's JavaScript debugger, which Mindbug did not start.
+    assert.ok(await STARTS[STARTS.length - 1].run(file), 'the debug session starts');
+    let pause = await first;
+    assert.equal(await hasHelper(pause), false, 'no helper in the program while the view is closed');
+    assert.equal(pauses.cdpRequests(), 0, 'no connection to V8 while the view is closed');
+    assert.equal(api.lastSnapshot(), before, 'no step while the view is closed');
+
+    // The view opens and reads the pause.
+    const opened = api.nextSnapshot(TIMEOUT);
+    await vscode.commands.executeCommand('nimblescape.mindbug.open');
+    const s = await opened;
+    assert.equal(s.step, 1);
+    assert.equal(await hasHelper(pause), true, 'the view runs the helper');
+    const requests = pauses.cdpRequests();
+    assert.ok(requests > 0);
+
+    // The view closes: the next pause gets no request of Mindbug.
+    await closeView();
+    const second = pauses.next();
+    await vscode.commands.executeCommand('workbench.action.debug.stepOver');
+    pause = await second;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    assert.equal(api.lastSnapshot(), s, 'no step while the view is closed');
+    assert.equal(pauses.cdpRequests(), requests, 'no new connection to V8 while the view is closed');
+
+    // The view opens again: the step history keeps step 1 and reads the pause as step 2.
+    const again = api.nextSnapshot(TIMEOUT);
+    await vscode.commands.executeCommand('nimblescape.mindbug.open');
+    assert.equal((await again).step, 2);
+    assert.deepEqual(api.historySteps(), [1, 2]);
+  } finally {
+    pauses.dispose();
+    await config().update('openAutomatically', true, vscode.ConfigurationTarget.Global);
+  }
 }
 
 async function stepsToTheEnd(api: MindbugApi, start: Start): Promise<void> {
@@ -985,6 +1094,8 @@ describe('the Mindbug view in VS Code', () => {
       if (!existed) await vscode.workspace.fs.delete(settings);
     }
   });
+
+  it('reads the memory of a paused program only while the view is open', () => onlyWhileTheViewIsOpen(api));
 
   for (const start of STARTS) {
     describe(start.title, () => {

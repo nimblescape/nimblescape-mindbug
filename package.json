@@ -1,7 +1,7 @@
 {
   "name": "nimblescape-mindbug",
   "displayName": "nimblescape Mindbug",
-  "description": "Shows the stack (one scope for each function call) and the heap of a paused TypeScript program as a diagram, to help students learn how memory works. Starts the program with the command ts of nimblescape TypeScript in the JavaScript debugger of VS Code, and at each pause runs a small helper in the program that reads its objects and changes nothing.",
+  "description": "Shows the stack (one scope for each function call) and the heap of a paused TypeScript program as a diagram, to help students learn how memory works. Starts the program with the command ts of nimblescape TypeScript in the JavaScript debugger of VS Code, and, while its view is open, at each pause runs a small helper in the program that reads its objects and changes nothing.",
   "version": "0.2.0",
   "publisher": "nimblescape",
   "license": "MIT",
