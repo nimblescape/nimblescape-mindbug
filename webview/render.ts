@@ -146,8 +146,7 @@ function renderFrame(frame: Frame, index: number, input: RenderInput, isTop: boo
   if (frame.file) {
     title.title = `${frame.file}, line ${frame.line} (click to show the line)`;
     title.classList.add('link');
-    title.dataset.file = frame.file;
-    title.dataset.line = String(frame.line);
+    title.dataset.frame = String(index);
   }
   box.append(title);
   if (isTop) box.append(runsMark(input.live !== false));

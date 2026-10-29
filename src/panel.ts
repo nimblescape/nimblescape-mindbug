@@ -4,8 +4,9 @@
 
 // The webview panel "Mindbug" beside the editor that shows the memory diagram.
 
+import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
-import type { FromWebview, ToWebview, ViewOptions } from './model.ts';
+import { fromWebview, type FromWebview, type ToWebview, type ViewOptions } from './model.ts';
 import { webviewHtml } from './webviewHtml.ts';
 
 export interface MemoryPanelHandlers {
@@ -14,7 +15,12 @@ export interface MemoryPanelHandlers {
   onViewStep(msg: Extract<FromWebview, { type: 'viewStep' }>): void;
   /** A click on a switch of the panel (see the `viewOption` message). */
   onViewOption(name: keyof ViewOptions, value: boolean): void;
-  /** The page of the panel is ready, also after it loaded again (for example after "Reload Webviews"). */
+  /** A click on the title of a scope (see the `openLocation` message). */
+  onOpenLocation(msg: Extract<FromWebview, { type: 'openLocation' }>): void;
+  /**
+   * The page of the panel is ready, also after it loaded again (for example after "Reload Webviews", or when the panel
+   * moves to another window): a page that loaded again has lost its steps.
+   */
   onReady(): void;
 }
 
@@ -31,7 +37,6 @@ export class MemoryPanel {
     this.panel = panel;
     const webview = panel.webview;
     const dist = vscode.Uri.joinPath(extensionUri, 'dist');
-    webview.options = { enableScripts: true, localResourceRoots: [dist] };
     webview.html = webviewHtml({
       cspSource: webview.cspSource,
       nonce: makeNonce(),
@@ -40,7 +45,7 @@ export class MemoryPanel {
       maxSteps,
       viewOptions,
     });
-    webview.onDidReceiveMessage((m: FromWebview) => this.onMessage(m), null, this.disposables);
+    webview.onDidReceiveMessage((m: unknown) => this.onMessage(m), null, this.disposables);
     panel.onDidDispose(() => this.dispose(), null, this.disposables);
   }
 
@@ -87,23 +92,18 @@ export class MemoryPanel {
     void this.panel.webview.postMessage(msg);
   }
 
-  private onMessage(m: FromWebview): void {
-    if (m.type === 'ready') {
+  private onMessage(message: unknown): void {
+    const m = fromWebview(message);
+    if (m?.type === 'ready') {
       this.ready = true;
       for (const q of this.queue.splice(0)) void this.panel.webview.postMessage(q);
       this.handlers?.onReady();
-    } else if (m.type === 'viewStep') {
+    } else if (m?.type === 'viewStep') {
       this.handlers?.onViewStep(m);
-    } else if (m.type === 'viewOption') {
+    } else if (m?.type === 'viewOption') {
       this.handlers?.onViewOption(m.name, m.value);
-    } else if (m.type === 'openLocation') {
-      const uri = vscode.Uri.file(m.file);
-      const line = Math.max(0, m.line - 1);
-      void vscode.window.showTextDocument(uri, {
-        viewColumn: this.editorColumn(),
-        selection: new vscode.Range(line, 0, line, 0),
-        preserveFocus: false,
-      });
+    } else if (m?.type === 'openLocation') {
+      this.handlers?.onOpenLocation(m);
     }
   }
 
@@ -116,9 +116,7 @@ export class MemoryPanel {
   }
 }
 
+/** The nonce of the script of the page: 128 random bits from the random generator for cryptography. */
 function makeNonce(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let s = '';
-  for (let i = 0; i < 32; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
-  return s;
+  return randomBytes(16).toString('hex');
 }

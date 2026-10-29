@@ -236,3 +236,103 @@ test('plain objects and arrays have no class', () => {
   const r = walk({ plain, list });
   for (const o of r.objects) assert.equal(o.cls, undefined);
 });
+
+test('a program that replaces built-in methods changes nothing that the walker reads, and none of them runs', () => {
+  // A lesson on prototypes can replace Array.prototype.push or add Object.prototype.toJSON. The walker saved the
+  // built-in functions at its install and calls none of the replaced ones. (It reads the text of functions and classes
+  // with the methods of strings, so they are not replaced here.)
+  class Shape {
+    static count = 1;
+    name = 'square';
+    get area(): number {
+      return 4;
+    }
+    grow(): void {}
+  }
+  const args: unknown[] = [
+    [1, [2, 3]],
+    new Map([['a', { b: 1 }]]),
+    new Set(['c']),
+    new Shape(),
+    new Uint8Array([4, 5]),
+    new DataView(new ArrayBuffer(2)),
+    Promise.resolve(1),
+    new Error('boom'),
+    'x'.repeat(300),
+  ];
+  const limits = { ...DEFAULT_LIMITS, str: 10 };
+  const read = () => walker(limits, args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8]);
+  const before = read();
+
+  // The replacements record their calls without the methods that they replace.
+  const calls: string[] = [];
+  const record = (label: string) => {
+    calls[calls.length] = label;
+  };
+  const patches: [object, PropertyKey, PropertyDescriptor | undefined][] = [];
+  const patch = (target: object, key: PropertyKey, make: (original: any) => PropertyDescriptor) => {
+    const original = Object.getOwnPropertyDescriptor(target, key);
+    patches[patches.length] = [target, key, original];
+    Object.defineProperty(target, key, { configurable: true, ...make(original?.value) });
+  };
+  const replace = (target: object, key: PropertyKey, label: string) =>
+    patch(target, key, (original) => ({
+      writable: true,
+      value(this: unknown, ...a: unknown[]) {
+        record(label);
+        return Reflect.apply(original, this, a);
+      },
+    }));
+  const hasInstance = (ctor: Function) =>
+    patch(ctor, Symbol.hasInstance, () => ({
+      value: () => {
+        record(`${ctor.name}[Symbol.hasInstance]`);
+        return false;
+      },
+    }));
+  hasInstance(Promise);
+  hasInstance(DataView);
+  patch(Object.prototype, 'toJSON', () => ({
+    writable: true,
+    value: () => {
+      record('Object.prototype.toJSON');
+      return 'changed';
+    },
+  }));
+  replace(Set.prototype, 'has', 'Set.prototype.has');
+  replace(Set.prototype, 'add', 'Set.prototype.add');
+  replace(WeakMap.prototype, 'get', 'WeakMap.prototype.get');
+  replace(WeakMap.prototype, 'set', 'WeakMap.prototype.set');
+  replace(Object.getPrototypeOf(new Map().entries()), 'next', 'next of a map iterator');
+  replace(Object.getPrototypeOf(new Set().values()), 'next', 'next of a set iterator');
+  replace(Object.getPrototypeOf([][Symbol.iterator]()), 'next', 'next of an array iterator');
+  replace(Array.prototype, Symbol.iterator, 'Array.prototype[Symbol.iterator]');
+  replace(Array.prototype, 'indexOf', 'Array.prototype.indexOf');
+  replace(Array.prototype, 'push', 'Array.prototype.push');
+  // A getter "value" of Object.prototype would run for the descriptor of a getter of the program, which has no value.
+  patch(Object.prototype, 'value', () => ({
+    get: () => {
+      record('Object.prototype.value');
+      return 'changed';
+    },
+  }));
+  let after = '';
+  let during: string[] = [];
+  try {
+    calls.length = 0;
+    after = read();
+    during = calls.slice();
+  } finally {
+    for (let i = patches.length - 1; i >= 0; i--) {
+      const [target, key, original] = patches[i];
+      if (original) Object.defineProperty(target, key, original);
+      else delete (target as Record<PropertyKey, unknown>)[key];
+    }
+  }
+  assert.deepEqual(during, []);
+  assert.equal(after, before);
+  const r = parsed(after);
+  assert.deepEqual(r.vars[8].value, { k: 'str', v: 'xxxxxxxxxx', cut: true });
+  assert.equal(byId(r)[(r.vars[5].value as { id: number }).id].kind, 'object', 'a DataView is no array');
+  assert.equal(byId(r)[(r.vars[6].value as { id: number }).id].type, 'Promise');
+});

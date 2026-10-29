@@ -59,20 +59,26 @@ What it does:
 
 What it does not do:
 
-- It calls no getter, no setter, and no `toString`, `valueOf`, `toJSON` or `Symbol.toPrimitive` of the program. It reads property descriptors, and it uses the built-in functions that it saved at its install, so that a program that changes `Object.prototype` or `Array.prototype` later does not change what it reads.
+- It calls no getter, no setter, and no `toString`, `valueOf`, `toJSON` or `Symbol.toPrimitive` of the program. It reads property descriptors, and it uses the built-in functions that it saved at its install, so that a program that replaces a built-in method later, for example `Array.prototype.push`, the iterator of arrays or `Map.prototype.entries`, or that adds `Object.prototype.toJSON`, does not change what it reads, and none of these functions of the program runs. A unit test checks this.
 - It changes no variable, no attribute and no array of the program.
 - It runs only while the program is paused, when the debugger asks for it.
 
 Where its protection ends:
 
 - A `Proxy` runs the traps of its handler, for example `ownKeys` and `getOwnPropertyDescriptor`, when the helper reads it. JavaScript offers no way to read a proxy without them.
+- To read the text of a function or a class (its signature, and the attributes that a class declares), the helper uses the methods of strings and regular expressions as the program has them. A program that replaces `String.prototype.slice`, for example, runs its own function there.
+- A program that adds a getter or a setter for a name such as `items` or `0` to `Object.prototype` or `Array.prototype` can see the objects that the helper builds for its result.
 - A program can detect the helper: it can read `globalThis.__mindbug`, and its timing changes while the debugger reads the memory. A program that behaves differently when it is debugged is not a program to learn with.
 
 ## The view
 
-The view is a webview of VS Code. Its content security policy (`src/webviewHtml.ts`) allows only the script of the extension with the nonce of the page, and the styles and images of the extension (`default-src 'none'`). It loads nothing from the network, and it reaches no file: it gets the snapshots from the extension as messages.
+The view is a webview of VS Code. Its content security policy (`src/webviewHtml.ts`) allows only the script of the extension with the nonce of the page (128 random bits from the random generator for cryptography of Node.js), and the styles and images of the extension (`default-src 'none'`). It loads nothing from the network, and it reaches no file: it gets the snapshots from the extension as messages.
 
-The view sends three kinds of messages to the extension: `viewStep` and `openLocation`, which open a file of a stack frame of a snapshot at its line in the editor, and `viewOption`, which carries the name and the value of a switch of the view after a click. The extension opens the file as a text document; it runs nothing. Of a `viewOption` message, it saves only the values `true` and `false` of the four user settings `nimblescape.mindbug.showClasses`, `showFunctions`, `showIds` and `showUninitialized`, and ignores any other name or value.
+The page shows names and values of the debugged program, so the extension treats its messages as untrusted: it checks each message (`fromWebview` in `src/model.ts`) and ignores a message of another type or with a value of the wrong type. The view sends four kinds of messages:
+
+- `ready`, when the page has loaded.
+- `viewStep` and `openLocation`, which carry only the number of a step and of a frame of that step, never a file. The extension takes the file and the line from its own step history and opens that file as a text document; it runs nothing. A step or a frame that the history does not have opens nothing, so the page cannot open any other file.
+- `viewOption`, which carries the name and the value of a switch of the view after a click. The extension saves only the values `true` and `false` of the six user settings of the switches (`nimblescape.mindbug.showClasses`, `showFunctions`, `showIds`, `showUninitialized`, `showScopeFrames` and `stopOnEntry`), and ignores any other name or value.
 
 ## Stored data
 

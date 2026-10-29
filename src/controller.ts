@@ -80,7 +80,8 @@ export class MemoryController implements vscode.Disposable {
   private readonly shownBlockMarks = new Map<string, BlockMark[]>();
   /** The brackets of the newest document that got block marks, for its version. */
   private brackets: { uri: string; version: number; pairs: BracketPair[] } | undefined;
-  private viewedStep: Extract<FromWebview, { type: 'viewStep' }> | undefined;
+  /** The earlier step that the view shows, with the file and the line of its running function; none for the newest step. */
+  private viewedStep: { step: number; file: string; line: number } | undefined;
   /** The reveals of revealLine, one after the other: a reveal that waits for an editor to open must not undo a later one. */
   private revealing: Promise<void> = Promise.resolve();
   /** The saves of the switches, one after the other, so that the last click wins. */
@@ -148,12 +149,8 @@ export class MemoryController implements vscode.Disposable {
       }),
       this.stepDecoration,
       this.blockDecoration,
+      vscode.debug.onDidChangeActiveStackItem(() => this.postFocusFrame()),
     );
-    // `onDidChangeActiveStackItem` exists since VS Code 1.90.
-    const debugApi = vscode.debug as any;
-    if (typeof debugApi.onDidChangeActiveStackItem === 'function') {
-      this.disposables.push(debugApi.onDidChangeActiveStackItem(() => this.postFocusFrame()));
-    }
   }
 
   /** Opens (or shows) the panel. Reads the current pause if there is one. */
@@ -172,24 +169,33 @@ export class MemoryController implements vscode.Disposable {
           },
           onViewStep: (m) => this.onViewStep(m),
           onViewOption: (name, value) => void this.saveViewOption(name, value),
-          // A page that loaded again shows the switches of its HTML, which can be older than the settings.
-          onReady: () => this.showViewOptions(true),
+          onOpenLocation: (m) => this.openLocation(m.step, m.frame),
+          onReady: () => this.onReady(),
         },
         this.maxSteps(),
         this.shownOptions,
       );
-      if (this.history.length > 0) {
-        this.post({ type: 'history', snapshots: this.history, sessionId: this.lastSession?.id ?? '' });
-      }
-      if (this.lastStatus) this.post(this.lastStatus);
     }
-    if (!this.paused) {
-      const item = (vscode.debug as any).activeStackItem;
-      if (item && item.session && typeof item.threadId === 'number') {
-        this.paused = { session: item.session, threadId: item.threadId };
-        this.scheduleRefresh();
-      }
+    // Only a session of VS Code's JavaScript debugger: Mindbug sends no request to the debugger of another language.
+    const item = vscode.debug.activeStackItem;
+    if (!this.paused && item && JS_DEBUG_TYPES.includes(item.session.type)) {
+      this.paused = { session: item.session, threadId: item.threadId };
+      this.scheduleRefresh();
     }
+  }
+
+  /**
+   * The page of the view has loaded: the first time after `open`, and again after "Reload Webviews" or when the panel
+   * moves to another window, which loads the page again without its steps. The page gets the switches (its HTML can
+   * have older ones than the settings), the steps of the run, the last status and the frame selected in the Call Stack.
+   */
+  private onReady(): void {
+    this.showViewOptions(true);
+    if (this.history.length > 0) {
+      this.post({ type: 'history', snapshots: this.history, sessionId: this.lastSession?.id ?? '' });
+    }
+    if (this.lastStatus) this.post(this.lastStatus);
+    this.postFocusFrame();
   }
 
   /** The block marks in the editors of a file (for tests). */
@@ -206,20 +212,25 @@ export class MemoryController implements vscode.Disposable {
   nextSnapshot(timeoutMs = 30000): Promise<MemorySnapshot> {
     return new Promise((resolve, reject) => {
       // The message names the state of the program and the last status of the view, to find the cause in a test log.
+      const waiter = (s: MemorySnapshot) => {
+        clearTimeout(timer);
+        resolve(s);
+      };
       const timer = setTimeout(() => {
+        const i = this.snapshotWaiters.indexOf(waiter);
+        if (i >= 0) this.snapshotWaiters.splice(i, 1);
         const status = this.lastStatus?.type === 'status' ? `, status "${this.lastStatus.text}"` : '';
         reject(new Error(`no snapshot (program ${this.paused ? 'paused' : 'not paused'}${status})`));
       }, timeoutMs);
-      this.snapshotWaiters.push((s) => {
-        clearTimeout(timer);
-        resolve(s);
-      });
+      this.snapshotWaiters.push(waiter);
     });
   }
 
   private post(msg: ToWebview): void {
     if (msg.type === 'status') this.lastStatus = msg;
-    if (msg.type === 'snapshot' || msg.type === 'history') this.lastStatus = undefined;
+    // A new step, or the empty history of a restart, ends what the last status says. The steps that a page gets again
+    // (onReady) do not: the program can have ended after them.
+    if (msg.type === 'snapshot' || (msg.type === 'history' && msg.snapshots.length === 0)) this.lastStatus = undefined;
     this.panel?.post(msg);
   }
 
@@ -297,13 +308,34 @@ export class MemoryController implements vscode.Disposable {
   /**
    * The panel shows another step. The editor shows the line of that step, as the debugger does at a pause, and an
    * earlier step gets its line marked. The line is already in the TypeScript file: VS Code's JavaScript debugger
-   * maps the stack frames through the source map of the runtime.
+   * maps the stack frames through the source map of the runtime. The file and the line come from the step history of
+   * the extension; a step that it does not have shows no line.
    */
   private onViewStep(m: Extract<FromWebview, { type: 'viewStep' }> | undefined): void {
-    this.viewedStep = m && !m.live && m.file && m.line ? m : undefined;
+    const snap = m && this.history.find((s) => s.step === m.step);
+    const top = snap?.frames[snap.frames.length - 1];
+    const at = m && top?.file && top.line ? { step: m.step, file: top.file, line: top.line } : undefined;
+    this.viewedStep = m && !m.live ? at : undefined;
     this.markViewedStep();
     this.markBlocks();
-    if (m?.file && m.line) this.revealLine(m.file, m.line, !m.live);
+    if (at) this.revealLine(at.file, at.line, !m?.live);
+  }
+
+  /**
+   * Shows the line of a frame of a step in the editor, after a click on the title of its scope in the view. The file
+   * and the line come from the step history of the extension.
+   */
+  private openLocation(step: number, frame: number): void {
+    const f = this.history.find((s) => s.step === step)?.frames[frame];
+    if (!f?.file) return;
+    const line = Math.max(0, f.line - 1);
+    void vscode.window
+      .showTextDocument(vscode.Uri.file(f.file), {
+        viewColumn: this.panel?.editorColumn() ?? vscode.ViewColumn.One,
+        selection: new vscode.Range(line, 0, line, 0),
+        preserveFocus: false,
+      })
+      .then(undefined, () => undefined); // the file does not exist any more
   }
 
   /**
@@ -343,7 +375,7 @@ export class MemoryController implements vscode.Disposable {
   private markViewedStep(): void {
     const m = this.viewedStep;
     for (const editor of vscode.window.visibleTextEditors) {
-      if (!m || !m.file || !m.line || !sameFile(editor.document.uri, m.file)) {
+      if (!m || !sameFile(editor.document.uri, m.file)) {
         editor.setDecorations(this.stepDecoration, []);
         continue;
       }
@@ -572,15 +604,18 @@ export class MemoryController implements vscode.Disposable {
   }
 
   private postFocusFrame(): void {
-    const item = (vscode.debug as any).activeStackItem;
-    const frameId = item && typeof item.frameId === 'number' ? item.frameId : undefined;
-    this.post({ type: 'focusFrame', frameId });
+    const item = vscode.debug.activeStackItem;
+    this.post({ type: 'focusFrame', frameId: item && 'frameId' in item ? item.frameId : undefined });
   }
 
   dispose(): void {
+    clearTimeout(this.refreshTimer);
+    clearTimeout(this.runningTimer);
+    this.refreshSeq++;
+    // The panel first: its end clears the marks in the editors, which need the decorations.
+    this.panel?.dispose();
     for (const id of [...this.connections.keys()]) this.disconnect(id);
     while (this.disposables.length) this.disposables.pop()?.dispose();
-    this.panel?.dispose();
   }
 }
 
