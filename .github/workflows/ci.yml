@@ -6,17 +6,17 @@
 # pull request, on the pinned Node.js 24 release (.node-version); VS Code 1.125
 # (engines.vscode) and later run extensions on Node.js 24 too. The job "test"
 # installs the locked development tools without install scripts, checks the
-# types, runs the unit tests, the screenshot tests, the tests in a real VS Code
-# (stable) and the tests against real Node.js programs, which run with the
-# TypeScript compiler of that VS Code, and packages the VSIX with vsce, which
-# also validates the manifest and the README. The VSIX and the screenshots
-# stay workflow artifacts for inspection.
+# types and the code (ESLint), runs the unit tests, the screenshot tests, the
+# tests in a real VS Code (stable) and the tests against real Node.js programs,
+# which run with the TypeScript compiler of that VS Code, and packages the VSIX
+# with vsce, which also validates the manifest and the README. The VSIX and the
+# screenshots stay workflow artifacts for inspection.
 # This workflow publishes nothing: the release workflow calls it for the commit
 # of a version and publishes the VSIX of that call. A change of this file
 # changes the release process: its pull request needs a dry run (rule 4). The
 # workflow "VS Code versions" calls it once per week with another VS Code
-# version; such a call runs only the type check, the unit tests, the tests in
-# VS Code and the package.
+# version; such a call runs only the type check, ESLint, the unit tests, the
+# tests in VS Code and the package.
 
 name: CI
 
@@ -71,6 +71,9 @@ jobs:
 
       - name: Check the types
         run: npm run typecheck
+
+      - name: Check the code with ESLint
+        run: npm run lint
 
       - name: Run the unit tests
         run: npm test

@@ -53,7 +53,24 @@ export interface CdpCallFrame {
 export interface CdpClient {
   /** The call frames of the current pause, the newest first, or none when the program runs. */
   callFrames(): Promise<CdpCallFrame[]>;
-  send(method: string, params?: object): Promise<any>;
+  /** The result of the answer, as V8 sends it: the caller checks what it reads. */
+  send(method: string, params?: object): Promise<unknown>;
+}
+
+/** The answer to the DAP request `requestCDPProxy`: the address of the WebSocket server of the debugger. */
+interface CdpProxyAddress {
+  host?: unknown;
+  port?: unknown;
+  path?: unknown;
+}
+
+/** A message of V8: the answer to a request (with its id), or an event (with its method). */
+interface CdpMessage {
+  id?: unknown;
+  result?: unknown;
+  error?: { message?: unknown };
+  method?: string;
+  params?: { callFrames?: CdpCallFrame[] };
 }
 
 /** The time after which a request without an answer fails, so that a step never waits for ever. */
@@ -62,7 +79,7 @@ const TIMEOUT_MS = 5000;
 export class V8Connection implements CdpClient {
   private readonly ws: WebSocket;
   private nextId = 1;
-  private readonly pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
+  private readonly pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   private paused: CdpCallFrame[] | undefined;
   private isClosed = false;
 
@@ -77,7 +94,7 @@ export class V8Connection implements CdpClient {
   static async open(dap: DapClient): Promise<V8Connection | undefined> {
     let ws: WebSocket | undefined;
     try {
-      const proxy = await dap.request('requestCDPProxy');
+      const proxy = (await dap.request('requestCDPProxy')) as CdpProxyAddress | undefined;
       if (typeof proxy?.port !== 'number' || typeof WebSocket === 'undefined') return undefined;
       const host = String(proxy.host ?? '127.0.0.1');
       const socket = new WebSocket(`ws://${host.includes(':') ? `[${host}]` : host}:${proxy.port}${proxy.path ?? ''}`);
@@ -103,7 +120,7 @@ export class V8Connection implements CdpClient {
     return this.isClosed;
   }
 
-  send(method: string, params: object = {}): Promise<any> {
+  send(method: string, params: object = {}): Promise<unknown> {
     if (this.isClosed) return Promise.reject(new Error('the connection to V8 is closed'));
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
@@ -112,7 +129,7 @@ export class V8Connection implements CdpClient {
         reject(new Error(`no answer from V8 to ${method}`));
       }, TIMEOUT_MS);
       const p = {
-        resolve: (v: any) => (clearTimeout(timer), resolve(v)),
+        resolve: (v: unknown) => (clearTimeout(timer), resolve(v)),
         reject: (e: Error) => (clearTimeout(timer), reject(e)),
       };
       this.pending.set(id, p);
@@ -147,9 +164,9 @@ export class V8Connection implements CdpClient {
   }
 
   private onMessage(text: string): void {
-    let m: any;
+    let m: CdpMessage;
     try {
-      m = JSON.parse(text);
+      m = JSON.parse(text) as CdpMessage;
     } catch {
       return;
     }

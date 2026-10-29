@@ -5,7 +5,7 @@
 // Entry point of the webview: receives snapshots from the extension, keeps the step history,
 // and draws the stack, the heap and the arrows.
 
-import type { FromWebview, MemorySnapshot, ProgramState, ToWebview } from '../src/model.ts';
+import type { FromWebview, ProgramState, ToWebview } from '../src/model.ts';
 import { computeChanges } from '../src/changes.ts';
 import { clearClassLinks, drawArrows, highlightArrows, showClassLinks } from './arrows.ts';
 import { StepHistory, stepLineText, stepTitle, whereText } from './history.ts';

@@ -25,11 +25,20 @@ import { V8Connection } from './v8Connection.ts';
 /** Requests that make the program run again. */
 const RUN_COMMANDS = new Set(['continue', 'next', 'stepIn', 'stepOut', 'stepBack', 'reverseContinue', 'goto', 'restartFrame']);
 
+/** The fields of a message of the Debug Adapter Protocol that the controller reads. */
+interface DapMessage {
+  type?: string;
+  command?: string;
+  event?: string;
+  arguments?: { restart?: unknown };
+  body?: { threadId?: unknown };
+}
+
 /**
  * True for a request that restarts the debug session: the request `restart`, or, for a debug adapter without it, the
  * requests `disconnect` and `terminate` with `restart: true`, after which VS Code starts the session again.
  */
-function isRestart(m: any): boolean {
+function isRestart(m: DapMessage | undefined): boolean {
   if (m?.command === 'restart') return true;
   return (m?.command === 'disconnect' || m?.command === 'terminate') && m.arguments?.restart === true;
 }
@@ -120,10 +129,10 @@ export class MemoryController implements vscode.Disposable {
     this.blockDecoration = vscode.window.createTextEditorDecorationType({});
     const tracker: vscode.DebugAdapterTrackerFactory = {
       createDebugAdapterTracker: (session) => ({
-        onDidSendMessage: (m: any) => this.onAdapterMessage(session, m),
-        onWillReceiveMessage: (m: any) => {
+        onDidSendMessage: (m: DapMessage | undefined) => this.onAdapterMessage(session, m),
+        onWillReceiveMessage: (m: DapMessage | undefined) => {
           if (m?.type !== 'request') return;
-          if (RUN_COMMANDS.has(m.command)) this.onRunning(session);
+          if (m.command !== undefined && RUN_COMMANDS.has(m.command)) this.onRunning(session);
           if (isRestart(m)) this.onRestart(session);
         },
       }),
@@ -463,7 +472,7 @@ export class MemoryController implements vscode.Disposable {
     return ranges ? blockMarks(text, ranges, this.brackets.pairs, tabSize) : [];
   }
 
-  private onAdapterMessage(session: vscode.DebugSession, m: any): void {
+  private onAdapterMessage(session: vscode.DebugSession, m: DapMessage | undefined): void {
     if (m?.type !== 'event') return;
     switch (m.event) {
       case 'stopped': {

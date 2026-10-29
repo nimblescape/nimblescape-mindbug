@@ -28,18 +28,19 @@ security model.
 | `media/` | The icons of the command **Open Mindbug** and of the line of an earlier step in the editor. |
 | `resources/icon.png`, `resources/icon.svg` | The Marketplace icon (256 × 256 PNG, because the Marketplace takes no SVG icon) and its source: two scopes of the stack and one object on the heap, on the tile of the nimblescape extensions. |
 | `esbuild.mjs` | Bundles the extension and the view. The bundles are readable: not minified. A production build (`--production`) has no source map. |
-| `tsconfig.json` | The TypeScript settings of the type check: strict, and no output, because esbuild builds the bundles. |
+| `tsconfig.json` | The TypeScript settings of the type check with TypeScript 6.0: strict, and no output, because esbuild builds the bundles. They are the same in every nimblescape extension, except the files they include and the settings that only Mindbug needs: the types of the browser for the view, and the settings that let Node.js run the tests without a build. |
+| `eslint.config.mjs` | The rules of `npm run lint`: the recommended rules of ESLint and of typescript-eslint, and the rules that find promises that nobody waits for, with the types of `tsconfig.json`. The file is the same in every nimblescape extension, except its lists of the ignored files and of the scripts of webviews. |
 | `vitest.config.mts`, `vitest.node.config.mts` | The settings of the unit tests (`test/unit/**/*.test.ts` and `scripts/**/*.test.mjs`) and of the tests against Node.js programs. |
 | `package.json` | The extension manifest. The section [Manifest](#manifest) explains it. |
 | `package-lock.json` | The locked development tools. npm writes this file, and nobody edits it by hand. |
 | `.node-version` | The Node release of the development tools. `actions/setup-node` in the workflows and local Node version managers read it. |
 | `.vscodeignore` | Lists the files of the package: the bundles, `dist/webview.css`, the icons of `media/`, `resources/icon.png`, `package.json`, `README.md`, `CHANGELOG.md`, `LICENSE` and `SUPPORT.md`. |
-| `.github/workflows/ci.yml` | Checks the types, runs all tests and packages every push to `main`, every pull request and the commit of every release. The release publishes the VSIX of this workflow, so a change of it needs a dry run (rule 4 of the [release rules](#release-rules)). |
+| `.github/workflows/ci.yml` | Checks the types and the code (ESLint), runs all tests and packages every push to `main`, every pull request and the commit of every release. The release publishes the VSIX of this workflow, so a change of it needs a dry run (rule 4 of the [release rules](#release-rules)). |
 | `.github/workflows/vscode-versions.yml` | Runs the tests in VS Code once per week on VS Code Insiders and on the lowest supported version. |
 | `.github/workflows/release.yml` | Releases a version on a manual start: commits the version to a temporary branch, tests and packages it with `ci.yml`, and only then moves `main` to it, creates its tag and GitHub release and publishes it to the Marketplace. A dry run tests without a change. The section [Release](#release) explains it. |
 | `.github/workflows/release-dry-run.yml` | Fails on a pull request that changes the release process (`release.yml`, `ci.yml` or `scripts/release-checks.mjs`) until a dry run on its branch tested the change (rule 4 of the [release rules](#release-rules)). |
 | `.github/workflows/marketplace-identity.yml` | Prints the Marketplace member ID of the publishing identity, to check the setup of the repository. |
-| `.github/dependabot.yml` | Proposes weekly updates of the development tools and of the pinned actions. |
+| `.github/dependabot.yml` | Proposes weekly updates of the development tools and of the pinned actions. TypeScript stays at 6.0.3, as in every nimblescape extension. |
 | `scripts/install-local.mjs`, `scripts/uninstall-local.mjs` | Install the built package into every profile of the VS Code of this computer, and remove it again. |
 | `scripts/marketplace-setup.sh` | Sets up the Marketplace publishing of the repository. The section [Setup of a repository](#setup-of-a-repository) explains it. |
 | `scripts/release-checks.mjs`, `scripts/release-checks.test.mjs` | The check of rule 4 of the [release rules](#release-rules), which the workflows run, and its test. |
@@ -48,8 +49,8 @@ security model.
 ## Development
 
 The extension uses VS Code APIs and has no npm runtime dependency. The
-development tools are TypeScript, esbuild, vitest, mocha with
-`@vscode/test-cli`, Playwright for the screenshots, and
+development tools are TypeScript 6.0, ESLint with typescript-eslint, esbuild,
+vitest, mocha with `@vscode/test-cli`, Playwright for the screenshots, and
 [`@vscode/vsce`](https://github.com/microsoft/vscode-vsce), the Microsoft tool
 that packages and publishes extensions. Everything runs on Node.js 24: the
 release in `.node-version` for the tools and CI, and the runtime of VS Code
@@ -62,6 +63,7 @@ that `npm run test:vscode` downloads, so CI runs `npm run test:node` after it.
 | --- | --- |
 | `npm ci --ignore-scripts` | Installs the locked development tools and runs no install script of a dependency. |
 | `npm run typecheck` | Checks the types with `tsc`. esbuild does not check them. |
+| `npm run lint` | Checks the code with ESLint (`eslint.config.mjs`). `npm run lint -- --fix` corrects what ESLint can correct itself. |
 | `npm test` | Runs the unit tests with vitest. They touch no installed editor. |
 | `npm run test:node` | Runs the tests against real Node.js programs, with the Node.js that runs npm. Run `npm run test:vscode` first, so that the tests find the TypeScript compiler of VS Code in `.vscode-test/`. |
 | `npm run record` | Records the steps of the examples with Node.js into `test/render/snapshots/`, after a change of the examples or of the snapshot. |

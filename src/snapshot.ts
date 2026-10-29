@@ -24,7 +24,8 @@ import type { CdpCallFrame, CdpClient, CdpRemoteObject, CdpScope } from './v8Con
 
 /** The part of a debug session that the collector needs. */
 export interface DapClient {
-  request(command: string, args?: object): Promise<any>;
+  /** The body of the answer, as the debugger sends it: the caller checks what it reads. */
+  request(command: string, args?: object): Promise<unknown>;
 }
 
 export interface DapSource {
@@ -317,7 +318,8 @@ export async function collectSnapshot(
     dap.request('stackTrace', { threadId, startFrame: 0, levels: 200 }),
     v8.callFrames(),
   ]);
-  const allFrames: DapStackFrame[] = (trace?.stackFrames ?? []).map(withLocalPath);
+  const body = trace as { stackFrames?: DapStackFrame[] } | undefined;
+  const allFrames: DapStackFrame[] = (body?.stackFrames ?? []).map(withLocalPath);
 
   // Keep the frames of the student's code. Stop at the first async boundary: the frames
   // after it are not on the stack any more and cannot be read.
@@ -438,13 +440,13 @@ export function callArgument(o: CdpRemoteObject): object {
  * also when the debugger pauses on caught exceptions. By value: V8 gives the whole string.
  */
 async function callFunction(v8: CdpClient, target: string, declaration: string, args: object[]): Promise<string> {
-  const res = await v8.send('Runtime.callFunctionOn', {
+  const res = (await v8.send('Runtime.callFunctionOn', {
     objectId: target,
     functionDeclaration: declaration,
     arguments: args,
     silent: true,
     returnByValue: true,
-  });
+  })) as { result?: CdpRemoteObject; exceptionDetails?: { text?: string; exception?: CdpRemoteObject } } | undefined;
   if (res?.exceptionDetails) {
     throw new Error(String(res.exceptionDetails.exception?.description ?? res.exceptionDetails.text));
   }
@@ -524,10 +526,12 @@ async function readNames(v8: CdpClient, f: DapStackFrame, cf: CdpCallFrame, isLa
       if (!wanted(kind) || !scope.object.objectId) return undefined;
       try {
         const [res, statement] = await Promise.all([
-          v8.send('Runtime.getProperties', { objectId: scope.object.objectId, ownProperties: true }),
+          v8.send('Runtime.getProperties', { objectId: scope.object.objectId, ownProperties: true }) as Promise<
+            { result?: { name: string; value?: CdpRemoteObject }[] } | undefined
+          >,
           kind === 'block' ? statementOf(v8, scope) : undefined,
         ]);
-        const vars: ListedVar[] = (res?.result ?? []).map((p: { name: string; value?: CdpRemoteObject }) => ({
+        const vars: ListedVar[] = (res?.result ?? []).map((p) => ({
           name: String(p.name),
           value: remoteValue(p.value),
           remote: p.value,
@@ -561,7 +565,7 @@ function scriptText(v8: CdpClient, scriptId: string): Promise<ScriptText | undef
   if (!texts) scriptTexts.set(v8, (texts = new Map()));
   let text = texts.get(scriptId);
   if (!text) {
-    text = v8.send('Debugger.getScriptSource', { scriptId }).then(
+    text = (v8.send('Debugger.getScriptSource', { scriptId }) as Promise<{ scriptSource?: unknown } | undefined>).then(
       (res) => (typeof res?.scriptSource === 'string' ? new ScriptText(res.scriptSource) : undefined),
       () => {
         // The next step asks again.

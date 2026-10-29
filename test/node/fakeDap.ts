@@ -28,7 +28,7 @@ function frameLabel(cf: PausedEvent['callFrames'][number]): string {
 
 export class FakeDap implements DapClient {
   /** Every request that was sent, for assertions. */
-  readonly log: { command: string; args: any }[] = [];
+  readonly log: { command: string; args: object }[] = [];
 
   private readonly inspector: NodeInspector;
   private readonly paused: PausedEvent;
@@ -38,7 +38,7 @@ export class FakeDap implements DapClient {
     this.paused = paused;
   }
 
-  async request(command: string, args: any = {}): Promise<any> {
+  async request(command: string, args: object = {}): Promise<unknown> {
     this.log.push({ command, args });
     if (command !== 'stackTrace') throw new Error(`unsupported request ${command}`);
     return {
@@ -70,7 +70,7 @@ export class RoundCounter {
   rounds = 0;
   readonly dap: DapClient;
   readonly v8: CdpClient;
-  private queue: { run: () => Promise<any>; resolve: (v: any) => void; reject: (e: unknown) => void }[] = [];
+  private queue: { run: () => Promise<unknown>; settle: (result: PromiseSettledResult<unknown>) => void }[] = [];
 
   constructor(dap: DapClient, v8: CdpClient) {
     this.dap = { request: (command, args) => this.add(() => dap.request(command, args)) };
@@ -81,9 +81,9 @@ export class RoundCounter {
   }
 
   private add<T>(run: () => Promise<T>): Promise<T> {
-    return new Promise((resolve, reject) => {
+    return new Promise<T>((resolve, reject) => {
       if (this.queue.length === 0) setTimeout(() => void this.answer(), 0);
-      this.queue.push({ run, resolve, reject });
+      this.queue.push({ run, settle: (r) => (r.status === 'fulfilled' ? resolve(r.value as T) : reject(r.reason)) });
     });
   }
 
@@ -91,6 +91,6 @@ export class RoundCounter {
     const round = this.queue.splice(0);
     this.rounds++;
     const results = await Promise.allSettled(round.map((r) => r.run()));
-    results.forEach((res, i) => (res.status === 'fulfilled' ? round[i].resolve(res.value) : round[i].reject(res.reason)));
+    results.forEach((res, i) => round[i].settle(res));
   }
 }

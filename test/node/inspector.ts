@@ -21,7 +21,7 @@ export interface PausedEvent {
 
 export class NodeInspector {
   private nextId = 1;
-  private readonly pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
+  private readonly pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   private readonly pauses: PausedEvent[] = [];
   private pauseWaiter: ((e: PausedEvent) => void) | undefined;
   private exited = false;
@@ -133,7 +133,7 @@ export class NodeInspector {
     return (line ?? location.lineNumber) + 1;
   }
 
-  send(method: string, params: object = {}): Promise<any> {
+  send(method: string, params: object = {}): Promise<unknown> {
     const id = this.nextId++;
     this.ws.send(JSON.stringify({ id, method, params }));
     return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));

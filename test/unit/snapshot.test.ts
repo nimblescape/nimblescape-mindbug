@@ -35,7 +35,7 @@ const dapFrame = (id: number, name: string, line = 1): DapStackFrame => ({
 
 /** A debugger that answers only the request stackTrace. */
 const stackTrace = (frames: DapStackFrame[], requests: string[] = []): DapClient => ({
-  async request(command: string): Promise<any> {
+  async request(command: string): Promise<unknown> {
     requests.push(command);
     if (command === 'stackTrace') return { stackFrames: frames };
     throw new Error('not in this test');
@@ -49,6 +49,14 @@ interface FakeCallFrame {
   scopes: { type: string; vars: [string, CdpRemoteObject | undefined][]; start?: [number, number] }[];
   this?: CdpRemoteObject;
   returnValue?: CdpRemoteObject;
+}
+
+/** The parameters of the requests that the fake V8 answers. */
+interface FakeParams {
+  scriptId?: string;
+  objectId?: string;
+  functionDeclaration?: string;
+  arguments?: { objectId: string }[];
 }
 
 /**
@@ -81,7 +89,7 @@ function fakeV8(
     async callFrames() {
       return callFrames;
     },
-    async send(method: string, params: any): Promise<any> {
+    async send(method: string, params: FakeParams): Promise<unknown> {
       requests.push(method);
       if (method === 'Debugger.getScriptSource') {
         assert.equal(params.scriptId, 'book');
@@ -97,7 +105,7 @@ function fakeV8(
         if (params.functionDeclaration === installFunction()) return { result: { type: 'string', value: 'installed' } };
         assert.equal(params.functionDeclaration, walkerFunction());
         // The first argument is the limits, the others the values of the variables.
-        const vars = params.arguments.slice(1).map((a: { objectId: string }, k: number) => {
+        const vars = (params.arguments ?? []).slice(1).map((a, k) => {
           const [, , j, name] = a.objectId.split('|');
           return { name: String(k), value: walker(i, name, Number(j)) };
         });
@@ -324,7 +332,7 @@ test('user frames: own files only', () => {
       line: 1,
       column: 1,
       source: path ? { name: 'x', path, sourceReference } : undefined,
-      presentationHint: hint as any,
+      presentationHint: hint,
     });
   assert.ok(f('/home/s/sort.ts'));
   assert.ok(f('/home/s/sort.ts', undefined, 0));

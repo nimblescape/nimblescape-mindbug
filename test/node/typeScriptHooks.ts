@@ -190,5 +190,7 @@ const compiler = process.env[TYPESCRIPT_VARIABLE];
 if (compiler) {
   // The program does not see the variable, and the programs that it starts do not get it.
   delete process.env[TYPESCRIPT_VARIABLE];
+  // The compiler is known only at run time, so require() loads it from its path.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   registerHooks(typeScriptHooks(require(compiler) as TypeScript));
 }

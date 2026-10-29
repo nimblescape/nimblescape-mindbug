@@ -2,36 +2,29 @@
 // © 2026 Hannes Stauss (scalarion@nimblescape.com)
 // Licensed under the MIT License. See LICENSE in the repository root for details.
 
+// The type check (npm run typecheck) with TypeScript 6.0, the same in every nimblescape extension: strict, and no
+// output, because esbuild builds the bundles. ESLint (npm run lint) reads the types of the same files.
+// Mindbug: the webview needs the types of the browser (DOM), and Node.js runs the programs of test/ without a
+// build, so the imports name the .ts files and the code uses only syntax that Node.js can erase.
 {
   "compilerOptions": {
     "target": "ES2022",
     "module": "preserve",
     "moduleResolution": "bundler",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
     "strict": true,
     "noEmit": true,
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "erasableSyntaxOnly": true,
     "skipLibCheck": true,
-    "types": [
-      "node",
-      "vscode"
-    ]
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "resolveJsonModule": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noFallthroughCasesInSwitch": true
   },
-  "include": [
-    "src",
-    "webview",
-    "test"
-  ],
-  "exclude": [
-    "test/node/fixtures",
-    "examples",
-    "node_modules",
-    "dist"
-  ]
+  "include": ["src", "webview", "test"],
+  "exclude": ["test/node/fixtures", "examples", "node_modules", "dist"]
 }

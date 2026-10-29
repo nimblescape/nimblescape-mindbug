@@ -13,7 +13,7 @@
 // `installHeapWalker` is converted to source text with Function.prototype.toString, so it must not
 // use anything from outside its own body. It is plain JavaScript with TypeScript types only.
 
-import type { Value } from './model.ts';
+import type { HeapObject, Value } from './model.ts';
 
 export const WALKER_VERSION = 7;
 export const GLOBAL_NAME = '__mindbug';
@@ -36,8 +36,8 @@ export const DEFAULT_LIMITS: WalkerLimits = { objects: 300, items: 100, fields: 
  * The api: begin(limits), v(name, value), end() -> JSON text.
  */
 export function installHeapWalker(version: number, globalName: string): string {
-  const g: any = globalThis;
-  const existing = g[globalName];
+  const g = globalThis as unknown as Record<string, unknown>;
+  const existing = g[globalName] as { version?: unknown } | undefined;
   if (existing && existing.version === version) {
     return 'ready';
   }
@@ -127,7 +127,7 @@ export function installHeapWalker(version: number, globalName: string): string {
     return '{' + text + '}';
   }
 
-  function brand(fn: Function, o: unknown): boolean {
+  function brand(fn: (...args: never[]) => unknown, o: unknown): boolean {
     try {
       apply(fn, o, []);
       return true;
@@ -210,7 +210,7 @@ export function installHeapWalker(version: number, globalName: string): string {
   }
 
   /** The class (written with the `class` keyword) that made this object, or undefined. */
-  function userClassOf(o: object): Function | undefined {
+  function userClassOf(o: object): object | undefined {
     try {
       const p = getProto(o);
       if (!p) return undefined;
@@ -320,7 +320,7 @@ export function installHeapWalker(version: number, globalName: string): string {
   }
 
   /** Static variables, static methods, methods and the superclass of a class. */
-  function describeClass(c: Function, src: string, out: any): void {
+  function describeClass(c: object, src: string, out: HeapObject): void {
     out.attrs = declaredAttributes(src).slice(0, limits.fields);
     out.fields = [];
     out.methods = [];
@@ -366,8 +366,8 @@ export function installHeapWalker(version: number, globalName: string): string {
     }
   }
 
-  function describe(o: object): any {
-    const out: any = { id: idOf(o), kind: 'object', type: 'Object' };
+  function describe(o: object): HeapObject {
+    const out: HeapObject = { id: idOf(o), kind: 'object', type: 'Object' };
     try {
       if (o === g) {
         out.kind = 'value';
@@ -395,7 +395,7 @@ export function installHeapWalker(version: number, globalName: string): string {
         head = head.slice(0, end).replace(/\s+/g, ' ').trim();
         if (head.length > 80) head = head.slice(0, 79) + '…';
         out.text = head;
-        if (isClass) describeClass(o as Function, src, out);
+        if (isClass) describeClass(o, src, out);
         return out;
       }
       const cls = userClassOf(o);
@@ -528,7 +528,7 @@ export function installHeapWalker(version: number, globalName: string): string {
     end(): string {
       const c = cur;
       if (!c) return '{}';
-      const objects: any[] = [];
+      const objects: HeapObject[] = [];
       let i = 0;
       while (i < c.queue.length && objects.length < limits.objects) {
         add(objects, describe(c.queue[i++]));
@@ -573,6 +573,6 @@ export function walkerFunction(): string {
 export interface WalkerResult {
   v: number;
   vars: { name: string; value: Value }[];
-  objects: import('./model.ts').HeapObject[];
+  objects: HeapObject[];
   missing: number[];
 }

@@ -16,7 +16,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Page } from 'playwright-core';
 import { webviewHtml } from '../../src/webviewHtml.ts';
-import type { MemorySnapshot, ToWebview } from '../../src/model.ts';
+import type { FromWebview, MemorySnapshot, ToWebview } from '../../src/model.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -166,7 +166,7 @@ async function main(): Promise<void> {
       await page.click('#steps li:nth-child(8) button');
       const stepText = await page.textContent('#stepText');
       if (!stepText?.startsWith('Step 8 of')) throw new Error(`history step text: ${stepText}`);
-      const sent = await page.evaluate(() => (window as any).__sent as any[]);
+      const sent = await page.evaluate(() => (window as unknown as { __sent: FromWebview[] }).__sent);
       const view = sent.filter((m) => m.type === 'viewStep').pop();
       if (!view || view.step !== 8 || view.live) throw new Error(`viewStep message: ${JSON.stringify(view)}`);
       await shot('history');
@@ -238,7 +238,7 @@ async function main(): Promise<void> {
       if (flatParts !== 0) throw new Error(`block parts with the switch off: ${flatParts}`);
       const flat = await page.$$eval('.frame:last-child .var-name', (els) => els.map((e) => e.textContent));
       if (flat.join(',') !== 'e,d,i,c,a,b,a') throw new Error(`variables with the switch off: ${flat.join(',')}`);
-      const option = (await page.evaluate(() => (window as any).__sent as any[])).filter((m) => m.type === 'viewOption').pop();
+      const option = (await page.evaluate(() => (window as unknown as { __sent: FromWebview[] }).__sent)).filter((m) => m.type === 'viewOption').pop();
       if (option?.name !== 'showScopeFrames' || option.value !== false) throw new Error(`viewOption message: ${JSON.stringify(option)}`);
       await shot('blocks-no-frames');
       await page.click('#showScopeFrames');

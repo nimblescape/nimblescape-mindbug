@@ -110,6 +110,8 @@ test('two variables that point to the same array get the same id, also in the ne
 
 test('values: numbers, strings, holes, map, set, cut strings', () => {
   const values = { negZero: -0, nan: NaN, big: 10n, nothing: null, long: 'x'.repeat(300) };
+  // An array with a hole, which the walker shows as a hole.
+  // eslint-disable-next-line no-sparse-arrays
   const sparse = [1, , 3];
   const scores = new Map([['ann', 3]]);
   const tags = new Set(['a']);
@@ -270,7 +272,11 @@ test('a program that replaces built-in methods changes nothing that the walker r
     calls[calls.length] = label;
   };
   const patches: [object, PropertyKey, PropertyDescriptor | undefined][] = [];
-  const patch = (target: object, key: PropertyKey, make: (original: any) => PropertyDescriptor) => {
+  const patch = (
+    target: object,
+    key: PropertyKey,
+    make: (original: (...args: unknown[]) => unknown) => PropertyDescriptor,
+  ) => {
     const original = Object.getOwnPropertyDescriptor(target, key);
     patches[patches.length] = [target, key, original];
     Object.defineProperty(target, key, { configurable: true, ...make(original?.value) });
@@ -283,7 +289,7 @@ test('a program that replaces built-in methods changes nothing that the walker r
         return Reflect.apply(original, this, a);
       },
     }));
-  const hasInstance = (ctor: Function) =>
+  const hasInstance = (ctor: abstract new (...args: never[]) => unknown) =>
     patch(ctor, Symbol.hasInstance, () => ({
       value: () => {
         record(`${ctor.name}[Symbol.hasInstance]`);
@@ -316,8 +322,8 @@ test('a program that replaces built-in methods changes nothing that the walker r
       return 'changed';
     },
   }));
-  let after = '';
-  let during: string[] = [];
+  let after: string;
+  let during: string[];
   try {
     calls.length = 0;
     after = read();
