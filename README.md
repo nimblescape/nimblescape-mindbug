@@ -4,9 +4,9 @@ See the memory of your TypeScript program while you debug it: the stack and the 
 
 Mindbug is a VS Code extension for teaching. It shows the **stack**, with one scope for each function call and its local variables, and the **heap**, with the objects and arrays that the variables point to. Arrows go from the variables to the objects. Mindbug works like [Python Tutor](https://pythontutor.com), but inside VS Code, with its normal debugger. It runs the program with the command `ts` of the extension [nimblescape TypeScript](https://marketplace.visualstudio.com/items?itemName=nimblescape.nimblescape-typescript), which compiles it with the TypeScript compiler of VS Code and runs it with [Node.js](https://nodejs.org).
 
-![Mindbug in VS Code, step by step: F5 starts the program, the call of createBook adds a scope with the parameters title and pages to the stack, new Book creates an object on the heap, after the return the variable myBook of the Global scope points to the object, and after myBook = null the object is gone; then the step history shows the steps 5 to 2 again; in blocks.ts, the block, the for loop, the body of the loop and the if block each get their own part in the Global scope, and a frame of the same color around their lines in the code; in closures.ts, the inner function next still sees count and prefix after makeCounter has returned, and count is 0 in the first call and 1 in the second call; a blue band above the window names each scene, and a label at the bottom names each pressed key and its command](https://raw.githubusercontent.com/nimblescape/nimblescape-mindbug/main/docs/images/mindbug-run.gif)
+![Mindbug in VS Code, step by step: F5 starts the program, the call of createBook adds a scope with the parameters title and pages to the stack, new Book creates an object on the heap, after the return the variable myBook of the Global scope points to the object, and after myBook = null the object is gone; then the step history shows the steps 5 to 2 again; in blocks.ts, the block, the for loop, the body of the loop and the if block each get their own part in the Global scope, and a frame of the same color around their lines in the code; in closures.ts, the inner function next still sees count and prefix after makeCounter has returned, and count is 0 in the first call and 1 in the second call; a blue band above the window names each scene, and a label at the bottom names each pressed key and its command](https://raw.githubusercontent.com/nimblescape/mindbug-vscode/main/docs/images/mindbug-run.gif)
 
-The animation steps through the example [return-object.ts](https://github.com/nimblescape/nimblescape-mindbug/blob/main/examples/return-object.ts) and then goes back through the step history. Then, with the switch **Stop on entry** off, it runs the examples [blocks.ts](https://github.com/nimblescape/nimblescape-mindbug/blob/main/examples/blocks.ts) and [closures.ts](https://github.com/nimblescape/nimblescape-mindbug/blob/main/examples/closures.ts) to their breakpoints.
+The animation steps through the example [return-object.ts](https://github.com/nimblescape/mindbug-vscode/blob/main/examples/return-object.ts) and then goes back through the step history. Then, with the switch **Stop on entry** off, it runs the examples [blocks.ts](https://github.com/nimblescape/mindbug-vscode/blob/main/examples/blocks.ts) and [closures.ts](https://github.com/nimblescape/mindbug-vscode/blob/main/examples/closures.ts) to their breakpoints.
 
 ## What the extension does on your computer
 
@@ -17,7 +17,7 @@ The animation steps through the example [return-object.ts](https://github.com/ni
 - **Network.** Mindbug connects only to the JavaScript debugger of VS Code, at the local address (`127.0.0.1`) that the debugger gives it. The debugger connects to Node.js on your computer. Mindbug collects no telemetry.
 - **Restricted Mode and virtual workspaces.** Mindbug does not run in Restricted Mode, because VS Code debugs a program only in a trusted workspace, and not in virtual workspaces, because Node.js runs a file on the disk.
 
-[Security](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/security.md#what-mindbug-does-on-your-computer) describes each step and where its protection ends.
+[Security](https://github.com/nimblescape/mindbug-vscode/blob/main/docs/security.md#what-mindbug-does-on-your-computer) describes each step and where its protection ends.
 
 ## Features
 
@@ -44,7 +44,7 @@ The animation steps through the example [return-object.ts](https://github.com/ni
 3. The program pauses at its first line, and the **Mindbug** view opens next to the code.
 4. Use **Step Over** (F10) and **Step Into** (F11) of the debugger. The view changes at each step.
 
-Without a `launch.json` file, F5 in a TypeScript file also offers **Mindbug**. The [user guide](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/guide.md#launch-configurations) explains the launch configurations of type `mindbug`, and the [examples](https://github.com/nimblescape/nimblescape-mindbug/tree/main/examples) are nine small programs to start with.
+Without a `launch.json` file, F5 in a TypeScript file also offers **Mindbug**. The [user guide](https://github.com/nimblescape/mindbug-vscode/blob/main/docs/guide.md#launch-configurations) explains the launch configurations of type `mindbug`, and the [examples](https://github.com/nimblescape/mindbug-vscode/tree/main/examples) are nine small programs to start with.
 
 ## Settings
 
@@ -62,10 +62,10 @@ Without a `launch.json` file, F5 in a TypeScript file also offers **Mindbug**. T
 | `nimblescape.mindbug.maxArrayItems` | `100` | Number of array items, set members and map entries per object. |
 | `nimblescape.mindbug.maxStringLength` | `200` | Number of characters per string. |
 
-All commands, settings and details are in the [user guide](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/guide.md).
+All commands, settings and details are in the [user guide](https://github.com/nimblescape/mindbug-vscode/blob/main/docs/guide.md).
 
 ---
 
-[Change log](https://github.com/nimblescape/nimblescape-mindbug/blob/main/CHANGELOG.md) · [Contributing](https://github.com/nimblescape/nimblescape-mindbug/blob/main/CONTRIBUTING.md) · [User guide](https://github.com/nimblescape/nimblescape-mindbug/blob/main/docs/guide.md) · [Support](https://github.com/nimblescape/nimblescape-mindbug/blob/main/SUPPORT.md) · [Issues](https://github.com/nimblescape/nimblescape-mindbug/issues) · [Source](https://github.com/nimblescape/nimblescape-mindbug)
+[Change log](https://github.com/nimblescape/mindbug-vscode/blob/main/CHANGELOG.md) · [Contributing](https://github.com/nimblescape/mindbug-vscode/blob/main/CONTRIBUTING.md) · [User guide](https://github.com/nimblescape/mindbug-vscode/blob/main/docs/guide.md) · [Support](https://github.com/nimblescape/mindbug-vscode/blob/main/SUPPORT.md) · [Issues](https://github.com/nimblescape/mindbug-vscode/issues) · [Source](https://github.com/nimblescape/mindbug-vscode)
 
-© 2026 Hannes Stauss (scalarion@nimblescape.com) · [MIT License](https://github.com/nimblescape/nimblescape-mindbug/blob/main/LICENSE).
+© 2026 Hannes Stauss (scalarion@nimblescape.com) · [MIT License](https://github.com/nimblescape/mindbug-vscode/blob/main/LICENSE).

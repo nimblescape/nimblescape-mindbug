@@ -273,7 +273,7 @@ line. The view also shows every other debug session of the JavaScript
 debugger of VS Code, for example one of a launch configuration of type
 `node`.
 
-The [examples](https://github.com/nimblescape/nimblescape-mindbug/tree/main/examples)
+The [examples](https://github.com/nimblescape/mindbug-vscode/tree/main/examples)
 are four small programs: insertion sort, classes with a static variable, a
 linked list, and a call stack of three functions that shows which objects
 survive a function call.
@@ -281,4 +281,4 @@ survive a function call.
 ---
 
 © 2026 Hannes Stauss (scalarion@nimblescape.com) ·
-[MIT License](https://github.com/nimblescape/nimblescape-mindbug/blob/main/LICENSE).
+[MIT License](https://github.com/nimblescape/mindbug-vscode/blob/main/LICENSE).
